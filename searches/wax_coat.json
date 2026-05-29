@@ -1,0 +1,14 @@
+{
+  "search_name": "wax_coat",
+  "active": true,
+  "criteria": {
+    "category": "coat",
+    "gender": "women",
+    "outer_material": ["waxed cotton"],
+    "lining": ["none", "cotton", "wool"],
+    "exclude": ["polyester", "nylon", "synthetic"],
+    "sizes": ["M", "L"],
+    "max_price": 300,
+    "extra_notes": "natural fabric lining preferred, or unlined"
+  }
+}
