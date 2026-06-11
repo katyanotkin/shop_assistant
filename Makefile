@@ -45,6 +45,10 @@ add: ## Add search: make add FILE=searches/wax_coat.json
 add-example: ## Add example wax_coat search to Firestore
 	PYTHONPATH=. $(PYTHON) run.py add searches/wax_coat.json
 
+## Run test suite
+test: ## Run tests
+	PYTHONPATH=. $(VENV)/bin/pytest tests/ -q --tb=short
+
 ## Lint
 lint: ## Run ruff
 	ruff check shop_assistant/ run.py

@@ -1,9 +1,16 @@
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class SearchCriteria(BaseModel):
-    category: str
+    category: list[str]
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def coerce_category(cls, v: object) -> list[str]:
+        if isinstance(v, str):
+            return [v]
+        return v
     gender: str
     outer_material: list[str] = []
     lining: list[str] = []
