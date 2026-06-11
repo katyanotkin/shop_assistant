@@ -1,0 +1,13 @@
+{
+  "search_name": "merino_bra",
+  "active": true,
+  "criteria": {
+    "category": ["underware","bra", "bralette"],
+    "gender": "women",
+    "outer_material": ["merino wool"],
+    "padding": ["none"],
+    "sizes": ["M", "L"],
+    "max_price": 100,
+    "extra_notes": "mixed with some synthetic for durability"
+  }
+}
