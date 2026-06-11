@@ -5,7 +5,7 @@ from datetime import date
 from .models import ProductMatch, RunResult, SearchCriteria
 from .settings import Settings
 from . import firestore_client as fc
-from .searcher import build_query, search_google
+from .searcher import search_products
 from .ranker import rank_all
 from .notifier import send_run_notification
 
@@ -55,15 +55,8 @@ def run_search(search_name: str, settings: Settings, dry_run: bool = False) -> R
         raise ValueError(f"Search '{search_name}' not found in Firestore. Add it first with: run.py add <file>")
 
     criteria = SearchCriteria(**config["criteria"])
-    query = build_query(criteria)
-    print(f"Query: {query}")
 
-    candidates = search_google(
-        query,
-        settings.google_custom_search_api_key,
-        settings.search_engine_id,
-        num=settings.max_candidates,
-    )
+    candidates = search_products(criteria, settings.google_cloud_project, max_results=settings.max_candidates)
     print(f"Candidates: {len(candidates)}")
 
     ranked = rank_all(candidates, criteria, settings.google_cloud_project)
