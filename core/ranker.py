@@ -1,7 +1,7 @@
 import json
 import time
-import vertexai
-from vertexai.generative_models import GenerationConfig, GenerativeModel
+import google.genai as genai
+from google.genai import types
 from .models import SearchCriteria
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
@@ -37,7 +37,7 @@ Be strict about material exclusions (exclude list). If excluded materials are pr
 Return only the JSON object, no markdown, no extra text."""
 
 
-def rank_candidate(url: str, text: str, criteria: SearchCriteria, model: GenerativeModel) -> dict:
+def rank_candidate(url: str, text: str, criteria: SearchCriteria, client: genai.Client) -> dict:
     if not text:
         return {
             "title": "",
@@ -48,9 +48,10 @@ def rank_candidate(url: str, text: str, criteria: SearchCriteria, model: Generat
             "notes": "could not fetch page",
         }
     try:
-        response = model.generate_content(
-            _PROMPT.format(criteria=criteria.model_dump_json(indent=2), text=text),
-            generation_config=GenerationConfig(temperature=0),
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=_PROMPT.format(criteria=criteria.model_dump_json(indent=2), text=text),
+            config=types.GenerateContentConfig(temperature=0),
         )
         raw = response.text.strip()
         if raw.startswith("```"):
@@ -75,8 +76,7 @@ def rank_all(
     project: str,
     delay: float = 1.0,
 ) -> list[dict]:
-    vertexai.init(project=project, location=GEMINI_LOCATION)
-    model = GenerativeModel(GEMINI_MODEL)
+    client = genai.Client(vertexai=True, project=project, location=GEMINI_LOCATION)
 
     from .fetcher import fetch_page_text
 
@@ -85,7 +85,7 @@ def rank_all(
         url = item.get("link", "")
         print(f"  [{len(results) + 1}/{len(candidates)}] {url}")
         text = fetch_page_text(url)
-        ranked = rank_candidate(url, text, criteria, model)
+        ranked = rank_candidate(url, text, criteria, client)
         ranked["url"] = url
         results.append(ranked)
         if delay:

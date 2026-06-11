@@ -1,6 +1,6 @@
 import json
-import vertexai
-from vertexai.generative_models import GenerationConfig, GenerativeModel, Tool, grounding
+import google.genai as genai
+from google.genai import types
 from .models import SearchCriteria
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
@@ -19,10 +19,11 @@ Focus on: product category, materials, gender, sizes. Include buying-intent word
 Return only the JSON array, no markdown, no extra text."""
 
 
-def _plan_queries(criteria: SearchCriteria, model: GenerativeModel) -> list[str]:
-    response = model.generate_content(
-        _PLAN_PROMPT.format(criteria=criteria.model_dump_json(indent=2)),
-        generation_config=GenerationConfig(temperature=0),
+def _plan_queries(criteria: SearchCriteria, client: genai.Client) -> list[str]:
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=_PLAN_PROMPT.format(criteria=criteria.model_dump_json(indent=2)),
+        config=types.GenerateContentConfig(temperature=0),
     )
     raw = response.text.strip()
     if raw.startswith("```"):
@@ -32,13 +33,19 @@ def _plan_queries(criteria: SearchCriteria, model: GenerativeModel) -> list[str]
     return json.loads(raw)
 
 
-def _grounded_search(query: str, model: GenerativeModel) -> list[dict]:
-    response = model.generate_content(f"Find product pages for sale matching: {query}")
+def _grounded_search(query: str, client: genai.Client) -> list[dict]:
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=f"Find product pages for sale matching: {query}",
+        config=types.GenerateContentConfig(
+            tools=[types.Tool(google_search=types.GoogleSearch())]
+        ),
+    )
     results = []
     try:
         for chunk in response.candidates[0].grounding_metadata.grounding_chunks:
-            if chunk.web.uri:
-                results.append({"link": chunk.web.uri, "title": chunk.web.title})
+            if chunk.web and chunk.web.uri:
+                results.append({"link": chunk.web.uri, "title": chunk.web.title or ""})
     except Exception:
         pass
     return results
@@ -46,18 +53,15 @@ def _grounded_search(query: str, model: GenerativeModel) -> list[dict]:
 
 def search_products(criteria: SearchCriteria, project: str, max_results: int = 20) -> list[dict]:
     """Two-stage AI search: planner generates queries, grounded Gemini returns URLs."""
-    vertexai.init(project=project, location=GEMINI_LOCATION)
+    client = genai.Client(vertexai=True, project=project, location=GEMINI_LOCATION)
 
-    queries = _plan_queries(criteria, GenerativeModel(GEMINI_MODEL))
+    queries = _plan_queries(criteria, client)
     print(f"Queries: {queries}")
-
-    search_tool = Tool.from_google_search_retrieval(grounding.GoogleSearchRetrieval())
-    searcher = GenerativeModel(GEMINI_MODEL, tools=[search_tool])
 
     seen: set[str] = set()
     results: list[dict] = []
     for query in queries:
-        for item in _grounded_search(query, searcher):
+        for item in _grounded_search(query, client):
             url = item["link"]
             if url not in seen:
                 seen.add(url)
