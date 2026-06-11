@@ -13,6 +13,11 @@ _RESULTS_DIR = pathlib.Path("results")
 _CSV_FIELDS = ["run_date", "search_name", "match_type", "score", "is_new", "title", "url", "price", "matched", "unmatched", "notes"]
 
 
+def _link(url: str) -> str:
+    """OSC 8 hyperlink — renders as clickable in iTerm2, GNOME Terminal, Kitty, Windows Terminal."""
+    return f"\033]8;;{url}\033\\{url}\033]8;;\033\\"
+
+
 def save_csv(result: RunResult) -> pathlib.Path:
     _RESULTS_DIR.mkdir(exist_ok=True)
     path = _RESULTS_DIR / f"{result.search_name}_{result.run_date}.csv"
@@ -55,8 +60,14 @@ def run_search(search_name: str, settings: Settings, dry_run: bool = False) -> R
         raise ValueError(f"Search '{search_name}' not found in Firestore. Add it first with: run.py add <file>")
 
     criteria = SearchCriteria(**config["criteria"])
+    shops: list[str] = config.get("preferred_shops", [])
 
-    candidates = search_products(criteria, settings.google_cloud_project, max_results=settings.max_candidates)
+    candidates = search_products(
+        criteria,
+        settings.google_cloud_project,
+        max_results=settings.max_candidates,
+        shops=shops or None,
+    )
     print(f"Candidates: {len(candidates)}")
 
     ranked = rank_all(candidates, criteria, settings.google_cloud_project)
@@ -126,7 +137,7 @@ def print_result(result: RunResult) -> None:
         for m in result.matches:
             new_tag = " [NEW]" if m.is_new else ""
             print(f"  [{m.score:.0f}/10]{new_tag} {m.title or '(no title)'}")
-            print(f"    {m.url}")
+            print(f"    {_link(m.url)}")
             if m.price:
                 print(f"    Price: {m.price}")
             if m.matched:
@@ -139,6 +150,6 @@ def print_result(result: RunResult) -> None:
         for m in result.partial_matches:
             new_tag = " [NEW]" if m.is_new else ""
             print(f"  [{m.score:.0f}/10]{new_tag} {m.title or '(no title)'}")
-            print(f"    {m.url}")
+            print(f"    {_link(m.url)}")
             if m.unmatched:
                 print(f"    Missing: {', '.join(m.unmatched)}")

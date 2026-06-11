@@ -24,6 +24,7 @@ class SearchConfig(BaseModel):
     search_name: str
     active: bool = True
     criteria: SearchCriteria
+    preferred_shops: list[str] = []
 
 
 class ProductMatch(BaseModel):

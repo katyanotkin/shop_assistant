@@ -22,22 +22,21 @@ Return ONLY a JSON object:
   "price": null or numeric price in USD/EUR/GBP,
   "score": integer 0-10,
   "matched": ["brief human-readable label per satisfied requirement, e.g. 'waxed cotton outer', 'size M available', 'price within budget'"],
-  "unmatched": ["brief label per unsatisfied or unknown requirement, e.g. 'lining unclear', 'size not listed', 'price too high'"],
+  "unmatched": ["brief label per unsatisfied or unknown requirement, e.g. 'lining unclear', 'size not listed', 'price over budget'"],
   "notes": "one sentence explanation"
 }}
 
-Scoring:
-- 9-10: all criteria met
-- 7-8: most criteria met, minor gaps
-- 4-6: partial match, notable gaps
-- 1-3: poor fit
-- 0: not a product page
+Hard rules (violations → score 0):
+- Product must match at least one value in `category`
+- Product must match `gender` (or be unisex)
+- Score 0 if not a product page at all
 
-Rules:
+Soft rules (violations reduce score, do not zero it):
 - outer_material / lining / sizes: satisfied if ANY listed value matches
 - exclude: if ANY excluded material is detected, cap score at 3
-- max_price: satisfied if listed price is at or below the limit
-- Keep matched/unmatched labels concise (2-5 words each) — no raw JSON field names or array indices
+- max_price: price up to 50% above the limit scores at most 6 and note as "price over budget"; price more than 50% above the limit caps score at 3
+
+Keep matched/unmatched labels concise (2-5 words) — no raw JSON field names.
 Return only the JSON object, no markdown, no extra text."""
 
 

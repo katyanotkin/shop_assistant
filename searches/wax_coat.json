@@ -10,5 +10,8 @@
     "sizes": ["M", "L"],
     "max_price": 500,
     "extra_notes": "natural fabric lining preferred, or unlined"
-  }
+  },
+  "preferred_shops": [
+    "https://www.houseofbruar.com"
+  ]
 }
