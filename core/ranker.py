@@ -8,7 +8,7 @@ GEMINI_MODEL = "gemini-2.5-flash-lite"
 GEMINI_LOCATION = "us-central1"
 
 _PROMPT = """\
-You are a shopping assistant. Analyze this product page and score how well it matches the search criteria.
+You are a shopping assistant. Score how well this product page matches the search criteria.
 
 Search criteria (JSON):
 {criteria}
@@ -16,24 +16,28 @@ Search criteria (JSON):
 Product page text:
 {text}
 
-Return ONLY a JSON object with these fields:
+Return ONLY a JSON object:
 {{
   "title": "product name, or empty string if not a product page",
   "price": null or numeric price in USD/EUR/GBP,
   "score": integer 0-10,
-  "matched": ["criteria that are satisfied"],
-  "unmatched": ["criteria that are not satisfied or unknown"],
+  "matched": ["brief human-readable label per satisfied requirement, e.g. 'waxed cotton outer', 'size M available', 'price within budget'"],
+  "unmatched": ["brief label per unsatisfied or unknown requirement, e.g. 'lining unclear', 'size not listed', 'price too high'"],
   "notes": "one sentence explanation"
 }}
 
-Scoring guide:
+Scoring:
 - 9-10: all criteria met
 - 7-8: most criteria met, minor gaps
 - 4-6: partial match, notable gaps
 - 1-3: poor fit
-- 0: not a product page or completely off
+- 0: not a product page
 
-Be strict about material exclusions (exclude list). If excluded materials are present, cap score at 3.
+Rules:
+- outer_material / lining / sizes: satisfied if ANY listed value matches
+- exclude: if ANY excluded material is detected, cap score at 3
+- max_price: satisfied if listed price is at or below the limit
+- Keep matched/unmatched labels concise (2-5 words each) — no raw JSON field names or array indices
 Return only the JSON object, no markdown, no extra text."""
 
 
@@ -78,15 +82,15 @@ def rank_all(
 ) -> list[dict]:
     client = genai.Client(vertexai=True, project=project, location=GEMINI_LOCATION)
 
-    from .fetcher import fetch_page_text
+    from .fetcher import fetch_page
 
     results = []
     for item in candidates:
         url = item.get("link", "")
         print(f"  [{len(results) + 1}/{len(candidates)}] {url}")
-        text = fetch_page_text(url)
-        ranked = rank_candidate(url, text, criteria, client)
-        ranked["url"] = url
+        final_url, text = fetch_page(url)
+        ranked = rank_candidate(final_url, text, criteria, client)
+        ranked["url"] = final_url
         results.append(ranked)
         if delay:
             time.sleep(delay)
