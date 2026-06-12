@@ -12,6 +12,6 @@ class Settings(BaseSettings):
     match_score_threshold: float = 7.0
     partial_score_threshold: float = 4.0
     fetch_timeout: float = 12.0
-    max_candidates: int = 20
+    max_candidates: int = 40
 
     model_config = {"env_file": ".env"}

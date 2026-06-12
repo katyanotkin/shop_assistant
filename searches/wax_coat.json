@@ -2,17 +2,18 @@
   "search_name": "wax_coat",
   "active": true,
   "criteria": {
-    "category": ["coat", "trenchcoat", "trench"],
+    "category": ["coat", "jacket", "riding_coat", "trench"],
     "gender": "women",
     "material": ["waxed cotton"],
     "lining": ["none", "cotton", "viscose"],
-    "length": ["thigh", "midi", "long", "maxi"],
+    "length": ["thigh", "midi", "long"],
     "exclude": ["polyester", "nylon", "synthetic"],
     "sizes": ["M", "L"],
     "max_price": 500,
     "extra_notes": "thigh length or longer preferred; natural fabric lining preferred, or unlined"
   },
   "preferred_shops": [
-    "https://www.houseofbruar.com"
+    "https://www.houseofbruar.com",
+    "https://www.barbour.com"
   ]
 }

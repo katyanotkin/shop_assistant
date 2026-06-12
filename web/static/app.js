@@ -14,7 +14,16 @@
 
   function siteName(url) {
     try {
-      return new URL(url).hostname.replace(/^www\./, "").split(".")[0].toUpperCase();
+      const locales = new Set(["us", "uk", "eu", "au", "ca"]);
+      const skip = new Set(["www", "shop", "store", "m", "en", "co"]);
+      const parts = new URL(url).hostname.split(".");
+      const labels = [];
+      for (let i = 0; i < parts.length - 1; i++) {
+        const p = parts[i].toLowerCase();
+        if (skip.has(p)) continue;
+        labels.push(locales.has(p) ? p.toUpperCase() : p.charAt(0).toUpperCase() + p.slice(1));
+      }
+      return labels.join(" ") || parts[0];
     } catch { return ""; }
   }
 
