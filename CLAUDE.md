@@ -30,6 +30,11 @@ SearchCriteria (Firestore)
          │ ProductMatch[]
          ▼
   Firestore + CSV + Email
+         │
+         ▼
+┌────────────────────────────┐
+│  Web UI (FastAPI)          │  — reads Firestore, serves results by search + date
+└────────────────────────────┘
 ```
 
 ### Key modules
@@ -44,6 +49,9 @@ SearchCriteria (Firestore)
 | `core/notifier.py` | Gmail notification on new matches |
 | `core/models.py` | Pydantic models: SearchCriteria, ProductMatch, RunResult |
 | `core/settings.py` | Env-based config via pydantic-settings |
+| `web/main.py` | FastAPI app: REST API + static file serving |
+| `web/static/app.js` | Vanilla JS: sidebar, date picker, result cards |
+| `web/static/app.css` | Styles — no framework, CSS custom properties |
 
 ### Gemini model
 
@@ -89,14 +97,16 @@ python run.py list
   "search_name": "wax_coat",
   "active": true,
   "criteria": {
-    "category": "coat",
+    "category": ["coat", "trenchcoat"],
     "gender": "women",
-    "outer_material": ["waxed cotton"],
+    "material": ["waxed cotton"],
     "lining": ["none", "cotton", "viscose"],
+    "length": ["thigh", "midi", "long"],
     "exclude": ["polyester", "nylon", "synthetic"],
     "sizes": ["M", "L"],
     "max_price": 500,
     "extra_notes": "natural fabric lining preferred, or unlined"
-  }
+  },
+  "preferred_shops": ["https://www.houseofbruar.com"]
 }
 ```

@@ -1,6 +1,6 @@
 # Shop Assistant
 
-CLI that monitors online shops for products matching saved search criteria. Uses Gemini (Vertex AI) to plan queries, search the web via Google Search grounding, and score each product page against your criteria. New matches are saved to Firestore and optionally emailed.
+CLI + web UI that monitors online shops for products matching saved search criteria. Uses Gemini (Vertex AI) to plan queries, search the web via Google Search grounding, and score each product page against your criteria. New matches are saved to Firestore and optionally emailed.
 
 ## How it works
 
@@ -9,6 +9,8 @@ CLI that monitors online shops for products matching saved search criteria. Uses
 3. **Fetch** — each URL is fetched and stripped to plain text
 4. **Rank** — Gemini scores each page 0–10 against your criteria
 5. **Save & notify** — results written to CSV + Firestore; email sent on new matches
+
+A lightweight web UI reads results from Firestore and displays them by search and date.
 
 ## Prerequisites
 
@@ -26,8 +28,6 @@ gcloud auth application-default login
 git clone <repo> && cd shop_assistant
 
 # create virtualenv and install
-make install        # uses uv if available
-# or manually:
 python3.12 -m venv .venv && source .venv/bin/activate && pip install -e .
 
 cp .env.sample .env
@@ -59,25 +59,28 @@ Write a JSON file describing what you want, save it under `searches/`, then push
 
 ```bash
 make add FILE=searches/wax_coat.json
-# or: python run.py add searches/wax_coat.json
 ```
 
-**Search config format** (`searches/wax_coat.json`):
+**Search config format:**
 
 ```json
 {
   "search_name": "wax_coat",
   "active": true,
   "criteria": {
-    "category": "coat",
+    "category": ["coat", "trenchcoat"],
     "gender": "women",
-    "outer_material": ["waxed cotton"],
+    "material": ["waxed cotton"],
     "lining": ["none", "cotton", "viscose"],
+    "length": ["thigh", "midi", "long"],
     "exclude": ["polyester", "nylon", "synthetic"],
     "sizes": ["M", "L"],
     "max_price": 500,
     "extra_notes": "natural fabric lining preferred, or unlined"
-  }
+  },
+  "preferred_shops": [
+    "https://www.houseofbruar.com"
+  ]
 }
 ```
 
@@ -87,52 +90,22 @@ make add FILE=searches/wax_coat.json
 | `active` | yes | `false` skips this search on batch runs |
 | `category` | yes | Product type keyword(s) |
 | `gender` | yes | `"women"`, `"men"`, `"unisex"` |
-| `outer_material` | no | Accepted outer materials |
+| `material` | no | Accepted outer materials |
 | `lining` | no | Accepted lining materials |
+| `length` | no | Accepted lengths — any match satisfies (e.g. `"thigh"`, `"midi"`, `"long"`, `"maxi"`) |
 | `exclude` | no | Materials that cap score at 3 if detected |
 | `sizes` | no | Accepted sizes |
 | `max_price` | no | Upper price limit |
 | `extra_notes` | no | Free-text hints passed to the Gemini ranker |
+| `preferred_shops` | no | Shop URLs to target directly with `site:` queries |
 
-### List saved searches
-
-```bash
-make list
-# or: python run.py list
-```
-
-### Run searches
+### List / run / dry-run
 
 ```bash
-# run all active searches
-make run
-
-# run one specific search
-make run-one SEARCH=wax_coat
-
-# dry run — print results, skip Firestore write and email
-make dry-run SEARCH=wax_coat
-```
-
-**Example output:**
-
-```
-Running: wax_coat
-Queries: ['women waxed cotton coat buy', 'waxed cotton trench coat women M L shop', ...]
-Candidates: 18
-  [1/18] https://example.com/waxed-coat
-  ...
-
-=== wax_coat | 2026-06-11 | 18 candidates ===
-
-Matches (2):
-  [9/10] [NEW] Barbour Beadnell Waxed Cotton Jacket
-    https://...
-    Price: 349.0
-    OK: waxed cotton outer, women, size M, no synthetic lining
-
-Partial matches (3):
-  [5/10] ...
+make list                       # list all searches in Firestore
+make run                        # run all active searches
+make run-one SEARCH=wax_coat    # run one search
+make dry-run SEARCH=wax_coat    # print results, skip save and email
 ```
 
 ### Update or disable a search
@@ -145,7 +118,59 @@ make add FILE=searches/wax_coat.json
 
 This overwrites the Firestore document in place.
 
-## Scheduling (cron)
+## Web UI
+
+### Run locally
+
+```bash
+make local-run    # installs fastapi + uvicorn into .venv, starts on http://localhost:8000
+```
+
+The UI reads directly from Firestore — no CLI run needed. Select a search from the sidebar, pick a date (defaults to latest), and browse scored results.
+
+### Host on Cloud Run
+
+```bash
+PROJECT=your-gcp-project-id
+REGION=us-east1
+IMAGE=us-east1-docker.pkg.dev/$PROJECT/shop-assistant/web
+
+# build and push
+docker build -f Dockerfile.web -t $IMAGE .
+docker push $IMAGE
+
+# deploy
+gcloud run deploy shop-assistant-web \
+  --image=$IMAGE \
+  --region=$REGION \
+  --platform=managed \
+  --allow-unauthenticated \
+  --set-env-vars=GOOGLE_CLOUD_PROJECT=$PROJECT
+```
+
+### Map a custom subdomain (e.g. shopassistant.verbboard.com)
+
+Cloud Run domain mappings require the domain to be verified in your GCP project. If verbboard.com is already verified:
+
+```bash
+gcloud run domain-mappings create \
+  --service=shop-assistant-web \
+  --domain=shopassistant.verbboard.com \
+  --region=$REGION
+```
+
+Then add the CNAME record shown in the output to your DNS (Cloudflare / Google Domains / etc.):
+
+```
+shopassistant   CNAME   ghs.googlehosted.com.
+```
+
+Propagation takes a few minutes; HTTPS is provisioned automatically by Cloud Run.
+
+> If verbboard.com is **not** already verified in this GCP project, first run:
+> `gcloud domains verify verbboard.com` and follow the TXT record prompt.
+
+## Scheduling
 
 ```bash
 crontab -e
@@ -153,7 +178,7 @@ crontab -e
 0 8 * * * cd /path/to/shop_assistant && source .venv/bin/activate && python run.py run >> logs/run.log 2>&1
 ```
 
-For serverless: deploy `run.py run` to Cloud Run and trigger via Cloud Scheduler.
+For serverless: deploy `run.py run` to Cloud Run Jobs and trigger via Cloud Scheduler.
 
 ## Output
 
@@ -171,7 +196,7 @@ For serverless: deploy `run.py run` to Cloud Run and trigger via Cloud Scheduler
 | Vertex AI (Gemini 2.5 Flash Lite) | `roles/aiplatform.user` |
 | Firestore | `roles/datastore.user` |
 
-No Google Custom Search API key or Programmable Search Engine is required — search is handled by Gemini's built-in Google Search grounding.
+No Google Custom Search API key is required — search uses Gemini's built-in Google Search grounding.
 
 ## Project structure
 
@@ -185,18 +210,23 @@ core/
   firestore_client.py  # Firestore read/write helpers
   models.py            # Pydantic models: SearchCriteria, ProductMatch, RunResult
   settings.py          # Env-based config (pydantic-settings)
+web/
+  main.py              # FastAPI app — serves UI and REST API
+  static/app.css       # Styles (vanilla CSS, no framework)
+  static/app.js        # Client logic (vanilla JS, no framework)
+  templates/index.html # Single-page shell
 searches/              # Search config JSON files (commit these)
 results/               # CSV output — gitignore this directory
 run.py                 # CLI entry point
-Makefile               # Convenience targets: install, run, dry-run, list, add
+Dockerfile.web         # Container for the web UI (Cloud Run)
+Makefile               # Convenience targets
 ```
 
-## AI agents (Claude Code)
-
-Three sub-agents are available under `.claude/agents/`:
+## Claude Code agents
 
 | Agent | When to use |
 |---|---|
 | `senior-architect` | Reviewing pipeline design, Gemini prompt strategy, GCP cost |
 | `code-reviewer` | After any code change — quality, security, performance, prompt fragility |
 | `qa-engineer` | Adding or fixing tests; always mocks Vertex AI and Firestore |
+| `ui-ux-engineer` | Web UI design critiques, CSS changes, layout decisions |
