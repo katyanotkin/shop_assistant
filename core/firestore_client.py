@@ -40,12 +40,23 @@ def load_last_run(search_name: str) -> dict | None:
     return docs[0].to_dict() if docs else None
 
 
-def save_run(search_name: str, run_date: str, result: dict) -> None:
-    (
+def list_runs(search_name: str, limit: int = 30) -> list[str]:
+    docs = (
         get_db()
         .collection("shop_results")
         .document(search_name)
         .collection("runs")
-        .document(run_date)
-        .set(result)
+        .order_by("run_date", direction=firestore.Query.DESCENDING)
+        .limit(limit)
+        .stream()
     )
+    return [d.id for d in docs]
+
+
+def load_run(search_name: str, run_date: str) -> dict | None:
+    doc = get_db().collection("shop_results").document(search_name).collection("runs").document(run_date).get()
+    return doc.to_dict() if doc.exists else None
+
+
+def save_run(search_name: str, run_date: str, result: dict) -> None:
+    (get_db().collection("shop_results").document(search_name).collection("runs").document(run_date).set(result))

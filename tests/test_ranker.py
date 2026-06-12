@@ -1,13 +1,13 @@
 import json
 from unittest.mock import MagicMock
-from core.ranker import rank_candidate
-from core.models import SearchCriteria
 
+from core.models import SearchCriteria
+from core.ranker import rank_candidate
 
 CRITERIA = SearchCriteria(
     category="jacket",
     gender="women",
-    outer_material=["waxed cotton"],
+    material=["waxed cotton"],
     sizes=["M", "L"],
 )
 

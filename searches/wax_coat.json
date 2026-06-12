@@ -2,14 +2,15 @@
   "search_name": "wax_coat",
   "active": true,
   "criteria": {
-    "category": ["coat","trenchcoat", "trench"],
+    "category": ["coat", "trenchcoat", "trench"],
     "gender": "women",
-    "outer_material": ["waxed cotton"],
+    "material": ["waxed cotton"],
     "lining": ["none", "cotton", "viscose"],
+    "length": ["thigh", "midi", "long", "maxi"],
     "exclude": ["polyester", "nylon", "synthetic"],
     "sizes": ["M", "L"],
     "max_price": 500,
-    "extra_notes": "natural fabric lining preferred, or unlined"
+    "extra_notes": "thigh length or longer preferred; natural fabric lining preferred, or unlined"
   },
   "preferred_shops": [
     "https://www.houseofbruar.com"

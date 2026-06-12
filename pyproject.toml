@@ -18,6 +18,8 @@ dependencies = [
     "google-genai>=1.0",
     "google-cloud-aiplatform>=1.60",
     "google-cloud-firestore>=2.16",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
 ]
 
 [tool.ruff]

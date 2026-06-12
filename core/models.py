@@ -1,4 +1,5 @@
 from typing import Optional
+
 from pydantic import BaseModel, field_validator
 
 
@@ -11,8 +12,10 @@ class SearchCriteria(BaseModel):
         if isinstance(v, str):
             return [v]
         return v
+
     gender: str
-    outer_material: list[str] = []
+    material: list[str] = []
+    length: list[str] = []
     lining: list[str] = []
     exclude: list[str] = []
     sizes: list[str] = []

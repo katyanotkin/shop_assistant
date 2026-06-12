@@ -1,8 +1,8 @@
 import json
 from unittest.mock import MagicMock, patch
-from core.searcher import _plan_queries, _grounded_search, search_products
-from core.models import SearchCriteria
 
+from core.models import SearchCriteria
+from core.searcher import _grounded_search, _plan_queries, search_products
 
 CRITERIA = SearchCriteria(category="jacket", gender="women", sizes=["M"])
 
@@ -23,6 +23,7 @@ def _make_grounding_chunk(uri: str, title: str) -> MagicMock:
 
 
 # --- _plan_queries ---
+
 
 def test_plan_queries_parses_valid_json_array():
     queries = ["women jacket buy", "jacket women M shop", "women jacket for sale"]
@@ -48,6 +49,7 @@ def test_plan_queries_strips_plain_code_fences():
 
 
 # --- _grounded_search ---
+
 
 def test_grounded_search_extracts_urls_from_chunks():
     chunk1 = _make_grounding_chunk("https://shop.com/jacket", "Jacket Shop")
@@ -102,6 +104,7 @@ def test_grounded_search_returns_empty_when_chunks_raise():
 
 # --- search_products ---
 
+
 def test_search_products_deduplicates_urls():
     queries = ["query one", "query two"]
     shared_url = "https://shop.com/jacket"
@@ -116,9 +119,7 @@ def test_search_products_deduplicates_urls():
     with patch("core.searcher.genai.Client") as MockClient:
         mock_client = MagicMock()
         MockClient.return_value = mock_client
-        mock_client.models.generate_content.side_effect = [
-            plan_response, search_response, search_response
-        ]
+        mock_client.models.generate_content.side_effect = [plan_response, search_response, search_response]
 
         result = search_products(CRITERIA, "my-project", max_results=20)
 

@@ -9,13 +9,14 @@ Usage:
   python run.py run --search wax_coat         # run one search
   python run.py run --search wax_coat --dry-run  # run without saving or notifying
 """
+
 import argparse
 import json
 import sys
 
-from core.settings import Settings
 from core import firestore_client as fc
-from core.runner import run_search, print_result
+from core.runner import print_result, run_search
+from core.settings import Settings
 
 
 def cmd_add(args, _settings: Settings) -> None:

@@ -1,7 +1,9 @@
 import json
 import time
+
 import google.genai as genai
 from google.genai import types
+
 from .models import SearchCriteria
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
@@ -21,8 +23,8 @@ Return ONLY a JSON object:
   "title": "product name, or empty string if not a product page",
   "price": null or numeric price in USD/EUR/GBP,
   "score": integer 0-10,
-  "matched": ["brief human-readable label per satisfied requirement, e.g. 'waxed cotton outer', 'size M available', 'price within budget'"],
-  "unmatched": ["brief label per unsatisfied or unknown requirement, e.g. 'lining unclear', 'size not listed', 'price over budget'"],
+  "matched": ["brief label per satisfied requirement, e.g. 'waxed cotton', 'size M', 'price ok'"],
+  "unmatched": ["brief label per unsatisfied requirement, e.g. 'lining unclear', 'size not listed'"],
   "notes": "one sentence explanation"
 }}
 
@@ -32,9 +34,9 @@ Hard rules (violations → score 0):
 - Score 0 if not a product page at all
 
 Soft rules (violations reduce score, do not zero it):
-- outer_material / lining / sizes: satisfied if ANY listed value matches
+- material / lining / sizes / length: satisfied if ANY listed value matches
 - exclude: if ANY excluded material is detected, cap score at 3
-- max_price: price up to 50% above the limit scores at most 6 and note as "price over budget"; price more than 50% above the limit caps score at 3
+- max_price: up to 50% over limit → score ≤ 6, note "price over budget"; more than 50% over → score ≤ 3
 
 Keep matched/unmatched labels concise (2-5 words) — no raw JSON field names.
 Return only the JSON object, no markdown, no extra text."""

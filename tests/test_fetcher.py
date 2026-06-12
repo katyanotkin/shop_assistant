@@ -1,6 +1,8 @@
 from unittest.mock import MagicMock, patch
+
 import httpx
-from core.fetcher import fetch_page_text, fetch_page
+
+from core.fetcher import fetch_page, fetch_page_text
 
 
 def _mock_response(status_code: int, text: str, url: str = "https://example.com") -> MagicMock:
@@ -83,6 +85,7 @@ def test_fetch_page_text_truncates_long_content():
 
 
 # --- fetch_page ---
+
 
 def test_fetch_page_returns_final_url_after_redirect():
     html = "<html><body><p>Product</p></body></html>"

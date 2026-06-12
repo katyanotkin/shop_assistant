@@ -2,15 +2,27 @@ import csv
 import pathlib
 from datetime import date
 
-from .models import ProductMatch, RunResult, SearchCriteria
-from .settings import Settings
 from . import firestore_client as fc
-from .searcher import search_products
-from .ranker import rank_all
+from .models import ProductMatch, RunResult, SearchCriteria
 from .notifier import send_run_notification
+from .ranker import rank_all
+from .searcher import search_products
+from .settings import Settings
 
 _RESULTS_DIR = pathlib.Path("results")
-_CSV_FIELDS = ["run_date", "search_name", "match_type", "score", "is_new", "title", "url", "price", "matched", "unmatched", "notes"]
+_CSV_FIELDS = [
+    "run_date",
+    "search_name",
+    "match_type",
+    "score",
+    "is_new",
+    "title",
+    "url",
+    "price",
+    "matched",
+    "unmatched",
+    "notes",
+]
 
 
 def _link(url: str) -> str:
@@ -27,10 +39,16 @@ def save_csv(result: RunResult) -> pathlib.Path:
     for m in result.partial_matches:
         rows.append(_to_row(m, "partial", result))
     if not rows:
-        rows.append({f: "" for f in _CSV_FIELDS} | {
-            "run_date": result.run_date, "search_name": result.search_name,
-            "match_type": "no_match", "score": "", "total_candidates": result.total_candidates,
-        })
+        rows.append(
+            {f: "" for f in _CSV_FIELDS}
+            | {
+                "run_date": result.run_date,
+                "search_name": result.search_name,
+                "match_type": "no_match",
+                "score": "",
+                "total_candidates": result.total_candidates,
+            }
+        )
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=_CSV_FIELDS, delimiter="\t")
         writer.writeheader()
@@ -97,10 +115,7 @@ def run_search(search_name: str, settings: Settings, dry_run: bool = False) -> R
     last_run = fc.load_last_run(search_name) if not dry_run else None
     prev_urls: set[str] = set()
     if last_run:
-        prev_urls = {
-            m["url"]
-            for m in last_run.get("matches", []) + last_run.get("partial_matches", [])
-        }
+        prev_urls = {m["url"] for m in last_run.get("matches", []) + last_run.get("partial_matches", [])}
 
     for m in matches + partial_matches:
         if m.url not in prev_urls:

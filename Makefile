@@ -4,7 +4,7 @@ UV=uv
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install run run-dry list add test lint
+.PHONY: help install run run-dry list add test lint web local-run
 
 ## Show available commands
 help:
@@ -52,3 +52,12 @@ test: ## Run tests
 ## Lint
 lint: ## Run ruff
 	ruff check shop_assistant/ run.py
+
+## Start local web UI (http://localhost:8000)
+web: ## Start web UI dev server
+	PYTHONPATH=. $(PYTHON) -m uvicorn web.main:app --reload --port 8000
+
+## Install web deps and start local web UI (http://localhost:8000)
+local-run: ## Install web deps then start web UI
+	$(VENV)/bin/pip install -q fastapi uvicorn
+	PYTHONPATH=. $(VENV)/bin/python -m uvicorn web.main:app --reload --port 8000

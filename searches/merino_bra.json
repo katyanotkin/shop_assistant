@@ -4,7 +4,7 @@
   "criteria": {
     "category": ["underware","bra", "bralette"],
     "gender": "women",
-    "outer_material": ["merino wool"],
+    "material": ["merino wool"],
     "padding": ["none"],
     "sizes": ["M", "L"],
     "max_price": 100,

@@ -1,7 +1,9 @@
 import json
 from urllib.parse import urlparse
+
 import google.genai as genai
 from google.genai import types
+
 from .models import SearchCriteria
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
@@ -43,7 +45,7 @@ def _plan_queries(criteria: SearchCriteria, client: genai.Client) -> list[str]:
 
 
 def _shop_queries(criteria: SearchCriteria, shops: list[str]) -> list[str]:
-    keywords = " ".join(criteria.category[:1] + criteria.outer_material[:1] + [criteria.gender])
+    keywords = " ".join(criteria.category[:1] + criteria.material[:1] + [criteria.gender])
     queries = []
     for shop_url in shops:
         domain = urlparse(shop_url).netloc.removeprefix("www.")
@@ -55,9 +57,7 @@ def _grounded_search(query: str, client: genai.Client) -> list[dict]:
     response = client.models.generate_content(
         model=GEMINI_MODEL,
         contents=f"Find product pages for sale matching: {query}",
-        config=types.GenerateContentConfig(
-            tools=[types.Tool(google_search=types.GoogleSearch())]
-        ),
+        config=types.GenerateContentConfig(tools=[types.Tool(google_search=types.GoogleSearch())]),
     )
     results = []
     try:

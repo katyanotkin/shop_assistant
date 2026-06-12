@@ -1,13 +1,14 @@
 import pytest
 from pydantic import ValidationError
-from core.models import SearchCriteria, ProductMatch, RunResult
+
+from core.models import ProductMatch, RunResult, SearchCriteria
 
 
 def test_search_criteria_valid():
     c = SearchCriteria(category="jacket", gender="women")
     assert c.category == ["jacket"]
     assert c.gender == "women"
-    assert c.outer_material == []
+    assert c.material == []
     assert c.lining == []
     assert c.exclude == []
     assert c.sizes == []
@@ -19,14 +20,14 @@ def test_search_criteria_full():
     c = SearchCriteria(
         category=["coat", "trench"],
         gender="women",
-        outer_material=["waxed cotton"],
+        material=["waxed cotton"],
         lining=["cotton"],
         exclude=["polyester"],
         sizes=["M", "L"],
         max_price=300.0,
         extra_notes="must be waterproof",
     )
-    assert c.outer_material == ["waxed cotton"]
+    assert c.material == ["waxed cotton"]
     assert c.max_price == 300.0
     assert c.extra_notes == "must be waterproof"
 
