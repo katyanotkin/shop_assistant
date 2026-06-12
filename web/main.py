@@ -1,15 +1,28 @@
+import hashlib
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import Cookie, Depends, FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 import core.firestore_client as fc
+from core.settings import Settings
 
+_settings = Settings()
 app = FastAPI(title="Shop Assistant")
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 _HTML = (Path(__file__).parent / "templates" / "index.html").read_text()
+_ADMIN_HTML = (Path(__file__).parent / "templates" / "admin.html").read_text()
+
+
+def _admin_token() -> str:
+    return hashlib.sha256(f"sa:{_settings.admin_password}".encode()).hexdigest()
+
+
+def _require_admin(sa_admin: str | None = Cookie(default=None)) -> None:
+    if not _settings.admin_password or sa_admin != _admin_token():
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -37,3 +50,34 @@ def get_run(search_name: str, run_date: str):
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
     return run
+
+
+# ── Admin ────────────────────────────────────────────────────────────────────
+
+
+@app.get("/admin", response_class=HTMLResponse)
+def admin_page():
+    return _ADMIN_HTML
+
+
+@app.post("/api/admin/login")
+async def admin_login(request: Request):
+    body = await request.json()
+    if not _settings.admin_password or body.get("password") != _settings.admin_password:
+        raise HTTPException(status_code=401, detail="Wrong password")
+    resp = JSONResponse({"ok": True})
+    resp.set_cookie("sa_admin", _admin_token(), httponly=True, samesite="strict")
+    return resp
+
+
+@app.get("/api/admin/searches", dependencies=[Depends(_require_admin)])
+def admin_list_searches():
+    return fc.list_searches(active_only=False)
+
+
+@app.put("/api/admin/search/{name}", dependencies=[Depends(_require_admin)])
+async def admin_save_search(name: str, request: Request):
+    config = await request.json()
+    config["search_name"] = name
+    fc.save_search_config(config)
+    return {"ok": True}

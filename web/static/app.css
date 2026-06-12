@@ -54,6 +54,14 @@ body {
   color: var(--text-main);
 }
 
+.topbar-admin-link {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.topbar-admin-link:hover { color: var(--text-main); }
+
 /* ===== Layout ===== */
 
 .layout {

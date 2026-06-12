@@ -93,7 +93,8 @@ gcp-deploy: gcp-build ## GCP: build + push + deploy to Cloud Run
 		--platform=managed \
 		--allow-unauthenticated \
 		--project=$(GCP_PROJECT) \
-		--set-env-vars=GOOGLE_CLOUD_PROJECT=$(GCP_PROJECT)
+		--set-env-vars=GOOGLE_CLOUD_PROJECT=$(GCP_PROJECT) \
+		--set-secrets=ADMIN_PASSWORD=shop-assistant-admin-password:latest
 	@echo "Deployed: $(GCP_SERVICE)"
 
 ## GCP: print deployed service URL
