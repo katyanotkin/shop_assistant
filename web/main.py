@@ -1,7 +1,7 @@
 import hashlib
 from pathlib import Path
 
-from fastapi import Cookie, Depends, FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, Cookie, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -75,9 +75,33 @@ def admin_list_searches():
     return fc.list_searches(active_only=False)
 
 
+@app.get("/api/admin/search/{name}", dependencies=[Depends(_require_admin)])
+def admin_get_search(name: str):
+    config = fc.load_search_config(name)
+    if not config:
+        raise HTTPException(status_code=404, detail="Not found")
+    return config
+
+
 @app.put("/api/admin/search/{name}", dependencies=[Depends(_require_admin)])
 async def admin_save_search(name: str, request: Request):
     config = await request.json()
     config["search_name"] = name
     fc.save_search_config(config)
+    return {"ok": True}
+
+
+def _run_in_background(search_name: str) -> None:
+    from core.runner import print_result, run_search
+
+    try:
+        result = run_search(search_name, _settings)
+        print_result(result)
+    except Exception as e:
+        print(f"Background run error [{search_name}]: {e}")
+
+
+@app.post("/api/admin/run/{name}", dependencies=[Depends(_require_admin)])
+def admin_run_search(name: str, background_tasks: BackgroundTasks):
+    background_tasks.add_task(_run_in_background, name)
     return {"ok": True}

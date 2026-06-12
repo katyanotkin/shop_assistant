@@ -16,7 +16,24 @@
     </nav>
   </header>
 
-  <div id="admin-root"></div>
+  <div id="login-overlay" class="login-overlay" hidden>
+    <form id="login-form" class="login-card">
+      <h2 class="login-title">Admin</h2>
+      <p id="login-err" class="login-err" hidden></p>
+      <input type="password" id="pwd" class="field-input" placeholder="Password" autofocus>
+      <button type="submit" class="btn-primary">Log in</button>
+    </form>
+  </div>
+
+  <div class="layout" id="admin-layout" hidden>
+    <nav class="sidebar">
+      <p class="sidebar-label">Searches</p>
+      <ul class="search-list" id="admin-search-list" role="listbox"></ul>
+    </nav>
+    <main class="content" id="admin-content">
+      <p class="empty-state">Select a search to edit.</p>
+    </main>
+  </div>
 
   <script src="/static/admin.js"></script>
 </body>
