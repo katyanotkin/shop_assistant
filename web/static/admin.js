@@ -163,46 +163,22 @@
 
       btnRun.disabled = true;
       btnSave.disabled = true;
-
-      let dotsTimer;
-      const startDots = () => {
-        let n = 0;
-        dotsTimer = setInterval(() => {
-          n = (n + 1) % 4;
-          btnRun.textContent = "Running" + ".".repeat(n + 1);
-        }, 450);
-      };
-      const stopDots = () => {
-        clearInterval(dotsTimer);
-        btnRun.textContent = "Save & Run";
-        btnRun.disabled = false;
-        btnSave.disabled = false;
-      };
+      let n = 0;
+      const timer = setInterval(() => { btnRun.textContent = "...".slice(0, (n++ % 3) + 1); }, 400);
 
       try {
         await api("PUT", `/api/admin/search/${cfg.search_name}`, cfg);
-        await api("POST", `/api/admin/run/${cfg.search_name}`);
-        startDots();
-        setMsg("", "");
-
-        // Poll until today's result appears in Firestore (run complete)
-        const today = new Date().toISOString().slice(0, 10);
-        await new Promise((resolve, reject) => {
-          let attempts = 0;
-          const id = setInterval(async () => {
-            attempts++;
-            if (attempts > 90) { clearInterval(id); reject(new Error("Timed out after 15 min")); return; }
-            try {
-              const dates = await api("GET", `/api/results/${encodeURIComponent(cfg.search_name)}`);
-              if (dates.includes(today)) { clearInterval(id); resolve(); }
-            } catch { /* keep polling */ }
-          }, 10000);
-        });
-
-        stopDots();
-        setMsg("Done! Switch to Results to view.", "ok");
+        const result = await api("POST", `/api/admin/run/${cfg.search_name}`);
+        clearInterval(timer);
+        btnRun.textContent = "Save & Run";
+        btnRun.disabled = false;
+        btnSave.disabled = false;
+        setMsg(`Done — ${result.matches} matches, ${result.partial} partial.`, "ok");
       } catch (e) {
-        stopDots();
+        clearInterval(timer);
+        btnRun.textContent = "Save & Run";
+        btnRun.disabled = false;
+        btnSave.disabled = false;
         setMsg(e.message, "err");
       }
     });
