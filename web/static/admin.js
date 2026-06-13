@@ -158,12 +158,53 @@
 
     form.querySelector(".btn-run").addEventListener("click", async () => {
       const cfg = collectConfig(form);
+      const btnRun  = form.querySelector(".btn-run");
+      const btnSave = form.querySelector(".btn-save");
+
+      btnRun.disabled = true;
+      btnSave.disabled = true;
+
+      let dotsTimer;
+      const startDots = () => {
+        let n = 0;
+        dotsTimer = setInterval(() => {
+          n = (n + 1) % 4;
+          btnRun.textContent = "Running" + ".".repeat(n + 1);
+        }, 450);
+      };
+      const stopDots = () => {
+        clearInterval(dotsTimer);
+        btnRun.textContent = "Save & Run";
+        btnRun.disabled = false;
+        btnSave.disabled = false;
+      };
+
       try {
         await api("PUT", `/api/admin/search/${cfg.search_name}`, cfg);
-        setMsg("Saved. Starting run…", "ok");
         await api("POST", `/api/admin/run/${cfg.search_name}`);
-        setMsg("Run started — check Results in a few minutes.", "ok");
-      } catch (e) { setMsg(e.message, "err"); }
+        startDots();
+        setMsg("", "");
+
+        // Poll until today's result appears in Firestore (run complete)
+        const today = new Date().toISOString().slice(0, 10);
+        await new Promise((resolve, reject) => {
+          let attempts = 0;
+          const id = setInterval(async () => {
+            attempts++;
+            if (attempts > 90) { clearInterval(id); reject(new Error("Timed out after 15 min")); return; }
+            try {
+              const dates = await api("GET", `/api/results/${encodeURIComponent(cfg.search_name)}`);
+              if (dates.includes(today)) { clearInterval(id); resolve(); }
+            } catch { /* keep polling */ }
+          }, 10000);
+        });
+
+        stopDots();
+        setMsg("Done! Switch to Results to view.", "ok");
+      } catch (e) {
+        stopDots();
+        setMsg(e.message, "err");
+      }
     });
   }
 
