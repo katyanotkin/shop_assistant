@@ -181,6 +181,7 @@
         btnRun.disabled = false;
         btnSave.disabled = false;
         setMsg(`Done — ${result.matches} matches, ${result.partial} partial.`, "ok");
+        showView(cfg.search_name, "results");
       } catch (e) {
         clearInterval(timer);
         btnRun.textContent = "Save & Run";
@@ -194,7 +195,6 @@
   // ── Results view ─────────────────────────────────────────────────────────
 
   async function renderResults(name) {
-    content.innerHTML = `<p class="loading">Loading…</p>`;
     try {
       const dates = await api("GET", `/api/results/${encodeURIComponent(name)}`);
       const run = await api("GET", `/api/results/${encodeURIComponent(name)}/${dates[0]}`);
@@ -241,6 +241,7 @@
         bindEdit(panel.querySelector(".edit-form"));
       } catch (e) { panel.innerHTML = `<p class="empty-state">${e.message}</p>`; }
     } else {
+      panel.innerHTML = `<p class="loading">Loading…</p>`;
       panel.innerHTML = await renderResults(name);
     }
   }
