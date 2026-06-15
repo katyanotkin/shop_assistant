@@ -30,8 +30,15 @@
     e.preventDefault();
     try {
       await api("POST", "/api/admin/login", { password: document.getElementById("pwd").value });
-      init();
-    } catch { showLogin("Wrong password."); }
+    } catch {
+      showLogin("Wrong password.");
+      return;
+    }
+    try {
+      await init();
+    } catch {
+      showLogin("Login accepted but auth check failed — check server logs.");
+    }
   });
 
   // ── Helpers shared with app.js ────────────────────────────────────────────
@@ -255,25 +262,20 @@
   // ── Init ─────────────────────────────────────────────────────────────────
 
   async function init() {
-    try {
-      const searches = await api("GET", "/api/admin/searches");
-      loginOverlay.hidden = true;
-      adminLayout.hidden = false;
+    const searches = await api("GET", "/api/admin/searches"); // throws on 401
+    loginOverlay.hidden = true;
+    adminLayout.hidden = false;
 
-      searchList.innerHTML = searches.map(s =>
-        `<li role="option" data-name="${s.search_name}" class="${s.active ? "" : "inactive-search"}">
-          ${s.search_name.replace(/_/g, " ")}
-        </li>`).join("");
+    searchList.innerHTML = searches.map(s =>
+      `<li role="option" data-name="${s.search_name}" class="${s.active ? "" : "inactive-search"}">
+        ${s.search_name.replace(/_/g, " ")}
+      </li>`).join("");
 
-      searchList.querySelectorAll("li").forEach(el =>
-        el.addEventListener("click", () => selectSearch(el.dataset.name, searches)));
+    searchList.querySelectorAll("li").forEach(el =>
+      el.addEventListener("click", () => selectSearch(el.dataset.name, searches)));
 
-      if (searches.length) selectSearch(searches[0].search_name, searches);
-    } catch (e) {
-      if (e.status === 401) showLogin();
-      else content.innerHTML = `<p class="empty-state">Error: ${e.message}</p>`;
-    }
+    if (searches.length) selectSearch(searches[0].search_name, searches);
   }
 
-  init();
+  init().catch(e => { if (e.status === 401) showLogin(); });
 })();

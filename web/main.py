@@ -66,7 +66,8 @@ async def admin_login(request: Request):
     if not _settings.admin_password or body.get("password") != _settings.admin_password:
         raise HTTPException(status_code=401, detail="Wrong password")
     resp = JSONResponse({"ok": True})
-    resp.set_cookie("sa_admin", _admin_token(), httponly=True, samesite="strict")
+    is_https = request.headers.get("x-forwarded-proto") == "https" or request.url.scheme == "https"
+    resp.set_cookie("sa_admin", _admin_token(), httponly=True, samesite="strict", secure=is_https)
     return resp
 
 
