@@ -1,0 +1,15 @@
+name: main-deploy
+description: deploy to Cloud Run on push to main
+filename: cloudbuild.yaml
+serviceAccount: projects/knotmem26/serviceAccounts/cloudbuild-deployer@knotmem26.iam.gserviceaccount.com
+
+github:
+  owner: katyanotkin
+  name: shop_assistant
+  push:
+    branch: ^main$
+
+ignoredFiles:
+  - "*.md"
+  - ".gitignore"
+  - "searches/**"
