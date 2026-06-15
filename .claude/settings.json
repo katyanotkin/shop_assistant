@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "agent",
+            "if": "Bash(git commit *)",
+            "prompt": "A git commit was just made. Review the changes by running `git diff HEAD~1 HEAD`. Focus on: CSS/JS anti-patterns (e.g. display:flex/grid on elements that also use the HTML `hidden` attribute, which causes the hidden attribute to have no effect); security issues in FastAPI auth or cookie handling; correctness bugs in Python or JavaScript; missing test coverage for new code paths. Report only real findings — skip style nitpicks and issues already covered by the pre-commit ruff/pytest hooks.",
+            "timeout": 120,
+            "statusMessage": "Code reviewer checking commit..."
+          }
+        ]
+      }
+    ]
+  }
+}
