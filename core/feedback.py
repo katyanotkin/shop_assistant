@@ -60,6 +60,7 @@ def learn_from_feedback(search_name: str, project: str) -> dict | None:
             raw = raw.split("```")[1]
             if raw.startswith("json"):
                 raw = raw[4:]
+            raw = raw.strip()
         parsed = json.loads(raw)
     except Exception:
         return None

@@ -60,7 +60,7 @@ class FeedbackBody(BaseModel):
     text: str
 
 
-@app.put("/api/feedback/{search_name}/{run_date}")
+@app.put("/api/feedback/{search_name}/{run_date}", dependencies=[Depends(_require_admin)])
 def put_feedback(search_name: str, run_date: str, body: FeedbackBody):
     submit_feedback(search_name, run_date, body.url, body.text)
     return {"ok": True}
