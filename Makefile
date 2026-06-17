@@ -13,7 +13,7 @@ GCP_IMAGE=$(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT)/$(GCP_REPOSITORY)/web:$(IM
 .DEFAULT_GOAL := help
 
 .PHONY: help install run run-one dry-run list add add-example test lint web local-run \
-	gcp-check gcp-auth gcp-build gcp-deploy gcp-map gcp-open
+	gcp-check gcp-auth gcp-build gcp-deploy gcp-map gcp-open apply-trigger apply-trigger
 
 ## Show available commands
 help:
@@ -109,5 +109,12 @@ gcp-map: gcp-check ## GCP: map $(DOMAIN) to Cloud Run service (one-time)
 	gcloud beta run domain-mappings create \
 		--service=$(GCP_SERVICE) \
 		--domain=$(DOMAIN) \
+		--region=$(GCP_REGION) \
+		--project=$(GCP_PROJECT)
+
+## GCP: import/update Cloud Build trigger (region=us-east1)
+apply-trigger: gcp-check ## GCP: import/update Cloud Build trigger (region=us-east1)
+	gcloud builds triggers import \
+		--source=cloudbuild-trigger.yaml \
 		--region=$(GCP_REGION) \
 		--project=$(GCP_PROJECT)
