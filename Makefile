@@ -13,7 +13,7 @@ GCP_IMAGE=$(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT)/$(GCP_REPOSITORY)/web:$(IM
 .DEFAULT_GOAL := help
 
 .PHONY: help install run run-one dry-run list add add-example test lint web local-run \
-	gcp-check gcp-auth gcp-build gcp-deploy gcp-map gcp-open apply-trigger apply-trigger
+	gcp-check gcp-auth gcp-build gcp-deploy gcp-map gcp-open apply-trigger
 
 ## Show available commands
 help:
