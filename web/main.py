@@ -4,8 +4,11 @@ from pathlib import Path
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 import core.firestore_client as fc
+from core.feedback import submit_feedback
+from core.runner import run_search
 from core.settings import Settings
 
 _settings = Settings()
@@ -52,6 +55,17 @@ def get_run(search_name: str, run_date: str):
     return run
 
 
+class FeedbackBody(BaseModel):
+    url: str
+    text: str
+
+
+@app.put("/api/feedback/{search_name}/{run_date}")
+def put_feedback(search_name: str, run_date: str, body: FeedbackBody):
+    submit_feedback(search_name, run_date, body.url, body.text)
+    return {"ok": True}
+
+
 # ── Admin ────────────────────────────────────────────────────────────────────
 
 
@@ -92,9 +106,11 @@ async def admin_save_search(name: str, request: Request):
     return {"ok": True}
 
 
-@app.post("/api/admin/run/{name}", dependencies=[Depends(_require_admin)])
-def admin_run_search(name: str):
-    from core.runner import run_search
+class RunOptions(BaseModel):
+    learn: bool = True
 
-    result = run_search(name, _settings)
+
+@app.post("/api/admin/run/{name}", dependencies=[Depends(_require_admin)])
+def admin_run_search(name: str, options: RunOptions = RunOptions()):
+    result = run_search(name, _settings, learn=options.learn)
     return {"ok": True, "matches": len(result.matches), "partial": len(result.partial_matches)}

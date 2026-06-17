@@ -49,7 +49,7 @@ def cmd_run(args, settings: Settings) -> None:
         return
     for name in names:
         print(f"\nRunning: {name}")
-        result = run_search(name, settings, dry_run=args.dry_run)
+        result = run_search(name, settings, dry_run=args.dry_run, learn=not args.no_learn)
         print_result(result)
 
 
@@ -65,6 +65,7 @@ def main() -> None:
     p_run = sub.add_parser("run", help="Run searches and report matches")
     p_run.add_argument("--search", help="Search name (default: all active)")
     p_run.add_argument("--dry-run", action="store_true", help="Don't save results or send notifications")
+    p_run.add_argument("--no-learn", action="store_true", help="Skip learning from feedback before running")
 
     args = parser.parse_args()
     # Settings (requires .env) only needed for run

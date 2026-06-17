@@ -4,7 +4,8 @@ from urllib.parse import urlparse
 import google.genai as genai
 from google.genai import types
 
-from .models import SearchCriteria
+from . import models
+from .feedback import format_feedback_section
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
 GEMINI_LOCATION = "us-central1"
@@ -14,6 +15,7 @@ You are a shopping search strategist. Given product search criteria, generate ex
 
 Criteria (JSON):
 {criteria}
+{feedback_section}
 
 Query format — follow this order strictly:
 1. Discovery query: "who sells {{gender}} {{material}} {{category terms}}?" — use ALL category values
@@ -30,10 +32,13 @@ Example for women's waxed cotton coat/jacket/trench M/L:
 Return ONLY a JSON array of 3 strings, no markdown, no extra text."""
 
 
-def _plan_queries(criteria: SearchCriteria, client: genai.Client) -> list[str]:
+def _plan_queries(criteria: models.SearchCriteria, client: genai.Client, feedback_notes: str = "") -> list[str]:
     response = client.models.generate_content(
         model=GEMINI_MODEL,
-        contents=_PLAN_PROMPT.format(criteria=criteria.model_dump_json(indent=2)),
+        contents=_PLAN_PROMPT.format(
+            criteria=criteria.model_dump_json(indent=2),
+            feedback_section=format_feedback_section(feedback_notes),
+        ),
         config=types.GenerateContentConfig(temperature=0),
     )
     raw = response.text.strip()
@@ -44,7 +49,7 @@ def _plan_queries(criteria: SearchCriteria, client: genai.Client) -> list[str]:
     return json.loads(raw)
 
 
-def _search_shop(shop_url: str, criteria: SearchCriteria, client: genai.Client) -> list[dict]:
+def _search_shop(shop_url: str, criteria: models.SearchCriteria, client: genai.Client) -> list[dict]:
     """Grounded search scoped to one preferred shop."""
     domain = urlparse(shop_url).netloc.removeprefix("www.")
     cats = " OR ".join(criteria.category)
@@ -91,10 +96,11 @@ def _grounded_search(query: str, client: genai.Client) -> list[dict]:
 
 
 def search_products(
-    criteria: SearchCriteria,
+    criteria: models.SearchCriteria,
     project: str,
     max_results: int = 20,
     shops: list[str] | None = None,
+    feedback_notes: str = "",
 ) -> list[dict]:
     """Two-stage AI search: planner generates queries, grounded Gemini returns URLs."""
     client = genai.Client(vertexai=True, project=project, location=GEMINI_LOCATION)
@@ -111,7 +117,7 @@ def search_products(
                 results.append(item)
 
     # General discovery queries fill remaining slots
-    queries = _plan_queries(criteria, client)
+    queries = _plan_queries(criteria, client, feedback_notes=feedback_notes)
     print(f"Queries: {queries}")
     for query in queries:
         for item in _grounded_search(query, client):

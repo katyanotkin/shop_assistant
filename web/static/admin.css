@@ -95,6 +95,12 @@
 }
 .btn-run:hover { background: #eff6ff; }
 
+.learn-label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; color: var(--text-muted); cursor: pointer;
+  margin-left: 4px;
+}
+
 .save-msg { font-size: 13px; }
 .save-msg.ok  { color: var(--score-green); }
 .save-msg.err { color: var(--score-red); }

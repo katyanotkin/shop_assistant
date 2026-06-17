@@ -37,7 +37,9 @@
     return `<span class="tag ${cls}">${text}</span>`;
   }
 
-  function renderCard(m) {
+  const _PHRASES = ["Perfect match", "Wrong material", "Too expensive", "Wrong style", "Doesn't ship to me", "Out of stock"];
+
+  function renderCard(m, feedbackMap) {
     const sc = scoreClass(m.score);
     const newTag = m.is_new ? tag("NEW", "tag-new") : "";
     const price = m.price ? `<span class="card-price">€${m.price}</span>` : "";
@@ -50,6 +52,8 @@
     const titleText = site && m.title
       ? `<span class="card-site">${site}</span><span class="card-sep"> | </span>${m.title}`
       : (m.title || "(no title)");
+    const existingFeedback = feedbackMap?.[m.url] || "";
+    const phrases = _PHRASES.map(p => `<button type="button" class="phrase-btn" data-phrase="${p}">${p}</button>`).join("");
     return `
       <div class="card">
         <div class="score-badge ${sc}">${Math.round(m.score)}</div>
@@ -64,6 +68,14 @@
           <a class="card-url" href="${m.url}" target="_blank" rel="noopener">${m.url}</a>
           ${criteria ? `<div class="criteria-row">${criteria}</div>` : ""}
           ${notes}
+          <div class="feedback-row" data-url="${m.url}">
+            <div class="feedback-phrases">${phrases}</div>
+            <div class="feedback-input-row">
+              <textarea class="feedback-text" placeholder="Add feedback…" rows="2">${existingFeedback}</textarea>
+              <button type="button" class="feedback-submit">Save</button>
+            </div>
+            <span class="feedback-msg"></span>
+          </div>
         </div>
       </div>`;
   }
@@ -73,20 +85,51 @@
       resultsPanel.innerHTML = `<p class="empty-state">No matches found for this run.</p>`;
       return;
     }
+    const fb = run.feedback || {};
     let html = `<p class="run-meta">${run.total_candidates ?? "?"} candidates evaluated</p>`;
     if (run.matches?.length) {
       html += `<div class="results-section">
         <p class="section-heading">Matches (${run.matches.length})</p>
-        <div class="cards">${run.matches.map(renderCard).join("")}</div>
+        <div class="cards">${run.matches.map(m => renderCard(m, fb)).join("")}</div>
       </div>`;
     }
     if (run.partial_matches?.length) {
       html += `<div class="results-section">
         <p class="section-heading">Partial matches (${run.partial_matches.length})</p>
-        <div class="cards">${run.partial_matches.map(renderCard).join("")}</div>
+        <div class="cards">${run.partial_matches.map(m => renderCard(m, fb)).join("")}</div>
       </div>`;
     }
     resultsPanel.innerHTML = html;
+  }
+
+  function bindFeedback(searchName, runDate) {
+    resultsPanel.querySelectorAll(".feedback-row").forEach(row => {
+      const url = row.dataset.url;
+      const textarea = row.querySelector(".feedback-text");
+      const msgEl = row.querySelector(".feedback-msg");
+
+      row.querySelectorAll(".phrase-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const phrase = btn.dataset.phrase;
+          textarea.value = textarea.value ? `${textarea.value}; ${phrase}` : phrase;
+        });
+      });
+
+      row.querySelector(".feedback-submit").addEventListener("click", async () => {
+        msgEl.textContent = "Saving…";
+        try {
+          const r = await fetch(
+            `/api/feedback/${encodeURIComponent(searchName)}/${encodeURIComponent(runDate)}`,
+            { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, text: textarea.value }) }
+          );
+          if (!r.ok) throw new Error(r.statusText);
+          msgEl.textContent = "Saved";
+          setTimeout(() => { msgEl.textContent = ""; }, 2000);
+        } catch {
+          msgEl.textContent = "Failed";
+        }
+      });
+    });
   }
 
   async function loadRun(searchName, runDate) {
@@ -94,6 +137,7 @@
     try {
       const run = await api(`/api/results/${encodeURIComponent(searchName)}/${encodeURIComponent(runDate)}`);
       renderResults(run);
+      bindFeedback(searchName, runDate);
     } catch (e) {
       resultsPanel.innerHTML = `<p class="empty-state">Failed to load results: ${e.message}</p>`;
     }

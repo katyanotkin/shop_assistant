@@ -28,6 +28,8 @@ class SearchConfig(BaseModel):
     active: bool = True
     criteria: SearchCriteria
     preferred_shops: list[str] = []
+    feedback_notes: Optional[str] = None
+    avoid_shops: list[str] = []
 
 
 class ProductMatch(BaseModel):
@@ -48,3 +50,4 @@ class RunResult(BaseModel):
     partial_matches: list[ProductMatch] = []
     no_match: bool = False
     total_candidates: int = 0
+    feedback: dict[str, str] = {}

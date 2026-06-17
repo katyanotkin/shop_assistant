@@ -2,11 +2,11 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-from .models import ProductMatch, RunResult
+from . import models
 from .settings import Settings
 
 
-def _format_match(m: ProductMatch) -> str:
+def _format_match(m: models.ProductMatch) -> str:
     lines = [f"  Score {m.score}/10  {'[NEW]' if m.is_new else ''}"]
     lines.append(f"  {m.title or '(no title)'}")
     lines.append(f"  {m.url}")
@@ -21,7 +21,7 @@ def _format_match(m: ProductMatch) -> str:
     return "\n".join(lines)
 
 
-def send_run_notification(result: RunResult, settings: Settings) -> None:
+def send_run_notification(result: models.RunResult, settings: Settings) -> None:
     if not settings.notify_email or not settings.gmail_app_password:
         return
     new_matches = [m for m in result.matches if m.is_new]

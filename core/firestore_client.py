@@ -1,3 +1,5 @@
+from urllib.parse import urlparse
+
 from google.cloud import firestore
 
 _db: firestore.Client | None = None
@@ -60,3 +62,48 @@ def load_run(search_name: str, run_date: str) -> dict | None:
 
 def save_run(search_name: str, run_date: str, result: dict) -> None:
     (get_db().collection("shop_results").document(search_name).collection("runs").document(run_date).set(result))
+
+
+def save_feedback(search_name: str, run_date: str, url: str, text: str) -> None:
+    doc_ref = get_db().collection("shop_results").document(search_name).collection("runs").document(run_date)
+    doc_ref.update({firestore.FieldPath("feedback", url): text})
+
+
+def save_learned_feedback(search_name: str, feedback_notes: str, avoid_shops: list[str]) -> None:
+    get_db().collection("shop_searches").document(search_name).update(
+        {"feedback_notes": feedback_notes, "avoid_shops": avoid_shops}
+    )
+
+
+def load_feedback_entries(search_name: str, limit: int = 10) -> list[dict]:
+    """Collect rated items across the last `limit` runs, with the Gemini context they were scored with."""
+    runs = (
+        get_db()
+        .collection("shop_results")
+        .document(search_name)
+        .collection("runs")
+        .order_by("run_date", direction=firestore.Query.DESCENDING)
+        .limit(limit)
+        .stream()
+    )
+    entries = []
+    for doc in runs:
+        data = doc.to_dict()
+        feedback = data.get("feedback") or {}
+        if not feedback:
+            continue
+        items_by_url = {m["url"]: m for m in data.get("matches", []) + data.get("partial_matches", [])}
+        for url, text in feedback.items():
+            item = items_by_url.get(url, {})
+            entries.append(
+                {
+                    "url": url,
+                    "domain": urlparse(url).netloc.removeprefix("www."),
+                    "title": item.get("title", ""),
+                    "score": item.get("score"),
+                    "matched": item.get("matched", []),
+                    "unmatched": item.get("unmatched", []),
+                    "feedback": text,
+                }
+            )
+    return entries

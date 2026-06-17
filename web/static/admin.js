@@ -122,8 +122,12 @@
       ${fieldRow("Notes", "extra_notes", c.extra_notes || "", "textarea")}
       ${fieldRow("Preferred shops", "preferred_shops", (cfg.preferred_shops || []).join("\n"), "textarea")}
       <div class="action-row">
+        <button class="btn-run btn-run-only">Run</button>
         <button class="btn-primary btn-save">Save</button>
-        <button class="btn-run">Save &amp; Run</button>
+        <button class="btn-run btn-save-run">Save &amp; Run</button>
+        <label class="learn-label">
+          <input type="checkbox" name="learn_feedback" checked> Learn from feedback
+        </label>
         <span class="save-msg"></span>
       </div>
     </div>`;
@@ -151,10 +155,15 @@
   }
 
   function bindEdit(form) {
-    const msg  = form.querySelector(".save-msg");
-    const setMsg = (text, cls) => { msg.textContent = text; msg.className = `save-msg ${cls}`; };
+    const msg        = form.querySelector(".save-msg");
+    const setMsg     = (text, cls) => { msg.textContent = text; msg.className = `save-msg ${cls}`; };
+    const btnSave    = form.querySelector(".btn-save");
+    const btnRunOnly = form.querySelector(".btn-run-only");
+    const btnSaveRun = form.querySelector(".btn-save-run");
+    const learnChk   = form.querySelector("[name='learn_feedback']");
+    const allBtns    = [btnSave, btnRunOnly, btnSaveRun];
 
-    form.querySelector(".btn-save").addEventListener("click", async () => {
+    btnSave.addEventListener("click", async () => {
       const cfg = collectConfig(form);
       try {
         await api("PUT", `/api/admin/search/${cfg.search_name}`, cfg);
@@ -163,33 +172,30 @@
       } catch (e) { setMsg(e.message, "err"); }
     });
 
-    form.querySelector(".btn-run").addEventListener("click", async () => {
+    async function runSearch(btn, saveFirst) {
       const cfg = collectConfig(form);
-      const btnRun  = form.querySelector(".btn-run");
-      const btnSave = form.querySelector(".btn-save");
-
-      btnRun.disabled = true;
-      btnSave.disabled = true;
+      const originalText = btn.textContent;
+      allBtns.forEach(b => b.disabled = true);
       let n = 0;
-      const timer = setInterval(() => { btnRun.textContent = "...".slice(0, (n++ % 3) + 1); }, 400);
-
+      const timer = setInterval(() => { btn.textContent = "...".slice(0, (n++ % 3) + 1); }, 400);
       try {
-        await api("PUT", `/api/admin/search/${cfg.search_name}`, cfg);
-        const result = await api("POST", `/api/admin/run/${cfg.search_name}`);
+        if (saveFirst) await api("PUT", `/api/admin/search/${cfg.search_name}`, cfg);
+        const result = await api("POST", `/api/admin/run/${cfg.search_name}`, { learn: learnChk.checked });
         clearInterval(timer);
-        btnRun.textContent = "Save & Run";
-        btnRun.disabled = false;
-        btnSave.disabled = false;
+        btn.textContent = originalText;
+        allBtns.forEach(b => b.disabled = false);
         setMsg(`Done — ${result.matches} matches, ${result.partial} partial.`, "ok");
         showView(cfg.search_name, "results");
       } catch (e) {
         clearInterval(timer);
-        btnRun.textContent = "Save & Run";
-        btnRun.disabled = false;
-        btnSave.disabled = false;
+        btn.textContent = originalText;
+        allBtns.forEach(b => b.disabled = false);
         setMsg(e.message, "err");
       }
-    });
+    }
+
+    btnRunOnly.addEventListener("click", () => runSearch(btnRunOnly, false));
+    btnSaveRun.addEventListener("click", () => runSearch(btnSaveRun, true));
   }
 
   // ── Results view ─────────────────────────────────────────────────────────

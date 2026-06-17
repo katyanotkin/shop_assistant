@@ -4,7 +4,9 @@ import time
 import google.genai as genai
 from google.genai import types
 
-from .models import SearchCriteria
+from . import models
+from .feedback import format_feedback_section
+from .fetcher import fetch_page
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
 GEMINI_LOCATION = "us-central1"
@@ -14,7 +16,7 @@ You are a shopping assistant. Score how well this product page matches the searc
 
 Search criteria (JSON):
 {criteria}
-
+{feedback_section}
 Product page text:
 {text}
 
@@ -42,7 +44,9 @@ Keep matched/unmatched labels concise (2-5 words) — no raw JSON field names.
 Return only the JSON object, no markdown, no extra text."""
 
 
-def rank_candidate(url: str, text: str, criteria: SearchCriteria, client: genai.Client) -> dict:
+def rank_candidate(
+    url: str, text: str, criteria: models.SearchCriteria, client: genai.Client, feedback_notes: str = ""
+) -> dict:
     if not text:
         return {
             "title": "",
@@ -55,7 +59,11 @@ def rank_candidate(url: str, text: str, criteria: SearchCriteria, client: genai.
     try:
         response = client.models.generate_content(
             model=GEMINI_MODEL,
-            contents=_PROMPT.format(criteria=criteria.model_dump_json(indent=2), text=text),
+            contents=_PROMPT.format(
+                criteria=criteria.model_dump_json(indent=2),
+                feedback_section=format_feedback_section(feedback_notes),
+                text=text,
+            ),
             config=types.GenerateContentConfig(temperature=0),
         )
         raw = response.text.strip()
@@ -77,20 +85,18 @@ def rank_candidate(url: str, text: str, criteria: SearchCriteria, client: genai.
 
 def rank_all(
     candidates: list[dict],
-    criteria: SearchCriteria,
+    criteria: models.SearchCriteria,
     project: str,
     delay: float = 1.0,
+    feedback_notes: str = "",
 ) -> list[dict]:
     client = genai.Client(vertexai=True, project=project, location=GEMINI_LOCATION)
-
-    from .fetcher import fetch_page
-
     results = []
     for item in candidates:
         url = item.get("link", "")
         print(f"  [{len(results) + 1}/{len(candidates)}] {url}")
         final_url, text = fetch_page(url)
-        ranked = rank_candidate(final_url, text, criteria, client)
+        ranked = rank_candidate(final_url, text, criteria, client, feedback_notes=feedback_notes)
         ranked["url"] = final_url
         results.append(ranked)
         if delay:
