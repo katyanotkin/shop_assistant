@@ -10,7 +10,7 @@ CLI + web UI that monitors online shops for products matching saved search crite
 4. **Rank** — Gemini scores each page 0–10 against your criteria
 5. **Save & notify** — results written to CSV + Firestore; email sent on new matches
 
-A lightweight web UI reads results from Firestore and displays them by search and date.
+A lightweight web UI reads results from Firestore and displays them by search and date. An admin panel (password-protected) lets you create and edit searches, trigger runs, and leave feedback on results.
 
 ## Prerequisites
 
@@ -40,6 +40,9 @@ cp .env.sample .env
 # Required
 GOOGLE_CLOUD_PROJECT=your-gcp-project-id
 
+# Admin UI (optional — omit to disable the /admin panel)
+ADMIN_PASSWORD=choose-a-strong-password
+
 # Email notifications (optional — omit both to use CSV output only)
 NOTIFY_EMAIL=you@gmail.com
 GMAIL_APP_PASSWORD=xxxx_xxxx_xxxx_xxxx   # 16-char App Password from myaccount.google.com/apppasswords
@@ -54,6 +57,12 @@ MAX_CANDIDATES=20             # max URLs to evaluate per run
 ## Daily operation
 
 ### Add a search
+
+#### Via the admin UI (recommended)
+
+Go to `/admin`, log in, and click **+ New search** in the sidebar. Enter a short search name (lowercase, underscores) and describe what you want in plain text — material, style, size, price ceiling, preferred shops. Click **Generate config**: Gemini produces a structured config which appears in an editable form. Review every field, then click **Save** or **Save & Run**.
+
+#### Via CLI / JSON (for scripting or bulk import)
 
 Write a JSON file describing what you want, save it under `searches/`, then push to Firestore:
 
@@ -116,7 +125,15 @@ Edit the JSON file (change criteria or set `"active": false`) and re-add:
 make add FILE=searches/wax_coat.json
 ```
 
-This overwrites the Firestore document in place.
+This overwrites the Firestore document in place. You can also edit directly in the admin UI.
+
+## Feedback & learning
+
+When logged in as admin, each result card on the results page shows a feedback textarea with quick-phrase buttons ("Wrong material", "Doesn't ship to me", etc.). Click **Save all feedback** to write all non-empty fields in one batch.
+
+On the next run, if at least 3 feedback items exist across the last 10 runs, Gemini distils product-attribute preferences and any shop-level complaints into reusable signal. That signal is injected into the planning and scoring prompts for the next run, and shops with a clear pattern of complaints are filtered out automatically. You can disable this per-run with the **Learn from feedback** checkbox in the admin edit view.
+
+See PRODUCT.md for the full user journey including feedback details.
 
 ## Web UI
 
@@ -127,6 +144,8 @@ make local-run    # installs fastapi + uvicorn into .venv, starts on http://loca
 ```
 
 The UI reads directly from Firestore — no CLI run needed. Select a search from the sidebar, pick a date (defaults to latest), and browse scored results.
+
+The results page (`/`) is public. The admin panel (`/admin`) requires the `ADMIN_PASSWORD` set in `.env`.
 
 ### Host on Cloud Run
 
@@ -208,13 +227,18 @@ core/
   runner.py            # orchestrator: search → fetch → rank → save → notify
   notifier.py          # Gmail notification on new matches
   firestore_client.py  # Firestore read/write helpers
+  generator.py         # generate structured search config from free-text description
+  feedback.py          # learn cycle: distil feedback → signal for next run
   models.py            # Pydantic models: SearchCriteria, ProductMatch, RunResult
   settings.py          # Env-based config (pydantic-settings)
 web/
   main.py              # FastAPI app — serves UI and REST API
   static/app.css       # Styles (vanilla CSS, no framework)
-  static/app.js        # Client logic (vanilla JS, no framework)
-  templates/index.html # Single-page shell
+  static/app.js        # Client logic for the public results page
+  static/admin.css     # Admin panel styles
+  static/admin.js      # Admin panel logic: new search, generate, run, feedback
+  templates/index.html # Public results page shell
+  templates/admin.html # Admin panel shell
 searches/              # Search config JSON files (commit these)
 results/               # CSV output — gitignore this directory
 run.py                 # CLI entry point
@@ -230,3 +254,4 @@ Makefile               # Convenience targets
 | `code-reviewer` | After any code change — quality, security, performance, prompt fragility |
 | `qa-engineer` | Adding or fixing tests; always mocks Vertex AI and Firestore |
 | `ui-ux-engineer` | Web UI design critiques, CSS changes, layout decisions |
+| `writer` | After significant feature additions, update README.md |

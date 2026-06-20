@@ -39,9 +39,15 @@ Never start implementation until design is settled.
 
 Use `/verify` skill to confirm the feature works in the live app. Required for any UI golden-path change.
 
+## Phase 7 -- Docs (after any significant feature addition)
+
+Invoke the `writer` agent to update **README.md** after any user-facing feature is added or changed. Significant means: new admin capability, new user workflow, new endpoint, changed behaviour a user would notice.
+
+Do not update README inline -- delegate to the writer agent. Brief the agent with: what changed, what sections to update, what not to touch.
+
 ---
 
-Trivial one-liners (typo fix, single-constant change): phases 2 and 5 may be skipped.
+Trivial one-liners (typo fix, single-constant change): phases 2, 5, and 7 may be skipped.
 
 ---
 
