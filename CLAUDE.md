@@ -2,66 +2,8 @@
 
 CLI tool that monitors online shops for products matching saved search criteria, scores candidates with Gemini, and sends email notifications.
 
-## Architecture
-
-```
-SearchCriteria (Firestore)
-        │
-        ▼
-┌───────────────────┐
-│  Planner (Gemini) │  — generates 3 optimized search queries from criteria
-└────────┬──────────┘
-         │ queries[]
-         ▼
-┌────────────────────────────┐
-│  Searcher (Gemini +        │  — Google Search grounding returns URLs per query
-│  GoogleSearchRetrieval)    │    no Custom Search API key needed
-└────────┬───────────────────┘
-         │ candidates [{"link", "title"}]
-         ▼
-┌────────────────────────────┐
-│  Fetcher (httpx + BS4)     │  — fetches page text, strips nav/footer/scripts
-└────────┬───────────────────┘
-         │ page text (≤3500 chars)
-         ▼
-┌────────────────────────────┐
-│  Ranker (Gemini)           │  — scores 0-10, extracts title/price, matched/unmatched
-└────────┬───────────────────┘
-         │ ProductMatch[]
-         ▼
-  Firestore + CSV + Email
-         │
-         ▼
-┌────────────────────────────┐
-│  Web UI (FastAPI)          │  — reads Firestore, serves results by search + date
-└────────────────────────────┘
-```
-
-### Key modules
-
-| File | Role |
-|------|------|
-| `core/searcher.py` | Two-stage AI search: planner → grounded searcher |
-| `core/fetcher.py` | HTTP fetch + HTML → plain text |
-| `core/ranker.py` | Gemini scoring of individual product pages |
-| `core/runner.py` | Orchestrator: search → fetch → rank → save → notify |
-| `core/firestore_client.py` | Load search configs, persist run results |
-| `core/notifier.py` | Gmail notification on new matches |
-| `core/models.py` | Pydantic models: SearchCriteria, ProductMatch, RunResult |
-| `core/settings.py` | Env-based config via pydantic-settings |
-| `web/main.py` | FastAPI app: REST API + static file serving |
-| `web/static/app.js` | Vanilla JS: sidebar, date picker, result cards |
-| `web/static/app.css` | Styles — no framework, CSS custom properties |
-
-### Gemini model
-
-All three AI steps use `gemini-2.5-flash-lite` (`us-central1`) via Vertex AI.
-
-### Search flow (searcher.py)
-
-1. **Planner** — `_plan_queries(criteria)`: calls Gemini (no grounding) with criteria JSON, returns 3 search query strings optimized for buying intent.
-2. **Grounded searcher** — `_grounded_search(query)`: calls Gemini with `GoogleSearchRetrieval` tool. URLs are extracted from `response.candidates[0].grounding_metadata.grounding_chunks[*].web.uri`.
-3. Deduplicates URLs across queries, caps at `max_candidates` (default 20).
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full pipeline, module roles, Firestore data model, API endpoints, and infrastructure details.
+See [PRODUCT.md](PRODUCT.md) for the user-facing feature guide.
 
 ## Setup
 
