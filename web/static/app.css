@@ -368,6 +368,28 @@ body {
   color: var(--text-muted);
 }
 
+/* ===== Save-all row ===== */
+
+.save-all-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.save-all-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--button-primary-text);
+  background: var(--button-primary-bg);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.save-all-btn:hover { opacity: 0.9; }
+.save-all-btn:disabled { opacity: 0.5; cursor: default; }
+
 /* ===== Meta bar ===== */
 
 .run-meta {

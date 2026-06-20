@@ -1,3 +1,4 @@
+import hashlib
 from urllib.parse import urlparse
 
 from google.cloud import firestore
@@ -55,18 +56,38 @@ def list_runs(search_name: str, limit: int = 30) -> list[str]:
     return [d.id for d in docs]
 
 
+def _decode_feedback(raw: dict) -> dict:
+    """Convert {md5_hash: {url, text}} back to {url: text} for frontend consumption."""
+    result = {}
+    for v in raw.values():
+        if isinstance(v, dict) and "url" in v:
+            result[v["url"]] = v.get("text", "")
+        # skip legacy malformed entries
+    return result
+
+
 def load_run(search_name: str, run_date: str) -> dict | None:
     doc = get_db().collection("shop_results").document(search_name).collection("runs").document(run_date).get()
-    return doc.to_dict() if doc.exists else None
+    if not doc.exists:
+        return None
+    data = doc.to_dict()
+    if data.get("feedback"):
+        data["feedback"] = _decode_feedback(data["feedback"])
+    return data
 
 
 def save_run(search_name: str, run_date: str, result: dict) -> None:
     (get_db().collection("shop_results").document(search_name).collection("runs").document(run_date).set(result))
 
 
+def _url_key(url: str) -> str:
+    """Safe Firestore field name for a URL (URLs contain '/' which is invalid in field paths)."""
+    return hashlib.md5(url.encode()).hexdigest()
+
+
 def save_feedback(search_name: str, run_date: str, url: str, text: str) -> None:
     doc_ref = get_db().collection("shop_results").document(search_name).collection("runs").document(run_date)
-    doc_ref.update({firestore.FieldPath("feedback", url): text})
+    doc_ref.update({f"feedback.{_url_key(url)}": {"url": url, "text": text}})
 
 
 def save_learned_feedback(search_name: str, feedback_notes: str, avoid_shops: list[str]) -> None:
@@ -89,9 +110,10 @@ def load_feedback_entries(search_name: str, limit: int = 10) -> list[dict]:
     entries = []
     for doc in runs:
         data = doc.to_dict()
-        feedback = data.get("feedback") or {}
-        if not feedback:
+        raw_feedback = data.get("feedback") or {}
+        if not raw_feedback:
             continue
+        feedback = _decode_feedback(raw_feedback)
         items_by_url = {m["url"]: m for m in data.get("matches", []) + data.get("partial_matches", [])}
         for url, text in feedback.items():
             item = items_by_url.get(url, {})

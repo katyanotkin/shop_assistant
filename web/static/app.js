@@ -80,26 +80,49 @@
       </div>`;
   }
 
+  function dedupeByUrl(items) {
+    const seen = new Map();
+    for (const item of items) {
+      const prev = seen.get(item.url);
+      if (!prev || (item.title || "").length > (prev.title || "").length) {
+        seen.set(item.url, item);
+      }
+    }
+    return [...seen.values()];
+  }
+
   function renderResults(run) {
     if (run.no_match || (!run.matches?.length && !run.partial_matches?.length)) {
       resultsPanel.innerHTML = `<p class="empty-state">No matches found for this run.</p>`;
       return;
     }
     const fb = run.feedback || {};
+    const matches = dedupeByUrl(run.matches || []);
+    const matchUrls = new Set(matches.map(m => m.url));
+    const partials = dedupeByUrl((run.partial_matches || []).filter(m => !matchUrls.has(m.url)));
     let html = `<p class="run-meta">${run.total_candidates ?? "?"} candidates evaluated</p>`;
-    if (run.matches?.length) {
+    html += `<div class="save-all-row"><button type="button" id="save-all-btn" class="save-all-btn">Save all feedback</button><span id="save-all-msg" class="feedback-msg"></span></div>`;
+    if (matches.length) {
       html += `<div class="results-section">
-        <p class="section-heading">Matches (${run.matches.length})</p>
-        <div class="cards">${run.matches.map(m => renderCard(m, fb)).join("")}</div>
+        <p class="section-heading">Matches (${matches.length})</p>
+        <div class="cards">${matches.map(m => renderCard(m, fb)).join("")}</div>
       </div>`;
     }
-    if (run.partial_matches?.length) {
+    if (partials.length) {
       html += `<div class="results-section">
-        <p class="section-heading">Partial matches (${run.partial_matches.length})</p>
-        <div class="cards">${run.partial_matches.map(m => renderCard(m, fb)).join("")}</div>
+        <p class="section-heading">Partial matches (${partials.length})</p>
+        <div class="cards">${partials.map(m => renderCard(m, fb)).join("")}</div>
       </div>`;
     }
     resultsPanel.innerHTML = html;
+  }
+
+  async function saveFeedback(searchName, runDate, url, text) {
+    const r = await fetch(
+      `/api/feedback/${encodeURIComponent(searchName)}/${encodeURIComponent(runDate)}`,
+      { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, text }) }
+    );
+    if (!r.ok) throw new Error(r.statusText);
   }
 
   function bindFeedback(searchName, runDate) {
@@ -118,11 +141,7 @@
       row.querySelector(".feedback-submit").addEventListener("click", async () => {
         msgEl.textContent = "Saving…";
         try {
-          const r = await fetch(
-            `/api/feedback/${encodeURIComponent(searchName)}/${encodeURIComponent(runDate)}`,
-            { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, text: textarea.value }) }
-          );
-          if (!r.ok) throw new Error(r.statusText);
+          await saveFeedback(searchName, runDate, url, textarea.value);
           msgEl.textContent = "Saved";
           setTimeout(() => { msgEl.textContent = ""; }, 2000);
         } catch {
@@ -130,6 +149,33 @@
         }
       });
     });
+
+    const saveAllBtn = document.getElementById("save-all-btn");
+    const saveAllMsg = document.getElementById("save-all-msg");
+    if (saveAllBtn) {
+      saveAllBtn.addEventListener("click", async () => {
+        const rows = [...resultsPanel.querySelectorAll(".feedback-row")];
+        const filled = rows.filter(r => r.querySelector(".feedback-text").value.trim());
+        if (!filled.length) { saveAllMsg.textContent = "Nothing to save"; setTimeout(() => { saveAllMsg.textContent = ""; }, 2000); return; }
+        saveAllBtn.disabled = true;
+        saveAllMsg.textContent = `Saving ${filled.length}…`;
+        let failed = 0;
+        await Promise.all(filled.map(async row => {
+          const msgEl = row.querySelector(".feedback-msg");
+          try {
+            await saveFeedback(searchName, runDate, row.dataset.url, row.querySelector(".feedback-text").value);
+            msgEl.textContent = "Saved";
+            setTimeout(() => { msgEl.textContent = ""; }, 2000);
+          } catch {
+            msgEl.textContent = "Failed";
+            failed++;
+          }
+        }));
+        saveAllMsg.textContent = failed ? `${failed} failed` : "All saved";
+        saveAllBtn.disabled = false;
+        setTimeout(() => { saveAllMsg.textContent = ""; }, 3000);
+      });
+    }
   }
 
   async function loadRun(searchName, runDate) {
