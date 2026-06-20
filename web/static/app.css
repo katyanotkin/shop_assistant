@@ -361,6 +361,14 @@ body {
 }
 .feedback-submit:hover { background: #eff6ff; }
 
+.feedback-charcount {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: right;
+}
+
 .feedback-msg {
   display: block;
   margin-top: 4px;

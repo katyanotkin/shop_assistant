@@ -1,6 +1,7 @@
 import hashlib
 from urllib.parse import urlparse
 
+from google.api_core.exceptions import NotFound
 from google.cloud import firestore
 
 _db: firestore.Client | None = None
@@ -91,7 +92,7 @@ def save_feedback(search_name: str, run_date: str, url: str, text: str) -> None:
     entry = {"url": url, "text": text}
     try:
         doc_ref.update({f"feedback.{key}": entry})
-    except Exception:
+    except NotFound:
         # update() raises NotFound if the document doesn't exist yet; set() creates it
         doc_ref.set({"feedback": {key: entry}}, merge=True)
 

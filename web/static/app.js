@@ -74,6 +74,7 @@
               <textarea class="feedback-text" placeholder="Add feedback…" rows="2" maxlength="256">${existingFeedback}</textarea>
               <button type="button" class="feedback-submit">Save</button>
             </div>
+            <span class="feedback-charcount">${existingFeedback.length}/256</span>
             <span class="feedback-msg"></span>
           </div>
         </div>
@@ -131,10 +132,15 @@
       const textarea = row.querySelector(".feedback-text");
       const msgEl = row.querySelector(".feedback-msg");
 
+      const charcount = row.querySelector(".feedback-charcount");
+      const updateCount = () => { charcount.textContent = `${textarea.value.length}/256`; };
+      textarea.addEventListener("input", updateCount);
+
       row.querySelectorAll(".phrase-btn").forEach(btn => {
         btn.addEventListener("click", () => {
           const phrase = btn.dataset.phrase;
           textarea.value = textarea.value ? `${textarea.value}; ${phrase}` : phrase;
+          updateCount();
         });
       });
 

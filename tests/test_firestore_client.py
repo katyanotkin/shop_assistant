@@ -1,6 +1,8 @@
 import hashlib
 from unittest.mock import MagicMock, patch
 
+from google.api_core.exceptions import NotFound
+
 import core.firestore_client as fc
 from core.firestore_client import _decode_feedback, _url_key
 
@@ -60,7 +62,7 @@ def test_save_feedback_falls_back_to_set_when_doc_missing():
     text = "great fit"
     expected_key = _url_key(url)
 
-    mock_db, mock_doc_ref = _make_doc_ref_mock(update_raises=Exception("NOT_FOUND"))
+    mock_db, mock_doc_ref = _make_doc_ref_mock(update_raises=NotFound("document not found"))
     with patch("core.firestore_client.get_db", return_value=mock_db):
         fc.save_feedback("wax_coat", "2026-06-19", url, text)
 
