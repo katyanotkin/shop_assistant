@@ -4,7 +4,7 @@ from pathlib import Path
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 import core.firestore_client as fc
 from core.feedback import submit_feedback
@@ -56,13 +56,13 @@ def get_run(search_name: str, run_date: str):
 
 
 class FeedbackBody(BaseModel):
-    url: str
-    text: str
+    url: str = Field(max_length=2048)
+    text: str = Field(max_length=256)
 
 
 @app.put("/api/feedback/{search_name}/{run_date}", dependencies=[Depends(_require_admin)])
 def put_feedback(search_name: str, run_date: str, body: FeedbackBody):
-    submit_feedback(search_name, run_date, body.url, body.text)
+    submit_feedback(search_name, run_date, body.url, body.text.strip())
     return {"ok": True}
 
 

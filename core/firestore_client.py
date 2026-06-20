@@ -87,7 +87,13 @@ def _url_key(url: str) -> str:
 
 def save_feedback(search_name: str, run_date: str, url: str, text: str) -> None:
     doc_ref = get_db().collection("shop_results").document(search_name).collection("runs").document(run_date)
-    doc_ref.update({f"feedback.{_url_key(url)}": {"url": url, "text": text}})
+    key = _url_key(url)
+    entry = {"url": url, "text": text}
+    try:
+        doc_ref.update({f"feedback.{key}": entry})
+    except Exception:
+        # update() raises NotFound if the document doesn't exist yet; set() creates it
+        doc_ref.set({"feedback": {key: entry}}, merge=True)
 
 
 def save_learned_feedback(search_name: str, feedback_notes: str, avoid_shops: list[str]) -> None:

@@ -28,15 +28,21 @@ def test_url_key_is_md5_hex():
 # ── save_feedback ─────────────────────────────────────────────────────────────
 
 
+def _make_doc_ref_mock(update_raises=None):
+    mock_doc_ref = MagicMock()
+    if update_raises:
+        mock_doc_ref.update.side_effect = update_raises
+    mock_db = MagicMock()
+    (mock_db.collection.return_value.document.return_value.collection.return_value.document.return_value) = mock_doc_ref
+    return mock_db, mock_doc_ref
+
+
 def test_save_feedback_uses_hash_key():
     url = "https://shop.example.com/items/coat/42"
     text = "great fit"
     expected_key = _url_key(url)
 
-    mock_doc_ref = MagicMock()
-    mock_db = MagicMock()
-    (mock_db.collection.return_value.document.return_value.collection.return_value.document.return_value) = mock_doc_ref
-
+    mock_db, mock_doc_ref = _make_doc_ref_mock()
     with patch("core.firestore_client.get_db", return_value=mock_db):
         fc.save_feedback("wax_coat", "2026-06-19", url, text)
 
@@ -47,6 +53,18 @@ def test_save_feedback_uses_hash_key():
     assert field_path in call_args
     assert "/" not in field_path
     assert call_args[field_path] == {"url": url, "text": text}
+
+
+def test_save_feedback_falls_back_to_set_when_doc_missing():
+    url = "https://shop.example.com/items/coat/42"
+    text = "great fit"
+    expected_key = _url_key(url)
+
+    mock_db, mock_doc_ref = _make_doc_ref_mock(update_raises=Exception("NOT_FOUND"))
+    with patch("core.firestore_client.get_db", return_value=mock_db):
+        fc.save_feedback("wax_coat", "2026-06-19", url, text)
+
+    mock_doc_ref.set.assert_called_once_with({"feedback": {expected_key: {"url": url, "text": text}}}, merge=True)
 
 
 # ── _decode_feedback ──────────────────────────────────────────────────────────

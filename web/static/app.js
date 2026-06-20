@@ -71,7 +71,7 @@
           <div class="feedback-row" data-url="${m.url}">
             <div class="feedback-phrases">${phrases}</div>
             <div class="feedback-input-row">
-              <textarea class="feedback-text" placeholder="Add feedback…" rows="2">${existingFeedback}</textarea>
+              <textarea class="feedback-text" placeholder="Add feedback…" rows="2" maxlength="256">${existingFeedback}</textarea>
               <button type="button" class="feedback-submit">Save</button>
             </div>
             <span class="feedback-msg"></span>
