@@ -87,14 +87,16 @@ def _url_key(url: str) -> str:
 
 
 def save_feedback(search_name: str, run_date: str, url: str, text: str) -> None:
+    save_feedback_batch(search_name, run_date, [(url, text)])
+
+
+def save_feedback_batch(search_name: str, run_date: str, items: list[tuple[str, str]]) -> None:
     doc_ref = get_db().collection("shop_results").document(search_name).collection("runs").document(run_date)
-    key = _url_key(url)
-    entry = {"url": url, "text": text}
+    updates = {f"feedback.{_url_key(url)}": {"url": url, "text": text} for url, text in items}
     try:
-        doc_ref.update({f"feedback.{key}": entry})
+        doc_ref.update(updates)
     except NotFound:
-        # update() raises NotFound if the document doesn't exist yet; set() creates it
-        doc_ref.set({"feedback": {key: entry}}, merge=True)
+        doc_ref.set({"feedback": {_url_key(url): {"url": url, "text": text} for url, text in items}}, merge=True)
 
 
 def save_learned_feedback(search_name: str, feedback_notes: str, avoid_shops: list[str]) -> None:

@@ -104,3 +104,21 @@
 .save-msg { font-size: 13px; }
 .save-msg.ok  { color: var(--score-green); }
 .save-msg.err { color: var(--score-red); }
+
+/* New search button */
+.btn-new-search {
+  display: block; width: calc(100% - 32px);
+  margin: 12px 16px 0;
+  padding: 7px 12px;
+  background: none;
+  border: 1px dashed var(--card-border);
+  border-radius: 6px;
+  font-size: 12px; font-weight: 500;
+  color: var(--text-muted); cursor: pointer;
+  text-align: left;
+}
+.btn-new-search:hover { color: var(--button-primary-bg); border-color: var(--button-primary-bg); }
+
+/* Generate panel */
+.generate-panel { max-width: 560px; }
+.generate-title { margin: 0 0 20px; font-size: 16px; color: var(--text-main); font-weight: 600; }

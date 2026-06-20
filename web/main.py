@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import core.firestore_client as fc
-from core.feedback import submit_feedback
+from core.generator import generate_search_config
 from core.runner import run_search
 from core.settings import Settings
 
@@ -60,9 +60,13 @@ class FeedbackBody(BaseModel):
     text: str = Field(max_length=256)
 
 
-@app.put("/api/feedback/{search_name}/{run_date}", dependencies=[Depends(_require_admin)])
-def put_feedback(search_name: str, run_date: str, body: FeedbackBody):
-    submit_feedback(search_name, run_date, body.url, body.text.strip())
+class FeedbackBatch(BaseModel):
+    items: list[FeedbackBody] = Field(max_length=200)
+
+
+@app.put("/api/feedback/{search_name}/{run_date}/batch", dependencies=[Depends(_require_admin)])
+def put_feedback_batch(search_name: str, run_date: str, body: FeedbackBatch):
+    fc.save_feedback_batch(search_name, run_date, [(i.url, i.text.strip()) for i in body.items])
     return {"ok": True}
 
 
@@ -109,6 +113,20 @@ async def admin_save_search(name: str, request: Request):
     config["search_name"] = name
     fc.save_search_config(config)
     return {"ok": True}
+
+
+class GenerateBody(BaseModel):
+    search_name: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9_]+$")
+    description: str = Field(min_length=10, max_length=2000)
+
+
+@app.post("/api/admin/search/generate", dependencies=[Depends(_require_admin)])
+def admin_generate_search(body: GenerateBody):
+    try:
+        config = generate_search_config(body.description, body.search_name, _settings.google_cloud_project)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return config
 
 
 class RunOptions(BaseModel):

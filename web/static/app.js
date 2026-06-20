@@ -60,10 +60,8 @@
             <div class="feedback-phrases">${phrases}</div>
             <div class="feedback-input-row">
               <textarea class="feedback-text" placeholder="Add feedback…" rows="2" maxlength="256">${existingFeedback}</textarea>
-              <button type="button" class="feedback-submit">Save</button>
             </div>
             <span class="feedback-charcount">${existingFeedback.length}/256</span>
-            <span class="feedback-msg"></span>
           </div>` : "";
     return `
       <div class="card">
@@ -121,41 +119,18 @@
     resultsPanel.innerHTML = html;
   }
 
-  async function saveFeedback(searchName, runDate, url, text) {
-    const r = await fetch(
-      `/api/feedback/${encodeURIComponent(searchName)}/${encodeURIComponent(runDate)}`,
-      { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, text }) }
-    );
-    if (!r.ok) throw new Error(r.statusText);
-  }
-
   function bindFeedback(searchName, runDate) {
     resultsPanel.querySelectorAll(".feedback-row").forEach(row => {
-      const url = row.dataset.url;
       const textarea = row.querySelector(".feedback-text");
-      const msgEl = row.querySelector(".feedback-msg");
-
       const charcount = row.querySelector(".feedback-charcount");
       const updateCount = () => { charcount.textContent = `${textarea.value.length}/256`; };
       textarea.addEventListener("input", updateCount);
-
       row.querySelectorAll(".phrase-btn").forEach(btn => {
         btn.addEventListener("click", () => {
           const phrase = btn.dataset.phrase;
           textarea.value = textarea.value ? `${textarea.value}; ${phrase}` : phrase;
           updateCount();
         });
-      });
-
-      row.querySelector(".feedback-submit").addEventListener("click", async () => {
-        msgEl.textContent = "Saving…";
-        try {
-          await saveFeedback(searchName, runDate, url, textarea.value);
-          msgEl.textContent = "Saved";
-          setTimeout(() => { msgEl.textContent = ""; }, 2000);
-        } catch {
-          msgEl.textContent = "Failed";
-        }
       });
     });
 
@@ -164,23 +139,25 @@
     if (saveAllBtn) {
       saveAllBtn.addEventListener("click", async () => {
         const rows = [...resultsPanel.querySelectorAll(".feedback-row")];
-        const filled = rows.filter(r => r.querySelector(".feedback-text").value.trim());
-        if (!filled.length) { saveAllMsg.textContent = "Nothing to save"; setTimeout(() => { saveAllMsg.textContent = ""; }, 2000); return; }
+        const items = rows
+          .map(r => ({ url: r.dataset.url, text: r.querySelector(".feedback-text").value.trim() }))
+          .filter(i => i.text);
+        if (!items.length) {
+          saveAllMsg.textContent = "Nothing to save";
+          setTimeout(() => { saveAllMsg.textContent = ""; }, 2000);
+          return;
+        }
         saveAllBtn.disabled = true;
-        saveAllMsg.textContent = `Saving ${filled.length}…`;
-        let failed = 0;
-        await Promise.all(filled.map(async row => {
-          const msgEl = row.querySelector(".feedback-msg");
-          try {
-            await saveFeedback(searchName, runDate, row.dataset.url, row.querySelector(".feedback-text").value);
-            msgEl.textContent = "Saved";
-            setTimeout(() => { msgEl.textContent = ""; }, 2000);
-          } catch {
-            msgEl.textContent = "Failed";
-            failed++;
-          }
-        }));
-        saveAllMsg.textContent = failed ? `${failed} failed` : "All saved";
+        saveAllMsg.textContent = `Saving ${items.length}…`;
+        try {
+          await fetch(
+            `/api/feedback/${encodeURIComponent(searchName)}/${encodeURIComponent(runDate)}/batch`,
+            { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items }) }
+          ).then(r => { if (!r.ok) throw new Error(r.statusText); });
+          saveAllMsg.textContent = "Saved";
+        } catch {
+          saveAllMsg.textContent = "Failed";
+        }
         saveAllBtn.disabled = false;
         setTimeout(() => { saveAllMsg.textContent = ""; }, 3000);
       });

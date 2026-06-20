@@ -69,6 +69,37 @@ def test_save_feedback_falls_back_to_set_when_doc_missing():
     mock_doc_ref.set.assert_called_once_with({"feedback": {expected_key: {"url": url, "text": text}}}, merge=True)
 
 
+# ── save_feedback_batch ───────────────────────────────────────────────────────
+
+
+def test_save_feedback_batch_single_update_call():
+    url1 = "https://shop.example.com/a"
+    url2 = "https://shop.example.com/b"
+
+    mock_db, mock_doc_ref = _make_doc_ref_mock()
+    with patch("core.firestore_client.get_db", return_value=mock_db):
+        fc.save_feedback_batch("wax_coat", "2026-06-19", [(url1, "good"), (url2, "bad")])
+
+    mock_doc_ref.update.assert_called_once()
+    updates = mock_doc_ref.update.call_args[0][0]
+    assert f"feedback.{_url_key(url1)}" in updates
+    assert f"feedback.{_url_key(url2)}" in updates
+    assert updates[f"feedback.{_url_key(url1)}"] == {"url": url1, "text": "good"}
+    assert updates[f"feedback.{_url_key(url2)}"] == {"url": url2, "text": "bad"}
+
+
+def test_save_feedback_batch_falls_back_to_set_when_doc_missing():
+    url = "https://shop.example.com/a"
+
+    mock_db, mock_doc_ref = _make_doc_ref_mock(update_raises=NotFound("not found"))
+    with patch("core.firestore_client.get_db", return_value=mock_db):
+        fc.save_feedback_batch("wax_coat", "2026-06-19", [(url, "nice")])
+
+    mock_doc_ref.set.assert_called_once()
+    call_kwargs = mock_doc_ref.set.call_args
+    assert call_kwargs[1].get("merge") is True
+
+
 # ── _decode_feedback ──────────────────────────────────────────────────────────
 
 

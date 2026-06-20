@@ -118,3 +118,79 @@ def test_admin_save_search_requires_auth(client):
 def test_admin_save_search_with_valid_cookie(authed_client):
     r = authed_client.put("/api/admin/search/wax_coat", json={"search_name": "wax_coat", "active": True})
     assert r.status_code == 200
+
+
+# ── GET /api/admin/me ─────────────────────────────────────────────────────────
+
+
+def test_admin_me_returns_false_when_not_logged_in(client):
+    r = client.get("/api/admin/me")
+    assert r.status_code == 200
+    assert r.json() == {"admin": False}
+
+
+def test_admin_me_returns_true_when_logged_in(authed_client):
+    r = authed_client.get("/api/admin/me")
+    assert r.status_code == 200
+    assert r.json() == {"admin": True}
+
+
+def test_admin_me_returns_false_with_wrong_cookie(client):
+    client.cookies.set("sa_admin", "deadbeef")
+    r = client.get("/api/admin/me")
+    assert r.status_code == 200
+    assert r.json() == {"admin": False}
+
+
+# ── POST /api/admin/search/generate ──────────────────────────────────────────
+
+
+def test_generate_search_requires_auth(client):
+    r = client.post(
+        "/api/admin/search/generate",
+        json={"search_name": "wool_coat", "description": "a warm wool coat for women"},
+    )
+    assert r.status_code == 401
+
+
+def test_generate_search_returns_config(authed_client):
+    fake_config = {
+        "search_name": "wool_coat",
+        "active": True,
+        "criteria": {
+            "category": ["coat"],
+            "gender": "women",
+            "material": ["wool"],
+            "lining": [],
+            "length": [],
+            "exclude": [],
+            "sizes": [],
+            "max_price": None,
+            "extra_notes": "",
+        },
+        "preferred_shops": [],
+    }
+    with patch("web.main.generate_search_config", return_value=fake_config) as mock_gen:
+        r = authed_client.post(
+            "/api/admin/search/generate",
+            json={"search_name": "wool_coat", "description": "a warm wool coat for women"},
+        )
+    assert r.status_code == 200
+    assert r.json()["search_name"] == "wool_coat"
+    mock_gen.assert_called_once()
+
+
+def test_generate_search_rejects_invalid_name(authed_client):
+    r = authed_client.post(
+        "/api/admin/search/generate",
+        json={"search_name": "Wool Coat!", "description": "a warm wool coat for women"},
+    )
+    assert r.status_code == 422
+
+
+def test_generate_search_rejects_short_description(authed_client):
+    r = authed_client.post(
+        "/api/admin/search/generate",
+        json={"search_name": "wool_coat", "description": "coat"},
+    )
+    assert r.status_code == 422

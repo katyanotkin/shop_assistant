@@ -28,69 +28,48 @@ def authed_client(client):
     return client
 
 
-# ── PUT /api/feedback/{search_name}/{run_date} ────────────────────────────────
+# ── PUT /api/feedback/{search_name}/{run_date}/batch ─────────────────────────
 
 
-def test_feedback_put_requires_auth(client):
+def test_feedback_batch_requires_auth(client):
     r = client.put(
-        "/api/feedback/wax_coat/2026-06-19",
-        json={"url": "https://example.com/product/1", "text": "nice coat"},
+        "/api/feedback/wax_coat/2026-06-19/batch",
+        json={"items": [{"url": "https://example.com/a", "text": "good"}]},
     )
     assert r.status_code == 401
 
 
-def test_feedback_put_saves_correctly(authed_client):
-    url = "https://example.com/product/1"
-    text = "nice coat"
-
-    with patch("web.main.submit_feedback") as mock_submit:
+def test_feedback_batch_saves_all_items(authed_client):
+    items = [
+        {"url": "https://example.com/a", "text": "good"},
+        {"url": "https://example.com/b", "text": "  bad  "},
+    ]
+    with patch("web.main.fc") as mock_fc:
         r = authed_client.put(
-            "/api/feedback/wax_coat/2026-06-19",
-            json={"url": url, "text": text},
+            "/api/feedback/wax_coat/2026-06-19/batch",
+            json={"items": items},
         )
-
     assert r.status_code == 200
     assert r.json() == {"ok": True}
-    mock_submit.assert_called_once_with("wax_coat", "2026-06-19", url, text)
+    mock_fc.save_feedback_batch.assert_called_once_with(
+        "wax_coat",
+        "2026-06-19",
+        [("https://example.com/a", "good"), ("https://example.com/b", "bad")],
+    )
 
 
-def test_feedback_put_bad_date_format_still_passes(authed_client):
-    with patch("web.main.submit_feedback") as mock_submit:
-        r = authed_client.put(
-            "/api/feedback/wax_coat/2026-06-15",
-            json={"url": "https://example.com/x", "text": "fine"},
+def test_feedback_batch_strips_whitespace(authed_client):
+    with patch("web.main.fc") as mock_fc:
+        authed_client.put(
+            "/api/feedback/wax_coat/2026-06-19/batch",
+            json={"items": [{"url": "https://example.com/a", "text": "  hello  "}]},
         )
-
-    assert r.status_code == 200
-    mock_submit.assert_called_once_with("wax_coat", "2026-06-15", "https://example.com/x", "fine")
+    mock_fc.save_feedback_batch.assert_called_once_with("wax_coat", "2026-06-19", [("https://example.com/a", "hello")])
 
 
-def test_feedback_put_strips_whitespace(authed_client):
-    with patch("web.main.submit_feedback") as mock_submit:
-        r = authed_client.put(
-            "/api/feedback/wax_coat/2026-06-19",
-            json={"url": "https://example.com/x", "text": "  nice coat  "},
-        )
-
-    assert r.status_code == 200
-    mock_submit.assert_called_once_with("wax_coat", "2026-06-19", "https://example.com/x", "nice coat")
-
-
-def test_feedback_put_rejects_text_over_256_chars(authed_client):
-    with patch("web.main.submit_feedback"):
-        r = authed_client.put(
-            "/api/feedback/wax_coat/2026-06-19",
-            json={"url": "https://example.com/x", "text": "x" * 257},
-        )
-
-    assert r.status_code == 422
-
-
-def test_feedback_put_rejects_url_over_2048_chars(authed_client):
-    with patch("web.main.submit_feedback"):
-        r = authed_client.put(
-            "/api/feedback/wax_coat/2026-06-19",
-            json={"url": "https://example.com/" + "x" * 2030, "text": "ok"},
-        )
-
+def test_feedback_batch_rejects_invalid_item(authed_client):
+    r = authed_client.put(
+        "/api/feedback/wax_coat/2026-06-19/batch",
+        json={"items": [{"url": "https://example.com/a", "text": "x" * 257}]},
+    )
     assert r.status_code == 422

@@ -154,7 +154,7 @@
     };
   }
 
-  function bindEdit(form) {
+  function bindEdit(form, opts = {}) {
     const msg        = form.querySelector(".save-msg");
     const setMsg     = (text, cls) => { msg.textContent = text; msg.className = `save-msg ${cls}`; };
     const btnSave    = form.querySelector(".btn-save");
@@ -169,6 +169,7 @@
         await api("PUT", `/api/admin/search/${cfg.search_name}`, cfg);
         setMsg("Saved.", "ok");
         setTimeout(() => setMsg("", ""), 2500);
+        if (opts.onSave) opts.onSave(cfg.search_name);
       } catch (e) { setMsg(e.message, "err"); }
     });
 
@@ -185,6 +186,7 @@
         btn.textContent = originalText;
         allBtns.forEach(b => b.disabled = false);
         setMsg(`Done — ${result.matches} matches, ${result.partial} partial.`, "ok");
+        if (opts.onSave) await opts.onSave(cfg.search_name);
         showView(cfg.search_name, "results");
       } catch (e) {
         clearInterval(timer);
@@ -220,6 +222,65 @@
     }
   }
 
+  // ── Generate from description ─────────────────────────────────────────────
+
+  function renderGenerate() {
+    return `<div class="generate-panel">
+      <h3 class="generate-title">New search</h3>
+      <div class="field-row">
+        <label class="field-label">Search name</label>
+        <input type="text" id="gen-name" class="field-input" placeholder="e.g. wool_coat (lowercase, underscores)">
+      </div>
+      <div class="field-row">
+        <label class="field-label">Describe what you want</label>
+        <textarea id="gen-desc" class="field-input" rows="6" placeholder="I'm looking for a women's waxed cotton coat, midi length, natural lining…"></textarea>
+      </div>
+      <div class="action-row">
+        <button id="gen-btn" class="btn-primary">Generate config</button>
+        <span id="gen-msg" class="save-msg"></span>
+      </div>
+    </div>`;
+  }
+
+  function bindGenerate() {
+    const btn = document.getElementById("gen-btn");
+    const msg = document.getElementById("gen-msg");
+    const setMsg = (text, cls) => { msg.textContent = text; msg.className = `save-msg ${cls}`; };
+
+    btn.addEventListener("click", async () => {
+      const name = document.getElementById("gen-name").value.trim().toLowerCase().replace(/\s+/g, "_");
+      const desc = document.getElementById("gen-desc").value.trim();
+      if (!name) { setMsg("Search name required.", "err"); return; }
+      if (desc.length < 10) { setMsg("Description too short.", "err"); return; }
+
+      btn.disabled = true;
+      setMsg("Generating…", "");
+      try {
+        const cfg = await api("POST", "/api/admin/search/generate", { search_name: name, description: desc });
+        const panel = document.getElementById("view-panel") || content;
+        panel.innerHTML = `<p class="save-msg ok" style="margin-bottom:12px">Generated — review, then Save or Save &amp; Run.</p>` + renderEdit(cfg);
+        bindEdit(panel.querySelector(".edit-form"), { onSave: name => refreshSidebar(name) });
+      } catch (e) {
+        setMsg(e.message, "err");
+        btn.disabled = false;
+      }
+    });
+  }
+
+  async function refreshSidebar(selectName) {
+    const searches = await api("GET", "/api/admin/searches");
+    searchList.innerHTML = searches.map(s =>
+      `<li role="option" data-name="${s.search_name}" class="${s.active ? "" : "inactive-search"}">
+        ${s.search_name.replace(/_/g, " ")}
+      </li>`).join("");
+    searchList.querySelectorAll("li").forEach(el =>
+      el.addEventListener("click", () => selectSearch(el.dataset.name)));
+    if (selectName) {
+      activeName = null;
+      selectSearch(selectName);
+    }
+  }
+
   // ── Search selection ──────────────────────────────────────────────────────
 
   let activeName = null;
@@ -252,7 +313,7 @@
     }
   }
 
-  async function selectSearch(name, searches) {
+  async function selectSearch(name) {
     activeName = name;
     searchList.querySelectorAll("li").forEach(el =>
       el.classList.toggle("active", el.dataset.name === name));
@@ -279,9 +340,16 @@
       </li>`).join("");
 
     searchList.querySelectorAll("li").forEach(el =>
-      el.addEventListener("click", () => selectSearch(el.dataset.name, searches)));
+      el.addEventListener("click", () => selectSearch(el.dataset.name)));
 
-    if (searches.length) selectSearch(searches[0].search_name, searches);
+    if (searches.length) selectSearch(searches[0].search_name);
+
+    document.getElementById("btn-new-search").addEventListener("click", () => {
+      activeName = null;
+      searchList.querySelectorAll("li").forEach(el => el.classList.remove("active"));
+      content.innerHTML = `<div id="view-panel">${renderGenerate()}</div>`;
+      bindGenerate();
+    });
   }
 
   init().catch(e => { if (e.status === 401) showLogin(); });
