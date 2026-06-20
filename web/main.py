@@ -69,6 +69,11 @@ def put_feedback(search_name: str, run_date: str, body: FeedbackBody):
 # ── Admin ────────────────────────────────────────────────────────────────────
 
 
+@app.get("/api/admin/me")
+def admin_me(sa_admin: str | None = Cookie(default=None)):
+    return {"admin": bool(_settings.admin_password and sa_admin == _admin_token())}
+
+
 @app.get("/admin", response_class=HTMLResponse)
 def admin_page():
     return _ADMIN_HTML

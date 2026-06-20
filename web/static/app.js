@@ -5,6 +5,7 @@
   const resultsPanel = document.getElementById("results-panel");
 
   let activeSearch = null;
+  let isAdmin = false;
 
   async function api(path) {
     const r = await fetch(path);
@@ -54,6 +55,16 @@
       : (m.title || "(no title)");
     const existingFeedback = feedbackMap?.[m.url] || "";
     const phrases = _PHRASES.map(p => `<button type="button" class="phrase-btn" data-phrase="${p}">${p}</button>`).join("");
+    const feedbackSection = isAdmin ? `
+          <div class="feedback-row" data-url="${m.url}">
+            <div class="feedback-phrases">${phrases}</div>
+            <div class="feedback-input-row">
+              <textarea class="feedback-text" placeholder="Add feedback…" rows="2" maxlength="256">${existingFeedback}</textarea>
+              <button type="button" class="feedback-submit">Save</button>
+            </div>
+            <span class="feedback-charcount">${existingFeedback.length}/256</span>
+            <span class="feedback-msg"></span>
+          </div>` : "";
     return `
       <div class="card">
         <div class="score-badge ${sc}">${Math.round(m.score)}</div>
@@ -68,15 +79,7 @@
           <a class="card-url" href="${m.url}" target="_blank" rel="noopener">${m.url}</a>
           ${criteria ? `<div class="criteria-row">${criteria}</div>` : ""}
           ${notes}
-          <div class="feedback-row" data-url="${m.url}">
-            <div class="feedback-phrases">${phrases}</div>
-            <div class="feedback-input-row">
-              <textarea class="feedback-text" placeholder="Add feedback…" rows="2" maxlength="256">${existingFeedback}</textarea>
-              <button type="button" class="feedback-submit">Save</button>
-            </div>
-            <span class="feedback-charcount">${existingFeedback.length}/256</span>
-            <span class="feedback-msg"></span>
-          </div>
+          ${feedbackSection}
         </div>
       </div>`;
   }
@@ -102,7 +105,7 @@
     const matchUrls = new Set(matches.map(m => m.url));
     const partials = dedupeByUrl((run.partial_matches || []).filter(m => !matchUrls.has(m.url)));
     let html = `<p class="run-meta">${run.total_candidates ?? "?"} candidates evaluated</p>`;
-    html += `<div class="save-all-row"><button type="button" id="save-all-btn" class="save-all-btn">Save all feedback</button><span id="save-all-msg" class="feedback-msg"></span></div>`;
+    if (isAdmin) html += `<div class="save-all-row"><button type="button" id="save-all-btn" class="save-all-btn">Save all feedback</button><span id="save-all-msg" class="feedback-msg"></span></div>`;
     if (matches.length) {
       html += `<div class="results-section">
         <p class="section-heading">Matches (${matches.length})</p>
@@ -221,6 +224,7 @@
   });
 
   async function init() {
+    try { isAdmin = (await api("/api/admin/me")).admin; } catch { isAdmin = false; }
     try {
       const searches = await api("/api/searches");
       searchList.innerHTML = searches.map(s =>
