@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+
+  <!-- 3-turn clockwise spiral (feedback iterations) -->
+  <path d="M128 18
+    L169.3 28.2 L203 53.1 L224.1 88.2 L230 128
+    L220.4 166.3 L197.3 197.3 L164.7 216.7 L128 222
+    L92.8 213 L64.4 191.6 L46.7 161.7 L42 128
+    L50.4 95.9 L70 70 L97.4 54.1 L128 50
+    L157.1 57.8 L180.3 75.7 L194.5 100.4 L198 128
+    L190.8 154 L174.7 174.7 L152.5 187.1 L128 190
+    L105 183.4 L87 169 L76.3 149.4 L74 128
+    L80 108.1 L92.6 92.6 L109.6 83.7 L128 82
+    L144.8 87.3 L157.7 98.3 L165 112.7 L166 128
+    L161.3 141.8 L152 152 L140.2 157.6 L128 158
+    L117.3 153.9 L109.6 146.4 L105.8 137.2 L106 128
+    L109.5 120.3 L115.3 115.3 L121.9 113.2 L128 114"/>
+
+  <!-- requirement nodes: 5 tick+dot markers at uneven angular intervals -->
+  <!-- upper-right ~45° (i=2) -->
+  <path d="M203 53 L213 43"/>
+  <circle cx="215" cy="41" r="5" fill="currentColor" stroke="none"/>
+
+  <!-- right ~90° (i=4) -->
+  <path d="M230 128 H244"/>
+  <circle cx="246" cy="128" r="6" fill="currentColor" stroke="none"/>
+
+  <!-- bottom ~180° (i=8) -->
+  <path d="M128 222 V236"/>
+  <circle cx="128" cy="238" r="6" fill="currentColor" stroke="none"/>
+
+  <!-- lower-left ~225° (i=10) -->
+  <path d="M64 192 L55 201"/>
+  <circle cx="53" cy="203" r="5" fill="currentColor" stroke="none"/>
+
+  <!-- left ~270° (i=12) -->
+  <path d="M42 128 H14"/>
+  <circle cx="12" cy="128" r="6" fill="currentColor" stroke="none"/>
+
+  <!-- match: currentColor ring (black in light mode) + gold fill -->
+  <circle cx="128" cy="128" r="24" fill="currentColor" stroke="none"/>
+  <circle cx="128" cy="128" r="20" fill="#F59E0B" stroke="none"/>
+
+  <!-- spark / entry icon at spiral start: 4-pointed star -->
+  <path d="M128 -8 L135 11 L154 18 L135 25 L128 44 L121 25 L102 18 L121 11 Z"
+        fill="#F59E0B" stroke="none"/>
+
+</svg>

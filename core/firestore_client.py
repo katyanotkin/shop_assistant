@@ -125,6 +125,8 @@ def load_feedback_entries(search_name: str, limit: int = 10) -> list[dict]:
         feedback = _decode_feedback(raw_feedback)
         items_by_url = {m["url"]: m for m in data.get("matches", []) + data.get("partial_matches", [])}
         for url, text in feedback.items():
+            if url.startswith("_"):
+                continue
             item = items_by_url.get(url, {})
             entries.append(
                 {

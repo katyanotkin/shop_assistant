@@ -43,7 +43,7 @@
   function renderCard(m, feedbackMap) {
     const sc = scoreClass(m.score);
     const newTag = m.is_new ? tag("NEW", "tag-new") : "";
-    const price = m.price ? `<span class="card-price">€${m.price}</span>` : "";
+    const price = m.price != null ? `<span class="card-price">${m.price}</span>` : "";
     const criteria = [
       ...(m.matched || []).map(t => tag(t, "tag tag-match")),
       ...(m.unmatched || []).map(t => tag(t, "tag tag-miss")),
@@ -103,7 +103,16 @@
     const matchUrls = new Set(matches.map(m => m.url));
     const partials = dedupeByUrl((run.partial_matches || []).filter(m => !matchUrls.has(m.url)));
     let html = `<p class="run-meta">${run.total_candidates ?? "?"} candidates evaluated</p>`;
-    if (isAdmin) html += `<div class="save-all-row"><button type="button" id="save-all-btn" class="save-all-btn">Save all feedback</button><span id="save-all-msg" class="feedback-msg"></span></div>`;
+    if (isAdmin) {
+      const overallFb = fb['_overall_'] || '';
+      html += `<div class="save-all-row">
+        <textarea id="overall-feedback" class="overall-feedback-text" placeholder="Overall run notes…" rows="2" maxlength="512">${overallFb}</textarea>
+        <div class="save-all-controls">
+          <button type="button" id="save-all-btn" class="save-all-btn">Save all feedback</button>
+          <span id="save-all-msg" class="feedback-msg"></span>
+        </div>
+      </div>`;
+    }
     if (matches.length) {
       html += `<div class="results-section">
         <p class="section-heading">Matches (${matches.length})</p>
@@ -136,12 +145,15 @@
 
     const saveAllBtn = document.getElementById("save-all-btn");
     const saveAllMsg = document.getElementById("save-all-msg");
+    const overallTextarea = document.getElementById("overall-feedback");
     if (saveAllBtn) {
       saveAllBtn.addEventListener("click", async () => {
         const rows = [...resultsPanel.querySelectorAll(".feedback-row")];
         const items = rows
           .map(r => ({ url: r.dataset.url, text: r.querySelector(".feedback-text").value.trim() }))
           .filter(i => i.text);
+        const overallText = overallTextarea?.value.trim();
+        if (overallText) items.push({ url: '_overall_', text: overallText });
         if (!items.length) {
           saveAllMsg.textContent = "Nothing to save";
           setTimeout(() => { saveAllMsg.textContent = ""; }, 2000);
@@ -167,7 +179,11 @@
   async function loadRun(searchName, runDate) {
     resultsPanel.innerHTML = `<p class="loading">Loading…</p>`;
     try {
-      const run = await api(`/api/results/${encodeURIComponent(searchName)}/${encodeURIComponent(runDate)}`);
+      const [run, adminResult] = await Promise.all([
+        api(`/api/results/${encodeURIComponent(searchName)}/${encodeURIComponent(runDate)}`),
+        api("/api/admin/me").catch(() => ({ admin: false })),
+      ]);
+      isAdmin = adminResult.admin;
       renderResults(run);
       bindFeedback(searchName, runDate);
     } catch (e) {
@@ -201,7 +217,6 @@
   });
 
   async function init() {
-    try { isAdmin = (await api("/api/admin/me")).admin; } catch { isAdmin = false; }
     try {
       const searches = await api("/api/searches");
       searchList.innerHTML = searches.map(s =>

@@ -50,9 +50,17 @@ body {
 }
 
 .topbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 600;
   font-size: 16px;
   color: var(--text-main);
+}
+
+.topbar-logo-img {
+  display: block;
+  flex-shrink: 0;
 }
 
 .topbar-admin-link {
@@ -380,9 +388,31 @@ body {
 
 .save-all-row {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.overall-feedback-text {
+  width: 100%;
+  max-width: 600px;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-body);
+  background: var(--page-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  resize: vertical;
+  min-height: 48px;
+  box-sizing: border-box;
+}
+.overall-feedback-text:focus { outline: 2px solid var(--button-primary-bg); outline-offset: 1px; background: var(--card-bg); }
+
+.save-all-controls {
+  display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 20px;
 }
 
 .save-all-btn {
