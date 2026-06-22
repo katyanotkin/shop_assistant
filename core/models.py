@@ -30,6 +30,12 @@ class SearchConfig(BaseModel):
     preferred_shops: list[str] = []
     feedback_notes: Optional[str] = None
     avoid_shops: list[str] = []
+    example_urls: list[str] = []
+
+    @field_validator("example_urls")
+    @classmethod
+    def cap_example_urls(cls, v: list[str]) -> list[str]:
+        return v[:3]
 
 
 class ProductMatch(BaseModel):

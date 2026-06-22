@@ -33,6 +33,11 @@ def index():
     return _HTML
 
 
+@app.get("/{search_name}", response_class=HTMLResponse)
+def search_page(search_name: str):
+    return _HTML
+
+
 @app.get("/api/searches")
 def get_searches():
     configs = fc.list_searches(active_only=False)

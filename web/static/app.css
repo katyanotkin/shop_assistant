@@ -110,12 +110,33 @@ body {
 }
 
 .search-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 10px 16px;
   cursor: pointer;
   color: var(--text-body);
   border-left: 3px solid transparent;
   transition: background 0.1s;
 }
+
+.copy-link-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  opacity: 0;
+  padding: 2px 5px;
+  font-size: 13px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-radius: 4px;
+  transition: opacity 0.12s;
+  line-height: 1;
+}
+.search-list li:hover .copy-link-btn,
+.search-list li.active .copy-link-btn { opacity: 1; }
+.copy-link-btn:hover { background: var(--line-soft); color: var(--text-body); }
 
 .search-list li:hover {
   background: var(--line-soft);
@@ -278,18 +299,11 @@ body {
   color: var(--text-body);
 }
 
-.card-url {
-  font-size: 12px;
-  color: var(--button-primary-bg);
+.card-title-link {
+  color: inherit;
   text-decoration: none;
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
 }
-
-.card-url:hover { text-decoration: underline; }
+.card-title-link:hover { text-decoration: underline; }
 
 .criteria-row {
   display: flex;
@@ -306,6 +320,8 @@ body {
   font-size: 12px;
   color: var(--text-muted);
   font-style: italic;
+  border-left: 2px solid var(--line-soft);
+  padding-left: 6px;
 }
 
 /* ===== Feedback ===== */

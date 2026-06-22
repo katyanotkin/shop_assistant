@@ -81,6 +81,7 @@ def run_search(search_name: str, settings: Settings, dry_run: bool = False, lear
 
     feedback_notes: str = config.get("feedback_notes") or ""
     avoid_shops: set[str] = set(config.get("avoid_shops") or [])
+    example_urls: list[str] = config.get("example_urls") or []
 
     if learn and not dry_run:
         learned = learn_from_feedback(search_name, settings.google_cloud_project)
@@ -110,7 +111,9 @@ def run_search(search_name: str, settings: Settings, dry_run: bool = False, lear
 
     print(f"Candidates: {len(candidates)}")
 
-    ranked = rank_all(candidates, criteria, settings.google_cloud_project, feedback_notes=feedback_notes)
+    ranked = rank_all(
+        candidates, criteria, settings.google_cloud_project, feedback_notes=feedback_notes, example_urls=example_urls
+    )
 
     matches: list[models.ProductMatch] = []
     partial_matches: list[models.ProductMatch] = []

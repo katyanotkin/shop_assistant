@@ -50,9 +50,10 @@
     ].join("");
     const notes = m.notes ? `<p class="card-notes">${m.notes}</p>` : "";
     const site = siteName(m.url);
-    const titleText = site && m.title
+    const titleInner = site && m.title
       ? `<span class="card-site">${site}</span><span class="card-sep"> | </span>${m.title}`
       : (m.title || "(no title)");
+    const titleText = `<a class="card-title-link" href="${m.url}" target="_blank" rel="noopener">${titleInner}</a>`;
     const existingFeedback = feedbackMap?.[m.url] || "";
     const phrases = _PHRASES.map(p => `<button type="button" class="phrase-btn" data-phrase="${p}">${p}</button>`).join("");
     const feedbackSection = isAdmin ? `
@@ -68,13 +69,12 @@
         <div class="score-badge ${sc}">${Math.round(m.score)}</div>
         <div class="card-body">
           <div class="card-title-row">
-            <span class="card-title">${titleText}</span>
+            ${titleText}
             ${newTag}
           </div>
           <div class="card-meta">
             ${price}
           </div>
-          <a class="card-url" href="${m.url}" target="_blank" rel="noopener">${m.url}</a>
           ${criteria ? `<div class="criteria-row">${criteria}</div>` : ""}
           ${notes}
           ${feedbackSection}
@@ -194,6 +194,7 @@
   async function selectSearch(name) {
     if (activeSearch === name) return;
     activeSearch = name;
+    history.pushState({}, "", "/" + encodeURIComponent(name));
 
     document.querySelectorAll(".search-list li").forEach(el => {
       el.classList.toggle("active", el.dataset.name === name);
@@ -220,14 +221,31 @@
     try {
       const searches = await api("/api/searches");
       searchList.innerHTML = searches.map(s =>
-        `<li role="option" data-name="${s.name}" class="${s.active ? "" : "inactive-search"}">${s.name.replace(/_/g, " ")}</li>`
+        `<li role="option" tabindex="0" data-name="${s.name}" class="${s.active ? "" : "inactive-search"}">
+          <span>${s.name.replace(/_/g, " ")}</span>
+          <button class="copy-link-btn" title="Copy link" aria-label="Copy link to ${s.name}">⎘</button>
+        </li>`
       ).join("");
 
       searchList.querySelectorAll("li").forEach(el => {
         el.addEventListener("click", () => selectSearch(el.dataset.name));
+        el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") selectSearch(el.dataset.name); });
       });
 
-      if (searches.length) selectSearch(searches[0].name);
+      searchList.querySelectorAll(".copy-link-btn").forEach(btn => {
+        btn.addEventListener("click", e => {
+          e.stopPropagation();
+          const name = btn.closest("li").dataset.name;
+          navigator.clipboard.writeText(`${location.origin}/${name}`).then(() => {
+            btn.textContent = "✓";
+            setTimeout(() => { btn.textContent = "⎘"; }, 1500);
+          });
+        });
+      });
+
+      const fromPath = decodeURIComponent(window.location.pathname.slice(1));
+      const initial = searches.find(s => s.name === fromPath) ? fromPath : searches[0]?.name;
+      if (initial) selectSearch(initial);
     } catch {
       searchList.innerHTML = `<li style="padding:12px 16px;color:var(--text-muted)">Failed to load searches</li>`;
     }

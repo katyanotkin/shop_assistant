@@ -14,5 +14,6 @@ class Settings(BaseSettings):
     fetch_timeout: float = 12.0
     max_candidates: int = 40
     admin_password: Optional[str] = None
+    base_url: Optional[str] = None
 
     model_config = {"env_file": ".env"}

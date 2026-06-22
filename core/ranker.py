@@ -11,12 +11,20 @@ from .fetcher import fetch_page
 GEMINI_MODEL = "gemini-2.5-flash-lite"
 GEMINI_LOCATION = "us-central1"
 
+
+def _example_section(urls: list[str]) -> str:
+    if not urls:
+        return ""
+    header = "\nReference products (use as style/quality benchmarks when scoring):\n"
+    return header + "\n".join(f"- {u}" for u in urls) + "\n"
+
+
 _PROMPT = """\
 You are a shopping assistant. Score how well this product page matches the search criteria.
 
 Search criteria (JSON):
 {criteria}
-{feedback_section}
+{feedback_section}{example_section}
 Product page text:
 {text}
 
@@ -45,7 +53,12 @@ Return only the JSON object, no markdown, no extra text."""
 
 
 def rank_candidate(
-    url: str, text: str, criteria: models.SearchCriteria, client: genai.Client, feedback_notes: str = ""
+    url: str,
+    text: str,
+    criteria: models.SearchCriteria,
+    client: genai.Client,
+    feedback_notes: str = "",
+    example_urls: list[str] | None = None,
 ) -> dict:
     if not text:
         return {
@@ -62,6 +75,7 @@ def rank_candidate(
             contents=_PROMPT.format(
                 criteria=criteria.model_dump_json(indent=2),
                 feedback_section=format_feedback_section(feedback_notes),
+                example_section=_example_section(example_urls or []),
                 text=text,
             ),
             config=types.GenerateContentConfig(temperature=0),
@@ -89,6 +103,7 @@ def rank_all(
     project: str,
     delay: float = 1.0,
     feedback_notes: str = "",
+    example_urls: list[str] | None = None,
 ) -> list[dict]:
     client = genai.Client(vertexai=True, project=project, location=GEMINI_LOCATION)
     results = []
@@ -96,7 +111,14 @@ def rank_all(
         url = item.get("link", "")
         print(f"  [{len(results) + 1}/{len(candidates)}] {url}")
         final_url, text = fetch_page(url)
-        ranked = rank_candidate(final_url, text, criteria, client, feedback_notes=feedback_notes)
+        ranked = rank_candidate(
+            final_url,
+            text,
+            criteria,
+            client,
+            feedback_notes=feedback_notes,
+            example_urls=example_urls,
+        )
         ranked["url"] = final_url
         results.append(ranked)
         if delay:

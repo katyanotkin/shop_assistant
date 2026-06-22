@@ -67,7 +67,7 @@
     const titleText = site && m.title
       ? `<span class="card-site">${site}</span><span class="card-sep"> | </span>${m.title}`
       : (m.title || "(no title)");
-    const price = m.price ? `<span class="card-price">€${m.price}</span>` : "";
+    const price = m.price != null ? `<span class="card-price">${m.price}</span>` : "";
     const newTag = m.is_new ? tag("NEW", "tag-new") : "";
     const criteria = [
       ...(m.matched || []).map(t => tag(t, "tag tag-match")),
@@ -121,6 +121,7 @@
       ${fieldRow("Max price", "max_price", c.max_price, "number")}
       ${fieldRow("Notes", "extra_notes", c.extra_notes || "", "textarea")}
       ${fieldRow("Preferred shops", "preferred_shops", (cfg.preferred_shops || []).join("\n"), "textarea")}
+      ${fieldRow("Example products (up to 3 URLs, one per line)", "example_urls", (cfg.example_urls || []).join("\n"), "textarea")}
       <div class="action-row">
         <button class="btn-run btn-run-only">Run</button>
         <button class="btn-primary btn-save">Save</button>
@@ -151,6 +152,7 @@
         extra_notes: g("extra_notes").value.trim() || null,
       },
       preferred_shops: g("preferred_shops").value.split("\n").map(s => s.trim()).filter(Boolean),
+      example_urls: g("example_urls").value.split("\n").map(s => s.trim()).filter(Boolean).slice(0, 3),
     };
   }
 

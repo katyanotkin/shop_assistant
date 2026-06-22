@@ -35,8 +35,10 @@ def send_run_notification(result: models.RunResult, settings: Settings) -> None:
         f"Search: {result.search_name}",
         f"Date: {result.run_date}",
         f"Candidates checked: {result.total_candidates}",
-        "",
     ]
+    if settings.base_url:
+        body_lines.append(f"View results: {settings.base_url.rstrip('/')}/{result.search_name}")
+    body_lines.append("")
 
     if new_matches:
         body_lines.append(f"=== {len(new_matches)} NEW MATCH(ES) ===")
