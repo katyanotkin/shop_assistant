@@ -3,11 +3,15 @@ from web.main import _inject_brand
 
 
 def test_inject_brand_replaces_name():
-    assert APP_NAME in _inject_brand("Hello __APP_NAME__")
+    result = _inject_brand("Hello __APP_NAME__")
+    assert APP_NAME in result
+    assert "__APP_NAME__" not in result
 
 
 def test_inject_brand_replaces_motto():
-    assert APP_MOTTO in _inject_brand("__APP_MOTTO__")
+    result = _inject_brand("__APP_MOTTO__")
+    assert APP_MOTTO in result
+    assert "__APP_MOTTO__" not in result
 
 
 def test_inject_brand_both():
