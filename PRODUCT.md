@@ -2,9 +2,9 @@
 
 ## What it does
 
-Shop Assistant solves a specific problem: finding products that match detailed, multi-criteria specifications across dozens of online retailers, without having to visit each shop manually. You describe what you want once — material, gender, length, lining, excluded materials, size, price ceiling, preferred shops — and the tool searches the web, fetches each candidate page, and scores how well each product matches your criteria on a 0–10 scale. It then shows you the results in a browser UI, grouped by match quality, and emails you when something new appears.
+TailoredLoop solves a specific problem: finding products that match detailed, multi-criteria specifications across dozens of online retailers, without having to visit each shop manually. You describe what you want once — material, gender, length, lining, excluded materials, size, price ceiling, preferred shops — and it searches the web, fetches each candidate page, and scores how well each product matches your criteria on a 0–10 scale. Results appear in a browser UI, grouped by match quality.
 
-It is designed for searches that are hard to express in a single Google query and where you want consistent scoring across many results over time.
+It is designed for searches that are hard to express in a single Google query and where you want consistent, comparable scoring across many results over time.
 
 ---
 

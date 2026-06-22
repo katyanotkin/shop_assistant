@@ -1,6 +1,6 @@
-# Shop Assistant
+# TailoredLoop
 
-CLI + web UI that monitors online shops for products matching saved search criteria. Uses Gemini (Vertex AI) to plan queries, search the web via Google Search grounding, and score each product page against your criteria. New matches are saved to Firestore and optionally emailed.
+Web app that monitors online shops for products matching saved search criteria. Uses Gemini (Vertex AI) to plan queries, search the web via Google Search grounding, and score each product page against your criteria. Results are saved to Firestore and displayed in the browser UI.
 
 ## How it works
 
@@ -58,13 +58,9 @@ MAX_CANDIDATES=20             # max URLs to evaluate per run
 
 ### Add a search
 
-#### Via the admin UI (recommended)
-
 Go to `/admin`, log in, and click **+ New search** in the sidebar. Enter a short search name (lowercase, underscores) and describe what you want in plain text — material, style, size, price ceiling, preferred shops. Click **Generate config**: Gemini produces a structured config which appears in an editable form. Review every field, then click **Save** or **Save & Run**.
 
-#### Via CLI / JSON (for scripting or bulk import)
-
-Write a JSON file describing what you want, save it under `searches/`, then push to Firestore:
+### Dev / bulk import (CLI)
 
 ```bash
 make add FILE=searches/wax_coat.json
@@ -108,18 +104,18 @@ make add FILE=searches/wax_coat.json
 | `extra_notes` | no | Free-text hints passed to the Gemini ranker |
 | `preferred_shops` | no | Shop URLs to target directly with `site:` queries |
 
-### List / run / dry-run
+### Dev commands
 
 ```bash
 make list                       # list all searches in Firestore
 make run                        # run all active searches
 make run-one SEARCH=wax_coat    # run one search
-make dry-run SEARCH=wax_coat    # print results, skip save and email
+make dry-run SEARCH=wax_coat    # print results without saving
 ```
 
 ### Update or disable a search
 
-Edit the JSON file (change criteria or set `"active": false`) and re-add:
+Edit directly in the admin UI, or via CLI:
 
 ```bash
 make add FILE=searches/wax_coat.json

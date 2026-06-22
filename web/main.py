@@ -7,16 +7,22 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import core.firestore_client as fc
+from core.brand import APP_MOTTO, APP_NAME
 from core.generator import generate_search_config
 from core.runner import run_search
 from core.settings import Settings
 
 _settings = Settings()
-app = FastAPI(title="Shop Assistant")
+app = FastAPI(title=APP_NAME)
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
-_HTML = (Path(__file__).parent / "templates" / "index.html").read_text()
-_ADMIN_HTML = (Path(__file__).parent / "templates" / "admin.html").read_text()
+
+def _inject_brand(html: str) -> str:
+    return html.replace("__APP_NAME__", APP_NAME).replace("__APP_MOTTO__", APP_MOTTO)
+
+
+_HTML = _inject_brand((Path(__file__).parent / "templates" / "index.html").read_text())
+_ADMIN_HTML = _inject_brand((Path(__file__).parent / "templates" / "admin.html").read_text())
 
 
 def _admin_token() -> str:

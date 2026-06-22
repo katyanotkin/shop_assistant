@@ -1,7 +1,7 @@
 {
-  "name": "Shop Assistant",
-  "short_name": "ShopAssist",
-  "description": "Monitors online shops and scores products against your saved search criteria",
+  "name": "TailoredLoop",
+  "short_name": "TailoredLoop",
+  "description": "Refine to find. Monitors shops and scores products against your saved criteria.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

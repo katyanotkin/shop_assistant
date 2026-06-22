@@ -1,6 +1,6 @@
-# Shop Assistant
+# TailoredLoop
 
-CLI tool that monitors online shops for products matching saved search criteria, scores candidates with Gemini, and sends email notifications.
+Web app that monitors online shops for products matching saved search criteria, scores candidates with Gemini, and displays results in a browser UI. The CLI (`run.py`) is a dev/testing tool — the web admin panel is the primary interface.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full pipeline, module roles, Firestore data model, API endpoints, and infrastructure details.
 See [PRODUCT.md](PRODUCT.md) for the user-facing feature guide.
@@ -13,18 +13,15 @@ cp .env.sample .env
 # edit .env — only GOOGLE_CLOUD_PROJECT is required
 ```
 
-Required GCP APIs: Vertex AI, Firestore, Gmail (optional).
+Required GCP APIs: Vertex AI, Firestore.
 
-## Usage
+## Dev usage (CLI)
 
 ```bash
-# add a search config
+# add a search config directly to Firestore
 python run.py add searches/wax_coat.json
 
-# run a search
-python run.py run wax_coat
-
-# dry run (no Firestore write, no email)
+# dry run a search (no Firestore write)
 python run.py run wax_coat --dry-run
 
 # list saved searches
