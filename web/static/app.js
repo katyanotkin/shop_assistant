@@ -6,6 +6,7 @@
 
   let activeSearch = null;
   let isAdmin = false;
+  let _loadSeq = 0;
 
   async function api(path) {
     const r = await fetch(path);
@@ -34,6 +35,10 @@
     return "red";
   }
 
+  function esc(s) {
+    return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
   function tag(text, cls) {
     return `<span class="tag ${cls}">${text}</span>`;
   }
@@ -48,12 +53,12 @@
       ...(m.matched || []).map(t => tag(t, "tag tag-match")),
       ...(m.unmatched || []).map(t => tag(t, "tag tag-miss")),
     ].join("");
-    const notes = m.notes ? `<p class="card-notes">${m.notes}</p>` : "";
+    const notes = m.notes ? `<p class="card-notes">${esc(m.notes)}</p>` : "";
     const site = siteName(m.url);
     const titleInner = site && m.title
-      ? `<span class="card-site">${site}</span><span class="card-sep"> | </span>${m.title}`
-      : (m.title || "(no title)");
-    const titleText = `<a class="card-title-link" href="${m.url}" target="_blank" rel="noopener">${titleInner}</a>`;
+      ? `<span class="card-site">${esc(site)}</span><span class="card-sep"> | </span>${esc(m.title)}`
+      : esc(m.title || "(no title)");
+    const titleText = `<a class="card-title-link" href="${esc(m.url)}" target="_blank" rel="noopener">${titleInner}</a>`;
     const existingFeedback = feedbackMap?.[m.url] || "";
     const phrases = _PHRASES.map(p => `<button type="button" class="phrase-btn" data-phrase="${p}">${p}</button>`).join("");
     const feedbackSection = isAdmin ? `
@@ -177,24 +182,29 @@
   }
 
   async function loadRun(searchName, runDate) {
+    const seq = ++_loadSeq;
     resultsPanel.innerHTML = `<p class="loading">Loading…</p>`;
     try {
       const [run, adminResult] = await Promise.all([
         api(`/api/results/${encodeURIComponent(searchName)}/${encodeURIComponent(runDate)}`),
         api("/api/admin/me").catch(() => ({ admin: false })),
       ]);
+      if (seq !== _loadSeq) return;
       isAdmin = adminResult.admin;
       renderResults(run);
       bindFeedback(searchName, runDate);
     } catch (e) {
+      if (seq !== _loadSeq) return;
       resultsPanel.innerHTML = `<p class="empty-state">Failed to load results: ${e.message}</p>`;
     }
   }
 
-  async function selectSearch(name) {
+  async function selectSearch(name, { replace = false } = {}) {
     if (activeSearch === name) return;
     activeSearch = name;
-    history.pushState({}, "", "/" + encodeURIComponent(name));
+    if (replace) history.replaceState({}, "", "/" + encodeURIComponent(name));
+    else history.pushState({}, "", "/" + encodeURIComponent(name));
+    document.title = `${name.replace(/_/g, " ")} — TailoredLoop`;
 
     document.querySelectorAll(".search-list li").forEach(el => {
       el.classList.toggle("active", el.dataset.name === name);
@@ -239,13 +249,16 @@
           navigator.clipboard.writeText(`${location.origin}/${name}`).then(() => {
             btn.textContent = "✓";
             setTimeout(() => { btn.textContent = "⎘"; }, 1500);
+          }).catch(() => {
+            btn.textContent = "✗";
+            setTimeout(() => { btn.textContent = "⎘"; }, 1500);
           });
         });
       });
 
       const fromPath = decodeURIComponent(window.location.pathname.slice(1));
       const initial = searches.find(s => s.name === fromPath) ? fromPath : searches[0]?.name;
-      if (initial) selectSearch(initial);
+      if (initial) selectSearch(initial, { replace: true });
     } catch {
       searchList.innerHTML = `<li style="padding:12px 16px;color:var(--text-muted)">Failed to load searches</li>`;
     }

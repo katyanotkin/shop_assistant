@@ -67,7 +67,7 @@ def _to_row(m: models.ProductMatch, match_type: str, result: models.RunResult) -
         "is_new": m.is_new,
         "title": m.title,
         "url": m.url,
-        "price": m.price or "",
+        "price": m.price if m.price is not None else "",
         "matched": "; ".join(m.matched),
         "unmatched": "; ".join(m.unmatched),
         "notes": m.notes,
@@ -81,7 +81,7 @@ def run_search(search_name: str, settings: Settings, dry_run: bool = False, lear
 
     feedback_notes: str = config.get("feedback_notes") or ""
     avoid_shops: set[str] = set(config.get("avoid_shops") or [])
-    example_urls: list[str] = config.get("example_urls") or []
+    example_urls: list[str] = (config.get("example_urls") or [])[:3]
 
     if learn and not dry_run:
         learned = learn_from_feedback(search_name, settings.google_cloud_project)

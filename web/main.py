@@ -2,7 +2,7 @@ import hashlib
 from pathlib import Path
 
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -23,6 +23,7 @@ def _inject_brand(html: str) -> str:
 
 _HTML = _inject_brand((Path(__file__).parent / "templates" / "index.html").read_text())
 _ADMIN_HTML = _inject_brand((Path(__file__).parent / "templates" / "admin.html").read_text())
+_MANIFEST = _inject_brand((Path(__file__).parent / "static" / "manifest.json").read_text())
 
 
 def _admin_token() -> str:
@@ -32,6 +33,11 @@ def _admin_token() -> str:
 def _require_admin(sa_admin: str | None = Cookie(default=None)) -> None:
     if not _settings.admin_password or sa_admin != _admin_token():
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+@app.get("/static/manifest.json")
+def manifest():
+    return Response(content=_MANIFEST, media_type="application/manifest+json")
 
 
 @app.get("/", response_class=HTMLResponse)

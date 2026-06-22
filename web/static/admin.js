@@ -60,26 +60,29 @@
 
   function scoreClass(s) { return s >= 7 ? "green" : s >= 4 ? "amber" : "red"; }
   function tag(text, cls) { return `<span class="tag ${cls}">${text}</span>`; }
+  function esc(s) {
+    return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
 
   function renderResultCard(m) {
     const sc = scoreClass(m.score);
     const site = siteName(m.url);
-    const titleText = site && m.title
-      ? `<span class="card-site">${site}</span><span class="card-sep"> | </span>${m.title}`
-      : (m.title || "(no title)");
-    const price = m.price != null ? `<span class="card-price">${m.price}</span>` : "";
+    const titleInner = site && m.title
+      ? `<span class="card-site">${esc(site)}</span><span class="card-sep"> | </span>${esc(m.title)}`
+      : esc(m.title || "(no title)");
+    const titleText = `<a class="card-title-link" href="${esc(m.url)}" target="_blank" rel="noopener">${titleInner}</a>`;
+    const price = m.price != null ? `<span class="card-price">${esc(String(m.price))}</span>` : "";
     const newTag = m.is_new ? tag("NEW", "tag-new") : "";
     const criteria = [
       ...(m.matched || []).map(t => tag(t, "tag tag-match")),
       ...(m.unmatched || []).map(t => tag(t, "tag tag-miss")),
     ].join("");
-    const notes = m.notes ? `<p class="card-notes">${m.notes}</p>` : "";
+    const notes = m.notes ? `<p class="card-notes">${esc(m.notes)}</p>` : "";
     return `<div class="card">
       <div class="score-badge ${sc}">${Math.round(m.score)}</div>
       <div class="card-body">
-        <div class="card-title-row"><span class="card-title">${titleText}</span>${newTag}</div>
+        <div class="card-title-row">${titleText}${newTag}</div>
         <div class="card-meta">${price}</div>
-        <a class="card-url" href="${m.url}" target="_blank" rel="noopener">${m.url}</a>
         ${criteria ? `<div class="criteria-row">${criteria}</div>` : ""}
         ${notes}
       </div>
