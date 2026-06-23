@@ -7,9 +7,10 @@
 .login-overlay {
   position: fixed; inset: 0;
   background: var(--page-bg);
-  display: flex; align-items: center; justify-content: center;
+  align-items: center; justify-content: center;
   z-index: 200;
 }
+.login-overlay:not([hidden]) { display: flex; }
 .login-card {
   background: var(--card-bg);
   border: 1px solid var(--card-border);

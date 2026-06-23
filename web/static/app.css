@@ -183,11 +183,11 @@ body {
 /* ===== Toolbar ===== */
 
 .toolbar {
-  display: flex;
   align-items: center;
   gap: 10px;
   margin-bottom: 24px;
 }
+.toolbar:not([hidden]) { display: flex; }
 
 .date-label {
   font-size: 13px;
