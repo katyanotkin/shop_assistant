@@ -74,13 +74,19 @@ body {
   flex-shrink: 0;
 }
 
-.topbar-admin-link {
+.topbar-admin-btn {
   margin-left: auto;
+  padding: 5px 14px;
   font-size: 12px;
+  font-weight: 600;
   color: var(--text-muted);
   text-decoration: none;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  background: var(--card-bg);
+  white-space: nowrap;
 }
-.topbar-admin-link:hover { color: var(--text-main); }
+.topbar-admin-btn:hover { color: var(--text-main); border-color: var(--text-muted); }
 
 /* ===== Layout ===== */
 

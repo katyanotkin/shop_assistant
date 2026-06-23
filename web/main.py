@@ -45,6 +45,11 @@ def index():
     return _HTML
 
 
+@app.get("/admin", response_class=HTMLResponse)
+def admin_page():
+    return _ADMIN_HTML
+
+
 @app.get("/{search_name}", response_class=HTMLResponse)
 def search_page(search_name: str):
     return _HTML
@@ -93,11 +98,6 @@ def put_feedback_batch(search_name: str, run_date: str, body: FeedbackBatch):
 @app.get("/api/admin/me")
 def admin_me(sa_admin: str | None = Cookie(default=None)):
     return {"admin": bool(_settings.admin_password and sa_admin == _admin_token())}
-
-
-@app.get("/admin", response_class=HTMLResponse)
-def admin_page():
-    return _ADMIN_HTML
 
 
 @app.post("/api/admin/login")
