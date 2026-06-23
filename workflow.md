@@ -22,7 +22,8 @@ Never start implementation until design is settled.
 
 | Task type | Agent or inline |
 |---|---|
-| UI layout, CSS, interaction | `ui-ux-engineer` |
+| UI layout, CSS, interaction design | `ui-ux-engineer` |
+| JS correctness, auth, routing, CSS anti-patterns | `senior-web-engineer` |
 | Backend Python, data model | Inline (main context) |
 | Writing/copy/changelog | `writer` |
 | Any other code | Inline |
