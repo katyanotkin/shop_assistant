@@ -20,6 +20,7 @@
 }
 .login-title { margin: 0; font-size: 18px; color: var(--text-main); }
 .login-err { margin: 0; color: var(--score-red); font-size: 13px; }
+.login-actions { display: flex; gap: 10px; }
 
 /* View tabs */
 .view-tabs {

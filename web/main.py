@@ -2,7 +2,7 @@ import hashlib
 from pathlib import Path
 
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -45,9 +45,9 @@ def index():
     return _HTML
 
 
-@app.get("/admin", response_class=HTMLResponse)
+@app.get("/admin")
 def admin_page():
-    return _ADMIN_HTML
+    return RedirectResponse(url="/", status_code=302)
 
 
 @app.get("/{search_name}", response_class=HTMLResponse)

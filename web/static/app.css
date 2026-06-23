@@ -85,6 +85,8 @@ body {
   border-radius: 6px;
   background: var(--card-bg);
   white-space: nowrap;
+  cursor: pointer;
+  font-family: inherit;
 }
 .topbar-admin-btn:hover { color: var(--text-main); border-color: var(--text-muted); }
 
@@ -484,6 +486,68 @@ body {
   text-align: center;
   font-size: 14px;
 }
+
+/* ===== Edit panel (right drawer) ===== */
+
+.edit-panel {
+  width: 380px;
+  flex-shrink: 0;
+  background: var(--card-bg);
+  border-left: 1px solid var(--card-border);
+  overflow-y: auto;
+  padding: 20px;
+  position: sticky;
+  top: var(--topbar-h);
+  height: calc(100vh - var(--topbar-h));
+}
+
+.edit-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.edit-panel-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-main);
+  text-transform: capitalize;
+}
+
+.edit-panel-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 22px;
+  color: var(--text-muted);
+  padding: 0 4px;
+  line-height: 1;
+}
+.edit-panel-close:hover { color: var(--text-main); }
+
+.topbar-admin-btn--active {
+  color: var(--score-green);
+  border-color: var(--score-green);
+}
+
+/* ===== Toolbar buttons ===== */
+
+.btn-run {
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-run:hover { color: var(--text-main); border-color: var(--text-muted); }
+.btn-run:disabled { opacity: 0.5; cursor: default; }
 
 /* ===== Mobile ===== */
 

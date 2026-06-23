@@ -1,25 +1,38 @@
 (() => {
-  const searchList = document.getElementById("search-list");
-  const toolbar = document.getElementById("toolbar");
-  const dateSelect = document.getElementById("date-select");
+  const searchList  = document.getElementById("search-list");
+  const toolbar     = document.getElementById("toolbar");
+  const dateSelect  = document.getElementById("date-select");
   const resultsPanel = document.getElementById("results-panel");
+  const editPanel   = document.getElementById("edit-panel");
 
   let activeSearch = null;
-  let isAdmin = false;
-  let _loadSeq = 0;
+  let isAdmin      = false;
+  let _loadSeq     = 0;
 
-  async function api(path) {
-    const r = await fetch(path);
+  // ── API ───────────────────────────────────────────────────────────────────
+  async function api(path, { method = "GET", body } = {}) {
+    const opts = { method, credentials: "same-origin", headers: {} };
+    if (body !== undefined) {
+      opts.headers["Content-Type"] = "application/json";
+      opts.body = JSON.stringify(body);
+    }
+    const r = await fetch(path, opts);
+    if (r.status === 401) { const e = new Error("Unauthorized"); e.status = 401; throw e; }
     if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
     return r.json();
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function esc(s) {
+    return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
   function siteName(url) {
     try {
       const locales = new Set(["us", "uk", "eu", "au", "ca"]);
-      const skip = new Set(["www", "shop", "store", "m", "en", "co"]);
-      const parts = new URL(url).hostname.split(".");
-      const labels = [];
+      const skip    = new Set(["www", "shop", "store", "m", "en", "co"]);
+      const parts   = new URL(url).hostname.split(".");
+      const labels  = [];
       for (let i = 0; i < parts.length - 1; i++) {
         const p = parts[i].toLowerCase();
         if (skip.has(p)) continue;
@@ -29,57 +42,326 @@
     } catch { return ""; }
   }
 
-  function scoreClass(s) {
-    if (s >= 7) return "green";
-    if (s >= 4) return "amber";
-    return "red";
+  function scoreClass(s) { return s >= 7 ? "green" : s >= 4 ? "amber" : "red"; }
+  function tag(text, cls) { return `<span class="tag ${cls}">${text}</span>`; }
+  function split(v) { return v.split(",").map(s => s.trim()).filter(Boolean); }
+  function join(a)  { return (a || []).join(", "); }
+
+  // ── Admin login modal ─────────────────────────────────────────────────────
+  const loginOverlay = document.getElementById("login-overlay");
+  const loginErr     = document.getElementById("login-err");
+
+  function showLogin() {
+    loginOverlay.hidden = false;
+    document.getElementById("admin-pwd").value = "";
+    if (loginErr) { loginErr.textContent = ""; loginErr.hidden = true; }
+  }
+  function hideLogin() { loginOverlay.hidden = true; }
+
+  document.getElementById("login-cancel")?.addEventListener("click", hideLogin);
+  document.getElementById("login-form")?.addEventListener("submit", async e => {
+    e.preventDefault();
+    try {
+      await api("/api/admin/login", { method: "POST", body: { password: document.getElementById("admin-pwd").value } });
+      hideLogin();
+      isAdmin = true;
+      updateAdminUI();
+      if (activeSearch && dateSelect.value) loadRun(activeSearch, dateSelect.value);
+    } catch {
+      if (loginErr) { loginErr.textContent = "Wrong password."; loginErr.hidden = false; }
+    }
+  });
+
+  // ── Admin UI state ────────────────────────────────────────────────────────
+  function updateAdminUI() {
+    const editBtn = document.getElementById("edit-search-btn");
+    const runBtn  = document.getElementById("run-search-btn");
+    const topBtn  = document.getElementById("topbar-admin-btn");
+    if (editBtn) editBtn.hidden = !isAdmin;
+    if (runBtn)  runBtn.hidden  = !isAdmin;
+    if (topBtn) {
+      topBtn.textContent = isAdmin ? "Admin ✓" : "Admin";
+      topBtn.classList.toggle("topbar-admin-btn--active", isAdmin);
+    }
   }
 
-  function esc(s) {
-    return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  document.getElementById("topbar-admin-btn")?.addEventListener("click", e => {
+    e.preventDefault();
+    if (isAdmin) { if (activeSearch) openEditPanel(activeSearch); }
+    else         showLogin();
+  });
+
+  document.getElementById("edit-search-btn")?.addEventListener("click", () => {
+    if (activeSearch) openEditPanel(activeSearch);
+  });
+
+  document.getElementById("run-search-btn")?.addEventListener("click", async () => {
+    if (!activeSearch) return;
+    const btn = document.getElementById("run-search-btn");
+    btn.disabled = true;
+    btn.textContent = "Running…";
+    try {
+      await api(`/api/admin/run/${activeSearch}`, { method: "POST", body: { learn: true } });
+      btn.textContent = "Run ▶";
+      const dates = await api(`/api/results/${encodeURIComponent(activeSearch)}`);
+      dateSelect.innerHTML = dates.map(d => `<option value="${d}">${d}</option>`).join("");
+      toolbar.hidden = false;
+      await loadRun(activeSearch, dates[0]);
+    } catch (e) {
+      btn.textContent = "Run ▶";
+      alert(`Run failed: ${e.message}`);
+    }
+    btn.disabled = false;
+  });
+
+  // ── Edit panel ────────────────────────────────────────────────────────────
+  function openEditPanel(name) {
+    editPanel.hidden = false;
+    editPanel.innerHTML = `<p class="loading">Loading…</p>`;
+    api(`/api/admin/search/${name}`).then(cfg => {
+      editPanel.innerHTML = `
+        <div class="edit-panel-header">
+          <span class="edit-panel-title">${esc(name.replace(/_/g, " "))}</span>
+          <button id="close-edit-btn" class="edit-panel-close" aria-label="Close">×</button>
+        </div>` + renderEdit(cfg) + renderReferences();
+      const form = editPanel.querySelector(".edit-form");
+      bindEdit(form, {
+        onAfterRun: async () => {
+          const dates = await api(`/api/results/${encodeURIComponent(name)}`);
+          dateSelect.innerHTML = dates.map(d => `<option value="${d}">${d}</option>`).join("");
+          toolbar.hidden = false;
+          await loadRun(name, dates[0]);
+        },
+      });
+      bindReferences(editPanel.querySelector(".references-card"), form, name);
+      document.getElementById("close-edit-btn").addEventListener("click", () => { editPanel.hidden = true; });
+    }).catch(e => {
+      editPanel.innerHTML = `<p class="empty-state">${esc(e.message)}</p>`;
+    });
   }
 
-  function tag(text, cls) {
-    return `<span class="tag ${cls}">${text}</span>`;
+  // ── Edit form ─────────────────────────────────────────────────────────────
+  function fieldRow(label, name, value, type = "text") {
+    if (type === "textarea") return `<div class="field-row">
+      <label class="field-label">${label}</label>
+      <textarea name="${name}" class="field-input" rows="3">${value}</textarea></div>`;
+    if (type === "number") return `<div class="field-row">
+      <label class="field-label">${label}</label>
+      <input type="number" name="${name}" class="field-input" value="${value ?? ""}" step="any"></div>`;
+    return `<div class="field-row">
+      <label class="field-label">${label}</label>
+      <input type="text" name="${name}" class="field-input" value="${value ?? ""}"></div>`;
   }
 
+  function renderEdit(cfg) {
+    const c = cfg.criteria || {};
+    return `<div class="edit-form" data-name="${cfg.search_name}">
+      <div class="edit-top">
+        <label class="active-label">
+          <input type="checkbox" name="active" ${cfg.active ? "checked" : ""}> Active
+        </label>
+      </div>
+      ${fieldRow("Category", "category", join(c.category))}
+      ${fieldRow("Gender", "gender", c.gender)}
+      ${fieldRow("Material", "material", join(c.material))}
+      ${fieldRow("Lining", "lining", join(c.lining))}
+      ${fieldRow("Length", "length", join(c.length))}
+      ${fieldRow("Exclude", "exclude", join(c.exclude))}
+      ${fieldRow("Sizes", "sizes", join(c.sizes))}
+      ${fieldRow("Max price", "max_price", c.max_price, "number")}
+      ${fieldRow("Notes", "extra_notes", c.extra_notes || "", "textarea")}
+      ${fieldRow("Preferred shops", "preferred_shops", (cfg.preferred_shops || []).join("\n"), "textarea")}
+      <input type="hidden" name="example_urls" value="${(cfg.example_urls || []).join("\n")}">
+      <div class="action-row">
+        <button class="btn-run btn-run-only">Run</button>
+        <button class="btn-primary btn-save">Save</button>
+        <button class="btn-run btn-save-run">Save &amp; Run</button>
+        <label class="learn-label">
+          <input type="checkbox" name="learn_feedback" checked> Learn from feedback
+        </label>
+        <span class="save-msg"></span>
+      </div>
+    </div>`;
+  }
+
+  function collectConfig(form) {
+    const g = n => form.querySelector(`[name="${n}"]`);
+    return {
+      search_name: form.dataset.name,
+      active: g("active").checked,
+      criteria: {
+        category:    split(g("category").value),
+        gender:      g("gender").value.trim(),
+        material:    split(g("material").value),
+        lining:      split(g("lining").value),
+        length:      split(g("length").value),
+        exclude:     split(g("exclude").value),
+        sizes:       split(g("sizes").value),
+        max_price:   parseFloat(g("max_price").value) || null,
+        extra_notes: g("extra_notes").value.trim() || null,
+      },
+      preferred_shops: g("preferred_shops").value.split("\n").map(s => s.trim()).filter(Boolean),
+      example_urls:    g("example_urls").value.split("\n").map(s => s.trim()).filter(Boolean).slice(0, 3),
+    };
+  }
+
+  function bindEdit(form, opts = {}) {
+    const msg        = form.querySelector(".save-msg");
+    const setMsg     = (text, cls) => { msg.textContent = text; msg.className = `save-msg ${cls}`; };
+    const btnSave    = form.querySelector(".btn-save");
+    const btnRunOnly = form.querySelector(".btn-run-only");
+    const btnSaveRun = form.querySelector(".btn-save-run");
+    const learnChk   = form.querySelector("[name='learn_feedback']");
+    const allBtns    = [btnSave, btnRunOnly, btnSaveRun];
+
+    btnSave.addEventListener("click", async () => {
+      const cfg = collectConfig(form);
+      try {
+        await api(`/api/admin/search/${cfg.search_name}`, { method: "PUT", body: cfg });
+        setMsg("Saved.", "ok");
+        setTimeout(() => setMsg("", ""), 2500);
+      } catch (e) { setMsg(e.message, "err"); }
+    });
+
+    async function runSearch(btn, saveFirst) {
+      const cfg = collectConfig(form);
+      const orig = btn.textContent;
+      allBtns.forEach(b => b.disabled = true);
+      let n = 0;
+      const timer = setInterval(() => { btn.textContent = "...".slice(0, (n++ % 3) + 1); }, 400);
+      try {
+        if (saveFirst) await api(`/api/admin/search/${cfg.search_name}`, { method: "PUT", body: cfg });
+        const result = await api(`/api/admin/run/${cfg.search_name}`, { method: "POST", body: { learn: learnChk.checked } });
+        clearInterval(timer);
+        btn.textContent = orig;
+        allBtns.forEach(b => b.disabled = false);
+        setMsg(`Done — ${result.matches} matches, ${result.partial} partial.`, "ok");
+        if (opts.onAfterRun) await opts.onAfterRun();
+      } catch (e) {
+        clearInterval(timer);
+        btn.textContent = orig;
+        allBtns.forEach(b => b.disabled = false);
+        setMsg(e.message, "err");
+      }
+    }
+
+    btnRunOnly.addEventListener("click", () => runSearch(btnRunOnly, false));
+    btnSaveRun.addEventListener("click", () => runSearch(btnSaveRun, true));
+  }
+
+  // ── Reference products card ───────────────────────────────────────────────
+  function renderReferences() {
+    return `<div class="references-card">
+      <div class="references-header">
+        <span class="references-title">Reference products</span>
+        <span class="ref-count"></span>
+      </div>
+      <p class="references-desc">Add up to 3 products you already love — the AI uses these to calibrate what a great match looks like for you.</p>
+      <div class="ref-chips"></div>
+      <div class="ref-input-row">
+        <input type="url" class="field-input ref-url-input" placeholder="Paste a product URL…">
+        <button class="btn-ref-add">Add</button>
+      </div>
+      <div class="ref-action-row">
+        <button class="btn-ref-save btn-primary">Save references</button>
+        <span class="ref-save-msg save-msg"></span>
+      </div>
+    </div>`;
+  }
+
+  function bindReferences(card, editForm, name) {
+    const hidden = editForm.querySelector('[name="example_urls"]');
+    let urls = hidden ? hidden.value.split("\n").filter(Boolean) : [];
+
+    function chipLabel(u) {
+      try { return siteName(u) || new URL(u).hostname; } catch { return u.slice(0, 40); }
+    }
+    function syncHidden() { if (hidden) hidden.value = urls.join("\n"); }
+
+    function renderChips() {
+      const chipsEl  = card.querySelector(".ref-chips");
+      const countEl  = card.querySelector(".ref-count");
+      const inputRow = card.querySelector(".ref-input-row");
+      chipsEl.innerHTML = urls.map(u => `
+        <div class="ref-chip" data-url="${esc(u)}">
+          <span class="ref-chip-label">${esc(chipLabel(u))}</span>
+          <button class="ref-chip-remove" aria-label="Remove">×</button>
+        </div>`).join("");
+      countEl.textContent = `${urls.length} / 3`;
+      if (inputRow) inputRow.hidden = urls.length >= 3;
+      card.querySelectorAll(".ref-chip-remove").forEach(btn => {
+        btn.addEventListener("click", () => {
+          urls = urls.filter(u => u !== btn.closest(".ref-chip").dataset.url);
+          renderChips(); syncHidden();
+        });
+      });
+    }
+    renderChips();
+
+    const urlInput = card.querySelector(".ref-url-input");
+    const addBtn   = card.querySelector(".btn-ref-add");
+
+    function addUrl() {
+      const val = urlInput.value.trim();
+      if (!val || urls.length >= 3) return;
+      try { new URL(val); } catch { urlInput.style.outline = "2px solid var(--score-red)"; return; }
+      urlInput.style.outline = "";
+      if (!urls.includes(val)) { urls.push(val); renderChips(); syncHidden(); }
+      urlInput.value = "";
+    }
+    addBtn.addEventListener("click", addUrl);
+    urlInput.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addUrl(); } });
+
+    const saveBtn = card.querySelector(".btn-ref-save");
+    const saveMsg = card.querySelector(".ref-save-msg");
+    const setMsg  = (t, cls) => { saveMsg.textContent = t; saveMsg.className = `ref-save-msg save-msg ${cls}`; };
+
+    saveBtn.addEventListener("click", async () => {
+      saveBtn.disabled = true; setMsg("Saving…", "");
+      try {
+        const cfg = await api(`/api/admin/search/${name}`);
+        cfg.example_urls = urls;
+        await api(`/api/admin/search/${name}`, { method: "PUT", body: cfg });
+        setMsg("Saved.", "ok");
+        setTimeout(() => setMsg("", ""), 2500);
+      } catch (e) { setMsg(e.message, "err"); }
+      saveBtn.disabled = false;
+    });
+  }
+
+  // ── Results rendering ─────────────────────────────────────────────────────
   const _PHRASES = ["Perfect match", "Wrong material", "Too expensive", "Wrong style", "Doesn't ship to me", "Out of stock"];
 
   function renderCard(m, feedbackMap) {
-    const sc = scoreClass(m.score);
+    const sc    = scoreClass(m.score);
     const newTag = m.is_new ? tag("NEW", "tag-new") : "";
-    const price = m.price != null ? `<span class="card-price">${m.price}</span>` : "";
+    const price  = m.price != null ? `<span class="card-price">${m.price}</span>` : "";
     const criteria = [
-      ...(m.matched || []).map(t => tag(t, "tag tag-match")),
+      ...(m.matched   || []).map(t => tag(t, "tag tag-match")),
       ...(m.unmatched || []).map(t => tag(t, "tag tag-miss")),
     ].join("");
-    const notes = m.notes ? `<p class="card-notes">${esc(m.notes)}</p>` : "";
-    const site = siteName(m.url);
+    const notes      = m.notes ? `<p class="card-notes">${esc(m.notes)}</p>` : "";
+    const site       = siteName(m.url);
     const titleInner = site && m.title
       ? `<span class="card-site">${esc(site)}</span><span class="card-sep"> | </span>${esc(m.title)}`
       : esc(m.title || "(no title)");
-    const titleText = `<a class="card-title-link" href="${esc(m.url)}" target="_blank" rel="noopener">${titleInner}</a>`;
+    const titleText  = `<a class="card-title-link" href="${esc(m.url)}" target="_blank" rel="noopener">${titleInner}</a>`;
     const existingFeedback = feedbackMap?.[m.url] || "";
     const phrases = _PHRASES.map(p => `<button type="button" class="phrase-btn" data-phrase="${p}">${p}</button>`).join("");
     const feedbackSection = isAdmin ? `
-          <div class="feedback-row" data-url="${m.url}">
-            <div class="feedback-phrases">${phrases}</div>
-            <div class="feedback-input-row">
-              <textarea class="feedback-text" placeholder="Add feedback…" rows="2" maxlength="256">${existingFeedback}</textarea>
-            </div>
-            <span class="feedback-charcount">${existingFeedback.length}/256</span>
-          </div>` : "";
+      <div class="feedback-row" data-url="${m.url}">
+        <div class="feedback-phrases">${phrases}</div>
+        <div class="feedback-input-row">
+          <textarea class="feedback-text" placeholder="Add feedback…" rows="2" maxlength="256">${existingFeedback}</textarea>
+        </div>
+        <span class="feedback-charcount">${existingFeedback.length}/256</span>
+      </div>` : "";
     return `
       <div class="card">
         <div class="score-badge ${sc}">${Math.round(m.score)}</div>
         <div class="card-body">
-          <div class="card-title-row">
-            ${titleText}
-            ${newTag}
-          </div>
-          <div class="card-meta">
-            ${price}
-          </div>
+          <div class="card-title-row">${titleText}${newTag}</div>
+          <div class="card-meta">${price}</div>
           ${criteria ? `<div class="criteria-row">${criteria}</div>` : ""}
           ${notes}
           ${feedbackSection}
@@ -91,9 +373,7 @@
     const seen = new Map();
     for (const item of items) {
       const prev = seen.get(item.url);
-      if (!prev || (item.title || "").length > (prev.title || "").length) {
-        seen.set(item.url, item);
-      }
+      if (!prev || (item.title || "").length > (prev.title || "").length) seen.set(item.url, item);
     }
     return [...seen.values()];
   }
@@ -103,13 +383,13 @@
       resultsPanel.innerHTML = `<p class="empty-state">No matches found for this run.</p>`;
       return;
     }
-    const fb = run.feedback || {};
-    const matches = dedupeByUrl(run.matches || []);
+    const fb      = run.feedback || {};
+    const matches  = dedupeByUrl(run.matches || []);
     const matchUrls = new Set(matches.map(m => m.url));
-    const partials = dedupeByUrl((run.partial_matches || []).filter(m => !matchUrls.has(m.url)));
+    const partials  = dedupeByUrl((run.partial_matches || []).filter(m => !matchUrls.has(m.url)));
     let html = `<p class="run-meta">${run.total_candidates ?? "?"} candidates evaluated</p>`;
     if (isAdmin) {
-      const overallFb = fb['_overall_'] || '';
+      const overallFb = fb["_overall_"] || "";
       html += `<div class="save-all-row">
         <textarea id="overall-feedback" class="overall-feedback-text" placeholder="Overall run notes…" rows="2" maxlength="512">${overallFb}</textarea>
         <div class="save-all-controls">
@@ -118,69 +398,60 @@
         </div>
       </div>`;
     }
-    if (matches.length) {
-      html += `<div class="results-section">
-        <p class="section-heading">Matches (${matches.length})</p>
-        <div class="cards">${matches.map(m => renderCard(m, fb)).join("")}</div>
-      </div>`;
-    }
-    if (partials.length) {
-      html += `<div class="results-section">
-        <p class="section-heading">Partial matches (${partials.length})</p>
-        <div class="cards">${partials.map(m => renderCard(m, fb)).join("")}</div>
-      </div>`;
-    }
+    if (matches.length) html += `<div class="results-section">
+      <p class="section-heading">Matches (${matches.length})</p>
+      <div class="cards">${matches.map(m => renderCard(m, fb)).join("")}</div>
+    </div>`;
+    if (partials.length) html += `<div class="results-section">
+      <p class="section-heading">Partial matches (${partials.length})</p>
+      <div class="cards">${partials.map(m => renderCard(m, fb)).join("")}</div>
+    </div>`;
     resultsPanel.innerHTML = html;
   }
 
   function bindFeedback(searchName, runDate) {
     resultsPanel.querySelectorAll(".feedback-row").forEach(row => {
-      const textarea = row.querySelector(".feedback-text");
+      const textarea  = row.querySelector(".feedback-text");
       const charcount = row.querySelector(".feedback-charcount");
       const updateCount = () => { charcount.textContent = `${textarea.value.length}/256`; };
       textarea.addEventListener("input", updateCount);
       row.querySelectorAll(".phrase-btn").forEach(btn => {
         btn.addEventListener("click", () => {
-          const phrase = btn.dataset.phrase;
-          textarea.value = textarea.value ? `${textarea.value}; ${phrase}` : phrase;
+          textarea.value = textarea.value ? `${textarea.value}; ${btn.dataset.phrase}` : btn.dataset.phrase;
           updateCount();
         });
       });
     });
 
-    const saveAllBtn = document.getElementById("save-all-btn");
-    const saveAllMsg = document.getElementById("save-all-msg");
+    const saveAllBtn      = document.getElementById("save-all-btn");
+    const saveAllMsg      = document.getElementById("save-all-msg");
     const overallTextarea = document.getElementById("overall-feedback");
-    if (saveAllBtn) {
-      saveAllBtn.addEventListener("click", async () => {
-        const rows = [...resultsPanel.querySelectorAll(".feedback-row")];
-        const items = rows
-          .map(r => ({ url: r.dataset.url, text: r.querySelector(".feedback-text").value.trim() }))
-          .filter(i => i.text);
-        const overallText = overallTextarea?.value.trim();
-        if (overallText) items.push({ url: '_overall_', text: overallText });
-        if (!items.length) {
-          saveAllMsg.textContent = "Nothing to save";
-          setTimeout(() => { saveAllMsg.textContent = ""; }, 2000);
-          return;
-        }
-        saveAllBtn.disabled = true;
-        saveAllMsg.textContent = `Saving ${items.length}…`;
-        try {
-          await fetch(
-            `/api/feedback/${encodeURIComponent(searchName)}/${encodeURIComponent(runDate)}/batch`,
-            { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items }) }
-          ).then(r => { if (!r.ok) throw new Error(r.statusText); });
-          saveAllMsg.textContent = "Saved";
-        } catch {
-          saveAllMsg.textContent = "Failed";
-        }
-        saveAllBtn.disabled = false;
-        setTimeout(() => { saveAllMsg.textContent = ""; }, 3000);
-      });
-    }
+    if (!saveAllBtn) return;
+    saveAllBtn.addEventListener("click", async () => {
+      const rows  = [...resultsPanel.querySelectorAll(".feedback-row")];
+      const items = rows
+        .map(r => ({ url: r.dataset.url, text: r.querySelector(".feedback-text").value.trim() }))
+        .filter(i => i.text);
+      const overallText = overallTextarea?.value.trim();
+      if (overallText) items.push({ url: "_overall_", text: overallText });
+      if (!items.length) {
+        saveAllMsg.textContent = "Nothing to save";
+        setTimeout(() => { saveAllMsg.textContent = ""; }, 2000);
+        return;
+      }
+      saveAllBtn.disabled = true;
+      saveAllMsg.textContent = `Saving ${items.length}…`;
+      try {
+        await api(`/api/feedback/${encodeURIComponent(searchName)}/${encodeURIComponent(runDate)}/batch`,
+          { method: "PUT", body: { items } });
+        saveAllMsg.textContent = "Saved";
+      } catch { saveAllMsg.textContent = "Failed"; }
+      saveAllBtn.disabled = false;
+      setTimeout(() => { saveAllMsg.textContent = ""; }, 3000);
+    });
   }
 
+  // ── Load / select ─────────────────────────────────────────────────────────
   async function loadRun(searchName, runDate) {
     const seq = ++_loadSeq;
     resultsPanel.innerHTML = `<p class="loading">Loading…</p>`;
@@ -191,6 +462,7 @@
       ]);
       if (seq !== _loadSeq) return;
       isAdmin = adminResult.admin;
+      updateAdminUI();
       renderResults(run);
       bindFeedback(searchName, runDate);
     } catch (e) {
@@ -203,16 +475,16 @@
     if (activeSearch === name) return;
     activeSearch = name;
     if (replace) history.replaceState({}, "", "/" + encodeURIComponent(name));
-    else history.pushState({}, "", "/" + encodeURIComponent(name));
+    else         history.pushState({}, "", "/" + encodeURIComponent(name));
     document.title = `${name.replace(/_/g, " ")} — TailoredLoop`;
 
-    document.querySelectorAll(".search-list li").forEach(el => {
-      el.classList.toggle("active", el.dataset.name === name);
-    });
+    editPanel.hidden = true;
+
+    document.querySelectorAll(".search-list li").forEach(el =>
+      el.classList.toggle("active", el.dataset.name === name));
 
     toolbar.hidden = true;
     resultsPanel.innerHTML = `<p class="loading">Loading dates…</p>`;
-
     try {
       const dates = await api(`/api/results/${encodeURIComponent(name)}`);
       dateSelect.innerHTML = dates.map(d => `<option value="${d}">${d}</option>`).join("");
@@ -227,6 +499,7 @@
     if (activeSearch) loadRun(activeSearch, dateSelect.value);
   });
 
+  // ── Init ─────────────────────────────────────────────────────────────────
   async function init() {
     try {
       const searches = await api("/api/searches");
@@ -234,8 +507,7 @@
         `<li role="option" tabindex="0" data-name="${s.name}" class="${s.active ? "" : "inactive-search"}">
           <span>${s.name.replace(/_/g, " ")}</span>
           <button class="copy-link-btn" title="Copy link" aria-label="Copy link to ${s.name}">⎘</button>
-        </li>`
-      ).join("");
+        </li>`).join("");
 
       searchList.querySelectorAll("li").forEach(el => {
         el.addEventListener("click", () => selectSearch(el.dataset.name));
@@ -246,18 +518,14 @@
         btn.addEventListener("click", e => {
           e.stopPropagation();
           const name = btn.closest("li").dataset.name;
-          navigator.clipboard.writeText(`${location.origin}/${name}`).then(() => {
-            btn.textContent = "✓";
-            setTimeout(() => { btn.textContent = "⎘"; }, 1500);
-          }).catch(() => {
-            btn.textContent = "✗";
-            setTimeout(() => { btn.textContent = "⎘"; }, 1500);
-          });
+          navigator.clipboard.writeText(`${location.origin}/${name}`)
+            .then(() => { btn.textContent = "✓"; setTimeout(() => { btn.textContent = "⎘"; }, 1500); })
+            .catch(() => { btn.textContent = "✗"; setTimeout(() => { btn.textContent = "⎘"; }, 1500); });
         });
       });
 
       const fromPath = decodeURIComponent(window.location.pathname.slice(1));
-      const initial = searches.find(s => s.name === fromPath) ? fromPath : searches[0]?.name;
+      const initial  = searches.find(s => s.name === fromPath) ? fromPath : searches[0]?.name;
       if (initial) selectSearch(initial, { replace: true });
     } catch {
       searchList.innerHTML = `<li style="padding:12px 16px;color:var(--text-muted)">Failed to load searches</li>`;
