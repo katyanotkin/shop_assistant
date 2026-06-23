@@ -122,3 +122,109 @@
 /* Generate panel */
 .generate-panel { max-width: 560px; }
 .generate-title { margin: 0 0 20px; font-size: 16px; color: var(--text-main); font-weight: 600; }
+
+/* Reference products card */
+.references-card {
+  margin-top: 28px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  padding: 16px 20px;
+}
+
+.references-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+
+.references-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #166534;
+}
+
+.ref-count {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.references-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+
+.ref-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+  min-height: 0;
+}
+
+.ref-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px 4px 10px;
+  background: #dcfce7;
+  border: 1px solid #86efac;
+  border-radius: 20px;
+  font-size: 12px;
+  color: #166534;
+}
+
+.ref-chip-label { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ref-chip-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #166534;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 3px;
+  opacity: 0.55;
+}
+.ref-chip-remove:hover { opacity: 1; }
+
+.ref-input-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ref-url-input { flex: 1; }
+
+.btn-ref-add {
+  padding: 7px 14px;
+  background: none;
+  border: 1px solid #16a34a;
+  color: #16a34a;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-ref-add:hover { background: #dcfce7; }
+
+.ref-action-row { display: flex; align-items: center; gap: 10px; }
+
+.btn-ref-save {
+  padding: 6px 16px;
+  background: #16a34a;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-ref-save:hover { opacity: 0.88; }
+.btn-ref-save:disabled { opacity: 0.5; cursor: default; }
