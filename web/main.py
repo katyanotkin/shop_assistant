@@ -35,7 +35,7 @@ def _require_admin(sa_admin: str | None = Cookie(default=None)) -> None:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
-@app.get("/static/manifest.json")
+@app.get("/manifest.json")
 def manifest():
     return Response(content=_MANIFEST, media_type="application/manifest+json")
 

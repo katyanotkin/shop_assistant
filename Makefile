@@ -6,6 +6,7 @@ GCP_PROJECT?=knotmem26
 GCP_REPOSITORY=shop-assistant
 GCP_SERVICE=shop-assistant-web
 DOMAIN=shopassistant.verbboard.com
+PROD_URL?=https://$(DOMAIN)
 
 IMAGE_TAG=$(shell git rev-parse --short HEAD)
 GCP_IMAGE=$(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT)/$(GCP_REPOSITORY)/web:$(IMAGE_TAG)
@@ -13,7 +14,7 @@ GCP_IMAGE=$(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT)/$(GCP_REPOSITORY)/web:$(IM
 .DEFAULT_GOAL := help
 
 .PHONY: help install run run-one dry-run list add add-example test lint web local-run \
-	gcp-check gcp-auth gcp-build gcp-deploy gcp-map gcp-open apply-trigger
+	gcp-check gcp-auth gcp-build gcp-deploy gcp-map gcp-open apply-trigger validate-prod
 
 ## Show available commands
 help:
@@ -56,6 +57,10 @@ add-example: ## Add example wax_coat search to Firestore
 ## Run test suite
 test: ## Run tests
 	PYTHONPATH=. $(VENV)/bin/pytest tests/ -q --tb=short
+
+## Smoke-test the live deployment (PROD_URL defaults to https://$(DOMAIN))
+validate-prod: ## Smoke-test production: make validate-prod [PROD_URL=https://...]
+	PROD_URL=$(PROD_URL) PYTHONPATH=. $(VENV)/bin/pytest tests/test_smoke.py -v
 
 ## Lint
 lint: ## Run ruff
