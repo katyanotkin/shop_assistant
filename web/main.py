@@ -111,6 +111,12 @@ async def admin_login(request: Request):
     return resp
 
 
+@app.post("/api/admin/logout")
+def admin_logout(response: Response):
+    response.delete_cookie("sa_admin", httponly=True, samesite="strict")
+    return {"ok": True}
+
+
 @app.get("/api/admin/searches", dependencies=[Depends(_require_admin)])
 def admin_list_searches():
     return fc.list_searches(active_only=False)

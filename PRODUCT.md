@@ -109,3 +109,34 @@ Select a search from the sidebar. The Edit config tab shows all fields. Each fie
 ### Scheduled runs
 
 Searches can be triggered automatically via Cloud Build on a schedule (configured separately from the web UI). The web UI is the primary way to view results and manage configs; scheduled runs write their output to the same Firestore database that the UI reads from.
+
+---
+
+## Future: multi-user model
+
+The planned evolution moves from a single-admin tool to a service with paying users, while keeping a curated public layer.
+
+### User accounts and private searches
+
+Signed-in paying users can create their own searches. Each user's searches and results are private — only visible to that user. The workflow is the same as today: describe what you want, generate a config, run it, read results, leave feedback.
+
+### Common results (admin-promoted)
+
+The admin can promote any search to **common**. Promoted searches become visible to all users (including visitors who are not signed in) as a read-only showcase:
+
+- The search config is displayed but not editable.
+- Results appear exactly as they do for the owner.
+- Visitors can browse results and click through to product pages but cannot run the search, leave feedback, or modify anything.
+
+This creates a curated discovery surface — searches the admin finds broadly interesting — alongside the private searches that paying users run for their own needs.
+
+### Access model summary
+
+| Capability | Public visitor | Paying user | Admin |
+|---|---|---|---|
+| View common results | ✓ | ✓ | ✓ |
+| Edit common search config | — | — | — |
+| Create private searches | — | ✓ | ✓ |
+| View own private results | — | ✓ | ✓ |
+| Promote search to common | — | — | ✓ |
+| Edit any config | — | — | ✓ |

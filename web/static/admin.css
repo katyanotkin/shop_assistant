@@ -23,27 +23,104 @@
 .login-err { margin: 0; color: var(--score-red); font-size: 13px; }
 .login-actions { display: flex; gap: 10px; }
 
-/* View tabs */
-.view-tabs {
-  display: flex;
-  gap: 2px;
-  margin-bottom: 20px;
-  border-bottom: 1px solid var(--line-soft);
-  padding-bottom: 0;
+/* ── 3-panel admin layout ─────────────────────────────────────────────── */
+
+:root {
+  --admin-sidebar-w: 200px;
+  --admin-sidebar-collapsed-w: 40px;
+  --admin-panel-min-w: 320px;
 }
-.tab-btn {
-  padding: 8px 16px;
+
+.admin-layout {
+  display: flex;
+  margin-top: var(--topbar-h);
+  min-height: calc(100vh - var(--topbar-h));
+}
+
+.admin-sidebar {
+  position: sticky;
+  top: var(--topbar-h);
+  height: calc(100vh - var(--topbar-h));
+  width: var(--admin-sidebar-w);
+  flex-shrink: 0;
+  background: var(--card-bg);
+  border-right: 1px solid var(--card-border);
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: width 0.18s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-sidebar--collapsed {
+  width: var(--admin-sidebar-collapsed-w);
+}
+
+.sidebar-collapse-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 10px auto 4px;
+  flex-shrink: 0;
   background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  font-size: 13px;
-  font-weight: 500;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
   color: var(--text-muted);
   cursor: pointer;
+  transition: color 0.1s, border-color 0.1s, transform 0.18s ease;
 }
-.tab-btn:hover { color: var(--text-main); }
-.tab-btn.active { color: var(--button-primary-bg); border-bottom-color: var(--button-primary-bg); font-weight: 600; }
+.sidebar-collapse-btn:hover { color: var(--text-main); border-color: var(--text-muted); }
+.admin-sidebar--collapsed .sidebar-collapse-btn { transform: rotate(180deg); }
+
+.sidebar-inner {
+  padding: 8px 0 16px;
+  opacity: 1;
+  transition: opacity 0.12s ease;
+  min-width: var(--admin-sidebar-w);
+}
+.admin-sidebar--collapsed .sidebar-inner {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.admin-panels {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-width: 0;
+  align-items: start;
+}
+
+.admin-panel {
+  padding: 24px;
+  min-width: 0;
+  min-height: calc(100vh - var(--topbar-h));
+}
+
+.admin-panel--config {
+  border-right: 1px solid var(--card-border);
+  overflow-y: auto;
+  position: sticky;
+  top: var(--topbar-h);
+  max-height: calc(100vh - var(--topbar-h));
+}
+
+.admin-panel--results {
+  overflow-y: auto;
+}
+
+.panel-heading {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  margin: 0 0 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line-soft);
+}
 
 /* Edit form */
 .edit-top { display: flex; justify-content: flex-end; margin-bottom: 8px; }
@@ -55,7 +132,7 @@
 
 .field-row {
   display: grid;
-  grid-template-columns: 130px 1fr;
+  grid-template-columns: 120px 1fr auto;
   align-items: start;
   gap: 10px;
   margin-bottom: 8px;
@@ -230,3 +307,126 @@
 }
 .btn-ref-save:hover { opacity: 0.88; }
 .btn-ref-save:disabled { opacity: 0.5; cursor: default; }
+
+/* ── Dynamic field controls ──────────────────────────────────────────────── */
+
+.btn-field-remove {
+  align-self: start;
+  margin-top: 6px;
+  padding: 0 5px;
+  background: none;
+  border: none;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0.4;
+  border-radius: 4px;
+  transition: opacity 0.1s;
+}
+.btn-field-remove:hover { opacity: 1; color: var(--score-red); }
+
+.add-field-row {
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.add-field-select {
+  padding: 5px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-muted);
+  background: var(--page-bg);
+  border: 1px dashed var(--card-border);
+  border-radius: 6px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.add-field-select:hover { border-color: var(--button-primary-bg); color: var(--button-primary-bg); }
+.add-field-select:focus { outline: 2px solid var(--button-primary-bg); outline-offset: 1px; }
+
+/* ── Logout button ───────────────────────────────────────────────────────── */
+
+.btn-logout {
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.btn-logout:hover { color: var(--score-red); border-color: var(--score-red); }
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .admin-panels {
+    grid-template-columns: 1fr;
+  }
+  .admin-panel--config {
+    border-right: none;
+    border-bottom: 1px solid var(--card-border);
+    position: static;
+    max-height: none;
+    min-height: 0;
+  }
+  .admin-panel--results {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .admin-layout {
+    flex-direction: column;
+  }
+  .admin-sidebar {
+    width: 100% !important;
+    height: auto;
+    position: static;
+    border-right: none;
+    border-bottom: 1px solid var(--card-border);
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .sidebar-collapse-btn { display: none; }
+  .sidebar-inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 12px;
+    min-width: 0;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+  .sidebar-label { display: none; }
+  .search-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 0;
+    margin: 0;
+  }
+  .search-list li {
+    border-left: none;
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+  .search-list li.active {
+    background: var(--button-primary-bg);
+    color: var(--button-primary-text);
+  }
+  .btn-new-search {
+    width: auto;
+    margin: 0;
+  }
+  .field-row {
+    grid-template-columns: 100px 1fr auto;
+  }
+}

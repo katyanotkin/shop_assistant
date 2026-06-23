@@ -18,6 +18,7 @@
     </span>
     <nav class="topbar-nav">
       <a href="/" class="topbar-admin-btn">← Results</a>
+      <button id="btn-logout" class="btn-logout">Log out</button>
     </nav>
   </header>
 
@@ -30,15 +31,28 @@
     </form>
   </div>
 
-  <div class="layout" id="admin-layout" hidden>
-    <nav class="sidebar">
-      <p class="sidebar-label">Searches</p>
-      <ul class="search-list" id="admin-search-list" role="listbox"></ul>
-      <button class="btn-new-search" id="btn-new-search">+ New search</button>
+  <div class="admin-layout" id="admin-layout" hidden>
+    <nav class="admin-sidebar" id="admin-sidebar">
+      <button class="sidebar-collapse-btn" id="sidebar-collapse-btn" aria-label="Collapse searches panel" aria-expanded="true">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <div class="sidebar-inner">
+        <p class="sidebar-label">Searches</p>
+        <ul class="search-list" id="admin-search-list" role="listbox"></ul>
+        <button class="btn-new-search" id="btn-new-search">+ New search</button>
+      </div>
     </nav>
-    <main class="content" id="admin-content">
-      <p class="empty-state">Select a search to edit.</p>
-    </main>
+
+    <div class="admin-panels">
+      <section class="admin-panel admin-panel--config" id="config-panel" aria-label="Config">
+        <p class="empty-state">Select a search to edit.</p>
+      </section>
+      <section class="admin-panel admin-panel--results" id="results-panel" aria-label="Results">
+        <p class="empty-state">Select a search to view results.</p>
+      </section>
+    </div>
   </div>
 
   <script src="/static/admin.js"></script>
