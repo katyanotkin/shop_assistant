@@ -7,8 +7,7 @@ WORKDIR /app
 RUN pip install --no-cache-dir uv
 
 COPY pyproject.toml ./
-RUN uv pip install --system fastapi uvicorn google-cloud-firestore pydantic pydantic-settings \
-    httpx beautifulsoup4 lxml google-genai google-cloud-aiplatform
+RUN uv pip install --system .
 
 COPY core ./core
 COPY web ./web
