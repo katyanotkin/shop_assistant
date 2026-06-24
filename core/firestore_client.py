@@ -21,7 +21,7 @@ def load_search_config(search_name: str) -> dict | None:
 
 def save_search_config(config: dict) -> None:
     config.setdefault("owner_id", "admin")
-    config.setdefault("visibility", "common")
+    config.setdefault("visibility", "public")
     get_db().collection("shop_searches").document(config["search_name"]).set(config)
 
 
@@ -129,6 +129,12 @@ def upsert_user(email: str, display_name: str, photo_url: str, bootstrap_admin_e
     }
     ref.set(data)
     return data
+
+
+def delete_user(email: str) -> None:
+    from core.auth import user_doc_id
+
+    get_db().collection("users").document(user_doc_id(email)).delete()
 
 
 def save_learned_feedback(search_name: str, feedback_notes: str, avoid_shops: list[str]) -> None:

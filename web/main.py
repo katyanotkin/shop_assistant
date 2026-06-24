@@ -134,6 +134,18 @@ def auth_logout_user(response: Response):
     return {"ok": True}
 
 
+@app.delete("/api/me")
+def delete_me(response: Response, sa_session: str | None = Cookie(default=None)):
+    if not sa_session:
+        raise HTTPException(status_code=401, detail="Not signed in")
+    user = verify_session_token(sa_session, _settings.session_secret)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid session")
+    fc.delete_user(user["sub"])
+    response.delete_cookie("sa_session", samesite="lax")
+    return {"ok": True}
+
+
 @app.get("/{search_name}", response_class=HTMLResponse)
 def search_page(search_name: str):
     return _HTML
@@ -157,7 +169,7 @@ def get_searches():
         {
             "name": c["search_name"],
             "active": c.get("active", True),
-            "visibility": c.get("visibility", "common"),
+            "visibility": c.get("visibility", "public"),
         }
         for c in configs
     ]

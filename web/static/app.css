@@ -123,6 +123,8 @@ body {
   white-space: nowrap;
 }
 .topbar-signout-btn:hover { color: var(--text-body); border-color: var(--text-muted); }
+.topbar-delete-btn { color: #b91c1c; border-color: #fca5a5; }
+.topbar-delete-btn:hover { color: #7f1d1d; border-color: #f87171; background: #fff1f2; }
 
 .topbar-admin-btn {
   padding: 5px 14px;

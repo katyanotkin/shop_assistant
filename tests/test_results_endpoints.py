@@ -43,8 +43,8 @@ def test_get_searches_contains_name_and_active(client):
     r = c.get("/api/searches")
     data = r.json()
     assert len(data) == 2
-    assert data[0] == {"name": "wax_coat", "active": True, "visibility": "common"}
-    assert data[1] == {"name": "wool_jacket", "active": False, "visibility": "common"}
+    assert data[0] == {"name": "wax_coat", "active": True, "visibility": "public"}
+    assert data[1] == {"name": "wool_jacket", "active": False, "visibility": "public"}
 
 
 def test_get_searches_returns_empty_list_when_no_searches(client):

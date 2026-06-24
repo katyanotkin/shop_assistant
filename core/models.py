@@ -27,7 +27,7 @@ class SearchConfig(BaseModel):
     search_name: str
     active: bool = True
     owner_id: str = "admin"
-    visibility: str = "common"  # "common" | "private"
+    visibility: str = "public"  # "public" | "private"
     criteria: SearchCriteria
     preferred_shops: list[str] = []
     feedback_notes: Optional[str] = None

@@ -115,10 +115,19 @@
     } else if (me.role !== "admin") {
       const name = esc(me.name || me.email || "");
       slot.innerHTML = `<span class="topbar-username" title="${esc(me.email || "")}">${name}</span>
-        <button id="signout-btn" class="topbar-signout-btn">Sign out</button>`;
+        <button id="signout-btn" class="topbar-signout-btn">Sign out</button>
+        <button id="delete-account-btn" class="topbar-signout-btn topbar-delete-btn">Delete account</button>`;
       document.getElementById("signout-btn")?.addEventListener("click", async () => {
         try { await fetch("/auth/logout", { method: "POST", credentials: "same-origin" }); } catch {}
         window.location.href = "/";
+      });
+      document.getElementById("delete-account-btn")?.addEventListener("click", async () => {
+        if (!confirm("Delete your account? Your login info will be removed within seconds. Your search data is retained (as described in our Privacy Policy). This cannot be undone.")) return;
+        try {
+          const r = await fetch("/api/me", { method: "DELETE", credentials: "same-origin" });
+          if (r.ok) { window.location.href = "/"; return; }
+        } catch {}
+        alert("Something went wrong. Please try again or email assistantderecherche@gmail.com.");
       });
     }
   }
@@ -602,7 +611,7 @@
       }
 
       let html = "";
-      if (showLabels && common.length) html += `<li class="search-group-label">Common</li>`;
+      if (showLabels && common.length) html += `<li class="search-group-label">Public</li>`;
       html += common.map(itemHTML).join("");
       if (mine.length) {
         html += `<li class="search-group-label">My searches</li>`;
