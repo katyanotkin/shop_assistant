@@ -7,6 +7,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import core.firestore_client as fc
+from core.auth import (
+    create_session_token,
+    exchange_code,
+    fetch_userinfo,
+    google_auth_url,
+    new_state,
+    verify_session_token,
+)
 from core.brand import APP_MOTTO, APP_NAME
 from core.generator import generate_search_config
 from core.runner import run_search
@@ -37,6 +45,18 @@ def _require_admin(sa_admin: str | None = Cookie(default=None)) -> None:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
+def _oauth_redirect_uri(request: Request) -> str:
+    if _settings.base_url:
+        return _settings.base_url.rstrip("/") + "/auth/callback"
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("host", request.url.netloc)
+    return f"{proto}://{host}/auth/callback"
+
+
+def _is_https(request: Request) -> bool:
+    return request.headers.get("x-forwarded-proto") == "https" or request.url.scheme == "https"
+
+
 @app.get("/manifest.json")
 def manifest():
     return Response(content=_MANIFEST, media_type="application/manifest+json")
@@ -62,16 +82,71 @@ def terms_page():
     return _TERMS_HTML
 
 
+@app.get("/auth/login")
+def auth_login(request: Request):
+    if not _settings.google_client_id:
+        raise HTTPException(status_code=503, detail="Google OAuth not configured")
+    state = new_state()
+    url = google_auth_url(_settings.google_client_id, _oauth_redirect_uri(request), state)
+    resp = RedirectResponse(url=url)
+    resp.set_cookie("sa_oauth_state", state, httponly=True, samesite="lax", secure=_is_https(request), max_age=300)
+    return resp
+
+
+@app.get("/auth/callback")
+def auth_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    sa_oauth_state: str | None = Cookie(default=None),
+):
+    if error or not code or not state or not sa_oauth_state or state != sa_oauth_state:
+        return RedirectResponse(url="/?auth_error=1", status_code=302)
+    try:
+        tokens = exchange_code(
+            _settings.google_client_id, _settings.google_client_secret, code, _oauth_redirect_uri(request)
+        )
+        userinfo = fetch_userinfo(tokens["access_token"])
+    except Exception:
+        return RedirectResponse(url="/?auth_error=1", status_code=302)
+    email = userinfo.get("email")
+    if not email:
+        return RedirectResponse(url="/?auth_error=1", status_code=302)
+    user = fc.upsert_user(
+        email=email,
+        display_name=userinfo.get("name", ""),
+        photo_url=userinfo.get("picture", ""),
+        bootstrap_admin_email=_settings.bootstrap_admin_email,
+    )
+    token = create_session_token(user, _settings.session_secret)
+    resp = RedirectResponse(url="/", status_code=302)
+    resp.delete_cookie("sa_oauth_state", samesite="lax")
+    resp.set_cookie(
+        "sa_session", token, httponly=True, samesite="lax", secure=_is_https(request), max_age=60 * 60 * 24 * 30
+    )
+    return resp
+
+
+@app.post("/auth/logout")
+def auth_logout_user(response: Response):
+    response.delete_cookie("sa_session", samesite="lax")
+    return {"ok": True}
+
+
 @app.get("/{search_name}", response_class=HTMLResponse)
 def search_page(search_name: str):
     return _HTML
 
 
 @app.get("/api/me")
-def get_me(sa_admin: str | None = Cookie(default=None)):
-    is_admin = bool(_settings.admin_password and sa_admin == _admin_token())
-    if is_admin:
+def get_me(sa_admin: str | None = Cookie(default=None), sa_session: str | None = Cookie(default=None)):
+    if _settings.admin_password and sa_admin == _admin_token():
         return {"role": "admin", "anonymous": False}
+    if sa_session:
+        user = verify_session_token(sa_session, _settings.session_secret)
+        if user:
+            return {"role": user["role"], "anonymous": False, "name": user.get("name"), "email": user.get("sub")}
     return {"role": "free", "anonymous": True}
 
 

@@ -16,5 +16,8 @@ class Settings(BaseSettings):
     admin_password: Optional[str] = None
     base_url: Optional[str] = None
     bootstrap_admin_email: Optional[str] = None
+    google_client_id: Optional[str] = None
+    google_client_secret: Optional[str] = None
+    session_secret: str = "dev-session-secret-change-in-production"
 
     model_config = {"env_file": ".env"}

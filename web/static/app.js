@@ -86,12 +86,31 @@
     }
   }
 
+  function updateUserSlot() {
+    const slot = document.getElementById("user-slot");
+    if (!slot) return;
+    if (me.anonymous) {
+      slot.innerHTML = `<a href="/auth/login" class="topbar-signin-btn">Sign in</a>`;
+    } else if (me.role !== "admin") {
+      const name = esc(me.name || me.email || "");
+      slot.innerHTML = `<span class="topbar-username" title="${esc(me.email || "")}">${name}</span>
+        <button id="signout-btn" class="topbar-signout-btn">Sign out</button>`;
+      document.getElementById("signout-btn")?.addEventListener("click", async () => {
+        try { await fetch("/auth/logout", { method: "POST", credentials: "same-origin" }); } catch {}
+        window.location.href = "/";
+      });
+    }
+  }
+
   function showPremiumBanner() {
     const existing = resultsPanel.querySelector(".premium-banner");
     if (existing) return;
     const banner = document.createElement("div");
     banner.className = "premium-banner";
-    banner.innerHTML = `You're on the Free plan — you can browse common searches. <a href="mailto:hello@tailoredloop.com">Contact us</a> to get full access. <button class="premium-banner-dismiss" aria-label="Dismiss">\xd7</button>`;
+    const msg = me.anonymous
+      ? `<a href="/auth/login">Sign in with Google</a> to save your own searches.`
+      : `You're on the Free plan. <a href="mailto:assistantderecherche@gmail.com">Contact us</a> to get full access.`;
+    banner.innerHTML = `${msg} <button class="premium-banner-dismiss" aria-label="Dismiss">\xd7</button>`;
     banner.querySelector(".premium-banner-dismiss").addEventListener("click", () => banner.remove());
     resultsPanel.prepend(banner);
   }
@@ -477,6 +496,7 @@
       me = meResult;
       isAdmin = me.role === "admin";
       updateAdminUI();
+      updateUserSlot();
       renderResults(run);
       bindFeedback(searchName, runDate);
     } catch (e) {
@@ -516,7 +536,14 @@
   // ── Init ─────────────────────────────────────────────────────────────────
   async function init() {
     try {
-      const searches = await api("/api/searches");
+      const [searches, meResult] = await Promise.all([
+        api("/api/searches"),
+        api("/api/me").catch(() => ({ role: "free", anonymous: true })),
+      ]);
+      me = meResult;
+      isAdmin = me.role === "admin";
+      updateAdminUI();
+      updateUserSlot();
       const common = searches.filter(s => s.visibility !== "private");
       const mine   = searches.filter(s => s.visibility === "private" && s.owned);
       const showLabels = mine.length > 0;

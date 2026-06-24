@@ -74,8 +74,57 @@ body {
   flex-shrink: 0;
 }
 
-.topbar-admin-btn {
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-left: auto;
+}
+
+.topbar-user-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar-username {
+  font-size: 13px;
+  color: var(--text-body);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-signin-btn {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--button-primary-bg);
+  text-decoration: none;
+  padding: 4px 12px;
+  border: 1px solid var(--button-primary-bg);
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.topbar-signin-btn:hover {
+  background: var(--button-primary-bg);
+  color: #fff;
+}
+
+.topbar-signout-btn {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: none;
+  border: 1px solid var(--card-border);
+  border-radius: 5px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.topbar-signout-btn:hover { color: var(--text-body); border-color: var(--text-muted); }
+
+.topbar-admin-btn {
   padding: 5px 14px;
   font-size: 12px;
   font-weight: 600;

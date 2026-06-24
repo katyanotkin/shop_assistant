@@ -101,6 +101,36 @@ def save_feedback_batch(search_name: str, run_date: str, items: list[tuple[str, 
         doc_ref.set({"feedback": {_url_key(url): {"url": url, "text": text} for url, text in items}}, merge=True)
 
 
+def upsert_user(email: str, display_name: str, photo_url: str, bootstrap_admin_email: str | None = None) -> dict:
+    from datetime import datetime, timezone
+
+    from core.auth import user_doc_id
+
+    doc_id = user_doc_id(email)
+    ref = get_db().collection("users").document(doc_id)
+    doc = ref.get()
+
+    if doc.exists:
+        data = doc.to_dict()
+        updates: dict = {"display_name": display_name, "photo_url": photo_url}
+        if bootstrap_admin_email and email.lower() == bootstrap_admin_email.lower() and data.get("role") == "free":
+            updates["role"] = "admin"
+        ref.update(updates)
+        data.update(updates)
+        return data
+
+    role = "admin" if (bootstrap_admin_email and email.lower() == bootstrap_admin_email.lower()) else "free"
+    data = {
+        "email": email,
+        "display_name": display_name,
+        "photo_url": photo_url,
+        "role": role,
+        "created_at": datetime.now(timezone.utc),
+    }
+    ref.set(data)
+    return data
+
+
 def save_learned_feedback(search_name: str, feedback_notes: str, avoid_shops: list[str]) -> None:
     get_db().collection("shop_searches").document(search_name).update(
         {"feedback_notes": feedback_notes, "avoid_shops": avoid_shops}
