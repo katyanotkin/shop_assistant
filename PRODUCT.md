@@ -132,8 +132,11 @@ Every account has one of three roles:
 |---|---|---|---|---|
 | Browse common results | ✓ | ✓ | ✓ | ✓ |
 | Sign in | — | ✓ | ✓ | ✓ |
-| Create / run / edit own searches | — | — | ✓ | ✓ |
-| View own private results & leave feedback | — | — | ✓ | ✓ |
+| Create 1 private search | — | ✓ | ✓ | ✓ |
+| Run own search (within 1 month of creation) | — | ✓ | ✓ | ✓ |
+| Create unlimited searches | — | — | ✓ | ✓ |
+| Run searches after 1 month | — | — | ✓ | ✓ |
+| View own private results & leave feedback | — | ✓ | ✓ | ✓ |
 | Promote any search to common | — | — | — | ✓ |
 | View all searches (any owner) | — | — | — | ✓ |
 | View all users & manage roles | — | — | — | ✓ |
@@ -141,9 +144,13 @@ Every account has one of three roles:
 
 ### User accounts and private searches
 
-Users sign in with Google. Premium users can create searches using the same workflow as today: describe what you want, generate a config, run it, read results, leave feedback. Each user's searches and results are private — only visible to that user and to the admin.
+Users sign in with Google. Each user's searches and results are private — only visible to that user and to the admin.
 
-Free users can read everything that is public (common searches and results) but cannot create or run searches. When they encounter a gated action the UI shows: *"You're on the Free plan — you can browse common searches. Contact us to get full access."*
+**Free tier** gives users 1 private search. They can create it, configure it, and run it for up to one month from the date the search was created. After one month, runs are disabled; the search and its results remain readable. Promotion to common does not change or reset the run window — the same 1-month clock applies regardless.
+
+When a free user tries a gated action the UI shows: *"You're on the Free plan. Contact us to get full access."*
+
+**Premium** users can create unlimited searches and run them indefinitely. They get the same workflow as today: describe what you want, generate a config, run it, read results, leave feedback.
 
 ### Common results
 

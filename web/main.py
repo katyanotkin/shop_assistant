@@ -24,6 +24,7 @@ def _inject_brand(html: str) -> str:
 _HTML = _inject_brand((Path(__file__).parent / "templates" / "index.html").read_text())
 _ADMIN_HTML = _inject_brand((Path(__file__).parent / "templates" / "admin.html").read_text())
 _PRIVACY_HTML = _inject_brand((Path(__file__).parent / "templates" / "privacy.html").read_text())
+_TERMS_HTML = _inject_brand((Path(__file__).parent / "templates" / "terms.html").read_text())
 _MANIFEST = _inject_brand((Path(__file__).parent / "static" / "manifest.json").read_text())
 
 
@@ -54,6 +55,11 @@ def admin_page():
 @app.get("/privacy", response_class=HTMLResponse)
 def privacy_page():
     return _PRIVACY_HTML
+
+
+@app.get("/terms", response_class=HTMLResponse)
+def terms_page():
+    return _TERMS_HTML
 
 
 @app.get("/{search_name}", response_class=HTMLResponse)

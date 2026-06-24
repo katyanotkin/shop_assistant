@@ -146,6 +146,12 @@ body {
   text-decoration: underline;
 }
 
+.sidebar-footer-sep {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0 4px;
+}
+
 .search-list li {
   display: flex;
   align-items: center;
