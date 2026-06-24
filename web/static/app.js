@@ -49,6 +49,12 @@
     return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
+  function formatPrice(p) {
+    if (p == null) return "";
+    const s = String(p).trim();
+    return /^[$£€¥₹₩₺₽฿]/.test(s) ? s : `$${s}`;
+  }
+
   function siteName(url) {
     try {
       const locales = new Set(["us", "uk", "eu", "au", "ca"]);
@@ -416,7 +422,7 @@
   function renderCard(m, feedbackMap) {
     const sc    = scoreClass(m.score);
     const newTag = m.is_new ? tag("NEW", "tag-new") : "";
-    const price  = m.price != null ? `<span class="card-price">${m.price}</span>` : "";
+    const price  = m.price != null ? `<span class="card-price">${esc(formatPrice(m.price))}</span>` : "";
     const criteria = [
       ...(m.matched   || []).map(t => tag(t, "tag tag-match")),
       ...(m.unmatched || []).map(t => tag(t, "tag tag-miss")),
