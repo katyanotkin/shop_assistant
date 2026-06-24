@@ -146,6 +146,18 @@ def run_search(search_name: str, settings: Settings, dry_run: bool = False, lear
         if m.url not in prev_urls:
             m.is_new = True
 
+    effective_config = models.SearchConfig(
+        search_name=search_name,
+        active=config.get("active", True),
+        owner_id=config.get("owner_id", "admin"),
+        visibility=config.get("visibility", "public"),
+        criteria=criteria,
+        preferred_shops=shops,
+        feedback_notes=feedback_notes or None,
+        avoid_shops=list(avoid_shops),
+        example_urls=example_urls,
+    )
+
     result = models.RunResult(
         search_name=search_name,
         run_date=str(date.today()),
@@ -153,6 +165,7 @@ def run_search(search_name: str, settings: Settings, dry_run: bool = False, lear
         partial_matches=partial_matches,
         no_match=(not matches and not partial_matches),
         total_candidates=len(candidates),
+        config_snapshot=effective_config,
     )
 
     csv_path = save_csv(result)

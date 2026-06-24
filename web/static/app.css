@@ -580,6 +580,23 @@ body {
   font-size: 13px;
   color: var(--text-muted);
   margin-bottom: 20px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.run-search-label {
+  font-weight: 600;
+  color: var(--text-primary, #111);
+  text-transform: capitalize;
+}
+
+.run-date-label {
+  font-variant-numeric: tabular-nums;
+}
+
+.run-candidates {
+  margin-left: auto;
 }
 
 /* ===== Empty / loading states ===== */

@@ -59,3 +59,4 @@ class RunResult(BaseModel):
     no_match: bool = False
     total_candidates: int = 0
     feedback: dict[str, str] = {}
+    config_snapshot: Optional[SearchConfig] = None

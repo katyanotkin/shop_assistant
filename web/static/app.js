@@ -474,7 +474,8 @@
     const matches  = dedupeByUrl(run.matches || []);
     const matchUrls = new Set(matches.map(m => m.url));
     const partials  = dedupeByUrl((run.partial_matches || []).filter(m => !matchUrls.has(m.url)));
-    let html = `<p class="run-meta">${run.total_candidates ?? "?"} candidates evaluated</p>`;
+    const searchLabel = (run.search_name || "").replace(/_/g, " ");
+    let html = `<p class="run-meta"><span class="run-search-label">${esc(searchLabel)}</span><span class="run-date-label">${esc(run.run_date || "")}</span><span class="run-candidates">${run.total_candidates ?? "?"} candidates</span></p>`;
     if (isAdmin) {
       const overallFb = fb["_overall_"] || "";
       html += `<div class="save-all-row">
