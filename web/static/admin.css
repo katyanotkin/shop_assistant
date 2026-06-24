@@ -62,7 +62,7 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  margin: 10px auto 4px;
+  margin: 10px 4px 4px auto;
   flex-shrink: 0;
   background: none;
   border: 1px solid var(--card-border);
@@ -72,7 +72,7 @@
   transition: color 0.1s, border-color 0.1s, transform 0.18s ease;
 }
 .sidebar-collapse-btn:hover { color: var(--text-main); border-color: var(--text-muted); }
-.admin-sidebar--collapsed .sidebar-collapse-btn { transform: rotate(180deg); }
+.admin-sidebar--collapsed .sidebar-collapse-btn { transform: rotate(180deg); margin: 10px auto 4px; }
 
 .sidebar-inner {
   padding: 8px 0 16px;
@@ -91,6 +91,53 @@
   grid-template-columns: 1fr 1fr;
   min-width: 0;
   align-items: start;
+  transition: grid-template-columns 0.18s ease;
+}
+
+.admin-panels--config-collapsed {
+  grid-template-columns: 36px 1fr;
+}
+
+.config-panel-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--card-bg);
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 4px 0;
+}
+
+.panel-collapse-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.1s, border-color 0.1s, transform 0.18s ease;
+}
+.panel-collapse-btn:hover { color: var(--text-main); border-color: var(--text-muted); }
+
+.admin-panels--config-collapsed #config-panel {
+  overflow: hidden;
+  border-right: 1px solid var(--card-border);
+  padding: 0;
+}
+.admin-panels--config-collapsed .config-panel-header {
+  justify-content: center;
+  padding: 8px 0 0;
+}
+.admin-panels--config-collapsed .panel-collapse-btn {
+  transform: rotate(180deg);
+}
+.admin-panels--config-collapsed #config-content {
+  display: none;
 }
 
 .admin-panel {
@@ -320,11 +367,10 @@
   line-height: 1;
   color: var(--text-muted);
   cursor: pointer;
-  opacity: 0.4;
   border-radius: 4px;
-  transition: opacity 0.1s;
+  transition: color 0.1s, background 0.1s;
 }
-.btn-field-remove:hover { opacity: 1; color: var(--score-red); }
+.btn-field-remove:hover { color: var(--score-red); background: #fee2e2; }
 
 .add-field-row {
   margin-top: 4px;

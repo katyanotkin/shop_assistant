@@ -33,7 +33,7 @@
 
   <div class="admin-layout" id="admin-layout" hidden>
     <nav class="admin-sidebar" id="admin-sidebar">
-      <button class="sidebar-collapse-btn" id="sidebar-collapse-btn" aria-label="Collapse searches panel" aria-expanded="true">
+      <button class="sidebar-collapse-btn" id="sidebar-collapse-btn" aria-label="Collapse searches panel" aria-expanded="true" title="Collapse searches">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
@@ -47,7 +47,14 @@
 
     <div class="admin-panels">
       <section class="admin-panel admin-panel--config" id="config-panel" aria-label="Config">
-        <p class="empty-state">Select a search to edit.</p>
+        <div class="config-panel-header">
+          <button class="panel-collapse-btn" id="config-collapse-btn" title="Collapse config" aria-label="Collapse config" aria-expanded="true">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+        <div id="config-content"><p class="empty-state">Select a search to edit.</p></div>
       </section>
       <section class="admin-panel admin-panel--results" id="results-panel" aria-label="Results">
         <p class="empty-state">Select a search to view results.</p>

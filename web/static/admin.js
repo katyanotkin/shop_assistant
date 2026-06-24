@@ -2,8 +2,10 @@
   const loginOverlay = document.getElementById("login-overlay");
   const adminLayout  = document.getElementById("admin-layout");
   const searchList   = document.getElementById("admin-search-list");
-  const configPanel  = document.getElementById("config-panel");
-  const resultsPanel = document.getElementById("results-panel");
+  const configPanel   = document.getElementById("config-panel");
+  const configContent = document.getElementById("config-content");
+  const resultsPanel  = document.getElementById("results-panel");
+  const adminPanels   = document.querySelector(".admin-panels");
 
   // ── API ──────────────────────────────────────────────────────────────────
 
@@ -466,7 +468,7 @@
       setMsg("Generating…", "");
       try {
         const cfg = await api("POST", "/api/admin/search/generate", { search_name: name, description: desc });
-        configPanel.innerHTML = `<p class="save-msg ok" style="margin-bottom:12px">Generated — review, then Save or Save &amp; Run.</p>` + renderEdit(cfg) + renderReferences();
+        configContent.innerHTML= `<p class="save-msg ok" style="margin-bottom:12px">Generated — review, then Save or Save &amp; Run.</p>` + renderEdit(cfg) + renderReferences();
         const form = configPanel.querySelector(".edit-form");
         bindEdit(form, { onSave: n => refreshSidebar(n) });
         bindReferences(configPanel.querySelector(".references-card"), form, name);
@@ -502,17 +504,17 @@
     searchList.querySelectorAll("li").forEach(el =>
       el.classList.toggle("active", el.dataset.name === name));
 
-    configPanel.innerHTML  = `<p class="loading">Loading…</p>`;
+    configContent.innerHTML = `<p class="loading">Loading…</p>`;
     resultsPanel.innerHTML = `<p class="loading">Loading…</p>`;
 
     try {
       const cfg = await api("GET", `/api/admin/search/${name}`);
-      configPanel.innerHTML = renderEdit(cfg) + renderReferences();
+      configContent.innerHTML= renderEdit(cfg) + renderReferences();
       const form = configPanel.querySelector(".edit-form");
       bindEdit(form);
       bindReferences(configPanel.querySelector(".references-card"), form, name);
     } catch (e) {
-      configPanel.innerHTML = `<p class="empty-state">${e.message}</p>`;
+      configContent.innerHTML= `<p class="empty-state">${e.message}</p>`;
     }
 
     loadResults(name);
@@ -527,6 +529,17 @@
     const collapsed = adminSidebar.classList.toggle("admin-sidebar--collapsed");
     collapseBtn.setAttribute("aria-expanded", String(!collapsed));
     collapseBtn.setAttribute("aria-label", collapsed ? "Expand searches panel" : "Collapse searches panel");
+  });
+
+  // ── Config panel collapse ─────────────────────────────────────────────────
+
+  const configCollapseBtn = document.getElementById("config-collapse-btn");
+
+  configCollapseBtn.addEventListener("click", () => {
+    const collapsed = adminPanels.classList.toggle("admin-panels--config-collapsed");
+    configCollapseBtn.setAttribute("aria-expanded", String(!collapsed));
+    configCollapseBtn.setAttribute("aria-label", collapsed ? "Expand config" : "Collapse config");
+    configCollapseBtn.title = collapsed ? "Expand config" : "Collapse config";
   });
 
   // ── Init ─────────────────────────────────────────────────────────────────
@@ -549,7 +562,7 @@
     document.getElementById("btn-new-search").addEventListener("click", () => {
       activeName = null;
       searchList.querySelectorAll("li").forEach(el => el.classList.remove("active"));
-      configPanel.innerHTML  = renderGenerate();
+      configContent.innerHTML = renderGenerate();
       resultsPanel.innerHTML = `<p class="empty-state">Save the new search, then run it to see results.</p>`;
       bindGenerate();
     });
