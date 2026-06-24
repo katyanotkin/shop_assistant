@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — __APP_NAME__</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/privacy.css">
+  <link rel="icon" type="image/svg+xml" href="/static/shpopassistant.svg">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#F59E0B">
+</head>
+<body>
+
+  <header class="topbar">
+    <span class="topbar-logo">
+      <img src="/static/shpopassistant.svg" alt="" class="topbar-logo-img" width="30" height="30">
+      <span class="topbar-brand">__APP_NAME__</span>
+      <span class="topbar-motto">__APP_MOTTO__</span>
+    </span>
+    <a href="/" class="topbar-admin-btn">Home</a>
+  </header>
+
+  <div class="privacy-container">
+    <h1>Privacy Policy</h1>
+    <p class="effective-date">Effective date: June 23, 2026</p>
+
+    <div class="privacy-content">
+      <p>__APP_NAME__ is a shop-monitoring assistant that tracks online stores for products matching saved search criteria and scores candidates using AI. This policy explains what data we collect and how we use it.</p>
+
+      <h2>Search configurations and results</h2>
+      <p>Search criteria (category, material, sizes, price limits, preferred shops, etc.) and the products found are stored in Google Firestore. Searches are either <b>private</b> (visible only to their owner) or <b>common</b> (promoted by the administrator to be visible to all visitors of this site, including the public).</p>
+      <p>When a search is promoted to common status, both its criteria and its results become publicly visible. If you do not want your search configuration to be shared, keep your search private and do not request promotion.</p>
+
+      <h2>AI processing</h2>
+      <p>Product listings retrieved from shops are sent to Google Vertex AI (Gemini) for scoring and matching against search criteria. These requests contain only product descriptions and search criteria — no personal data is included.</p>
+
+      <h2>No user accounts (current)</h2>
+      <p>__APP_NAME__ currently operates with a single administrator account secured by a password. Visitors browse results without an account and no personal information is collected from them.</p>
+
+      <h2>Future: signed-in user accounts</h2>
+      <p>We plan to add sign-in with Google, allowing users to save private searches linked to their account. When that feature launches, this policy will be updated to describe what account data is stored.</p>
+
+      <h2>Third-party services</h2>
+      <ul>
+        <li><b>Google Firestore</b> — stores search configurations and results (Google Cloud, US)</li>
+        <li><b>Google Cloud Run</b> — hosts the application (Google Cloud, US)</li>
+        <li><b>Google Vertex AI (Gemini)</b> — scores and filters product candidates</li>
+      </ul>
+      <p>All are subject to <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's Privacy Policy</a>.</p>
+
+      <h2>Data deletion</h2>
+      <p>To request deletion of any stored data, email <a href="mailto:assistantderecherche@gmail.com">assistantderecherche@gmail.com</a>. We will remove the data within 30 days.</p>
+
+      <h2>Changes</h2>
+      <p>If we make material changes to this policy, we will update the effective date above.</p>
+
+      <h2>Contact</h2>
+      <p><a href="mailto:assistantderecherche@gmail.com">assistantderecherche@gmail.com</a></p>
+    </div>
+  </div>
+
+</body>
+</html>
