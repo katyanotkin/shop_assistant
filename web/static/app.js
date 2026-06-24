@@ -7,6 +7,7 @@
 
   let activeSearch = null;
   let isAdmin      = false;
+  let me           = { role: "free", anonymous: true };
   let _loadSeq     = 0;
 
   // ── API ───────────────────────────────────────────────────────────────────
@@ -85,6 +86,16 @@
     }
   }
 
+  function showPremiumBanner() {
+    const existing = resultsPanel.querySelector(".premium-banner");
+    if (existing) return;
+    const banner = document.createElement("div");
+    banner.className = "premium-banner";
+    banner.innerHTML = `You're on the Free plan — you can browse common searches. <a href="mailto:hello@tailoredloop.com">Contact us</a> to get full access. <button class="premium-banner-dismiss" aria-label="Dismiss">\xd7</button>`;
+    banner.querySelector(".premium-banner-dismiss").addEventListener("click", () => banner.remove());
+    resultsPanel.prepend(banner);
+  }
+
   document.getElementById("topbar-admin-btn")?.addEventListener("click", e => {
     e.preventDefault();
     if (isAdmin) { if (activeSearch) openEditPanel(activeSearch); }
@@ -92,11 +103,13 @@
   });
 
   document.getElementById("edit-search-btn")?.addEventListener("click", () => {
+    if (!isAdmin) { showPremiumBanner(); return; }
     if (activeSearch) openEditPanel(activeSearch);
   });
 
   document.getElementById("run-search-btn")?.addEventListener("click", async () => {
     if (!activeSearch) return;
+    if (!isAdmin) { showPremiumBanner(); return; }
     const btn = document.getElementById("run-search-btn");
     btn.disabled = true;
     btn.textContent = "Running…";
@@ -456,12 +469,13 @@
     const seq = ++_loadSeq;
     resultsPanel.innerHTML = `<p class="loading">Loading…</p>`;
     try {
-      const [run, adminResult] = await Promise.all([
+      const [run, meResult] = await Promise.all([
         api(`/api/results/${encodeURIComponent(searchName)}/${encodeURIComponent(runDate)}`),
-        api("/api/admin/me").catch(() => ({ admin: false })),
+        api("/api/me").catch(() => ({ role: "free", anonymous: true })),
       ]);
       if (seq !== _loadSeq) return;
-      isAdmin = adminResult.admin;
+      me = meResult;
+      isAdmin = me.role === "admin";
       updateAdminUI();
       renderResults(run);
       bindFeedback(searchName, runDate);
@@ -503,13 +517,27 @@
   async function init() {
     try {
       const searches = await api("/api/searches");
-      searchList.innerHTML = searches.map(s =>
-        `<li role="option" tabindex="0" data-name="${s.name}" class="${s.active ? "" : "inactive-search"}">
+      const common = searches.filter(s => s.visibility !== "private");
+      const mine   = searches.filter(s => s.visibility === "private" && s.owned);
+      const showLabels = mine.length > 0;
+
+      function itemHTML(s) {
+        return `<li role="option" tabindex="0" data-name="${s.name}" class="${s.active ? "" : "inactive-search"}">
           <span>${s.name.replace(/_/g, " ")}</span>
           <button class="copy-link-btn" title="Copy link" aria-label="Copy link to ${s.name}">⎘</button>
-        </li>`).join("");
+        </li>`;
+      }
 
-      searchList.querySelectorAll("li").forEach(el => {
+      let html = "";
+      if (showLabels && common.length) html += `<li class="search-group-label">Common</li>`;
+      html += common.map(itemHTML).join("");
+      if (mine.length) {
+        html += `<li class="search-group-label">My searches</li>`;
+        html += mine.map(itemHTML).join("");
+      }
+      searchList.innerHTML = html;
+
+      searchList.querySelectorAll("li[role='option']").forEach(el => {
         el.addEventListener("click", () => selectSearch(el.dataset.name));
         el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") selectSearch(el.dataset.name); });
       });

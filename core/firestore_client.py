@@ -20,6 +20,8 @@ def load_search_config(search_name: str) -> dict | None:
 
 
 def save_search_config(config: dict) -> None:
+    config.setdefault("owner_id", "admin")
+    config.setdefault("visibility", "common")
     get_db().collection("shop_searches").document(config["search_name"]).set(config)
 
 

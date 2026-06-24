@@ -112,31 +112,57 @@ Searches can be triggered automatically via Cloud Build on a schedule (configure
 
 ---
 
-## Future: multi-user model
+## Planned: multi-user model
 
-The planned evolution moves from a single-admin tool to a service with paying users, while keeping a curated public layer.
+The planned evolution moves from a single-admin tool to a service with multiple users, while keeping a curated public layer open to anyone.
+
+### Roles
+
+Every account has one of three roles:
+
+| Role | How you get it |
+|---|---|
+| **Free** | Default on first sign-in via Google |
+| **Premium** | Admin grants it manually (whether you paid or were comped is decided outside the product) |
+| **Admin** | Bootstrapped; additional admins promoted manually |
+
+### What each role can do
+
+| Capability | Visitor (no account) | Free | Premium | Admin |
+|---|---|---|---|---|
+| Browse common results | ✓ | ✓ | ✓ | ✓ |
+| Sign in | — | ✓ | ✓ | ✓ |
+| Create / run / edit own searches | — | — | ✓ | ✓ |
+| View own private results & leave feedback | — | — | ✓ | ✓ |
+| Promote any search to common | — | — | — | ✓ |
+| View all searches (any owner) | — | — | — | ✓ |
+| View all users & manage roles | — | — | — | ✓ |
+| Edit any search config | — | — | — | ✓ |
 
 ### User accounts and private searches
 
-Signed-in paying users can create their own searches. Each user's searches and results are private — only visible to that user. The workflow is the same as today: describe what you want, generate a config, run it, read results, leave feedback.
+Users sign in with Google. Premium users can create searches using the same workflow as today: describe what you want, generate a config, run it, read results, leave feedback. Each user's searches and results are private — only visible to that user and to the admin.
 
-### Common results (admin-promoted)
+Free users can read everything that is public (common searches and results) but cannot create or run searches. When they encounter a gated action the UI shows: *"You're on the Free plan — you can browse common searches. Contact us to get full access."*
 
-The admin can promote any search to **common**. Promoted searches become visible to all users (including visitors who are not signed in) as a read-only showcase:
+### Common results
 
-- The search config is displayed but not editable.
+The admin can promote any search — their own or a user's — to **common**. Promoted searches appear on the public results page as a curated showcase:
+
+- The search config is visible to everyone but not editable by visitors or other users.
 - Results appear exactly as they do for the owner.
 - Visitors can browse results and click through to product pages but cannot run the search, leave feedback, or modify anything.
 
-This creates a curated discovery surface — searches the admin finds broadly interesting — alongside the private searches that paying users run for their own needs.
+### Granting premium access
 
-### Access model summary
+The admin manages roles from a **Users** tab in the admin panel. Each user appears in a list with their current role as a dropdown (`Free / Premium`). Changing the dropdown takes effect immediately — no re-login required for the user. There is no payment UI, no billing form, and no expiry — determining whether someone qualifies for premium happens outside the product.
 
-| Capability | Public visitor | Paying user | Admin |
-|---|---|---|---|
-| View common results | ✓ | ✓ | ✓ |
-| Edit common search config | — | — | — |
-| Create private searches | — | ✓ | ✓ |
-| View own private results | — | ✓ | ✓ |
-| Promote search to common | — | — | ✓ |
-| Edit any config | — | — | ✓ |
+### Admin capabilities
+
+Admin is a full superuser:
+
+- Sees all searches from all users, not just their own.
+- Can edit, run, or delete any search regardless of owner.
+- Promotes and demotes any search between private and common.
+- Views the user list and changes any user's role.
+- Cannot accidentally remove the last admin account (the action is blocked).

@@ -1,0 +1,21 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "shop_searches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "owner_id", "order": "ASCENDING" },
+        { "fieldPath": "active",   "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "shop_searches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "visibility", "order": "ASCENDING" },
+        { "fieldPath": "active",     "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

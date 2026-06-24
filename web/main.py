@@ -55,10 +55,25 @@ def search_page(search_name: str):
     return _HTML
 
 
+@app.get("/api/me")
+def get_me(sa_admin: str | None = Cookie(default=None)):
+    is_admin = bool(_settings.admin_password and sa_admin == _admin_token())
+    if is_admin:
+        return {"role": "admin", "anonymous": False}
+    return {"role": "free", "anonymous": True}
+
+
 @app.get("/api/searches")
 def get_searches():
     configs = fc.list_searches(active_only=False)
-    return [{"name": c["search_name"], "active": c.get("active", True)} for c in configs]
+    return [
+        {
+            "name": c["search_name"],
+            "active": c.get("active", True),
+            "visibility": c.get("visibility", "common"),
+        }
+        for c in configs
+    ]
 
 
 @app.get("/api/results/{search_name}")
