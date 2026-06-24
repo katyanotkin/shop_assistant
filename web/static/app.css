@@ -161,17 +161,53 @@ body {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  transition: width 0.2s ease;
+}
+
+.sidebar.collapsed {
+  width: 36px;
+  overflow: hidden;
+}
+
+.sidebar.collapsed .search-list,
+.sidebar.collapsed .sidebar-footer,
+.sidebar.collapsed .sidebar-label {
+  display: none;
+}
+
+.sidebar.collapsed .sidebar-header {
+  justify-content: center;
+  padding: 0;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  margin-bottom: 8px;
 }
 
 .sidebar-label {
-  margin: 0 0 8px;
-  padding: 0 16px;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-muted);
 }
+
+.sidebar-toggle-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 3px 5px;
+  font-size: 12px;
+  border-radius: 4px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.sidebar-toggle-btn:hover { color: var(--text-main); background: var(--line-soft); }
 
 .search-list {
   list-style: none;
@@ -661,6 +697,37 @@ body {
 }
 .btn-run:hover { color: var(--text-main); border-color: var(--text-muted); }
 .btn-run:disabled { opacity: 0.5; cursor: default; }
+
+/* ===== Criteria bar ===== */
+
+.criteria-bar {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+}
+
+.criteria-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.criteria-chip {
+  font-size: 12px;
+  padding: 2px 9px;
+  background: var(--line-soft);
+  border-radius: 12px;
+  color: var(--text-body);
+}
+
+.criteria-notes {
+  margin: 7px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
 
 /* ===== Mobile ===== */
 

@@ -163,6 +163,18 @@ def get_searches():
     ]
 
 
+@app.get("/api/search/{name}")
+def get_search_public(name: str):
+    config = fc.load_search_config(name)
+    if not config:
+        raise HTTPException(status_code=404, detail="Not found")
+    return {
+        "search_name": config["search_name"],
+        "criteria": config.get("criteria", {}),
+        "preferred_shops": config.get("preferred_shops", []),
+    }
+
+
 @app.get("/api/results/{search_name}")
 def get_run_dates(search_name: str):
     dates = fc.list_runs(search_name)

@@ -37,7 +37,10 @@
 
   <div class="layout">
     <nav class="sidebar" id="sidebar">
-      <p class="sidebar-label">Searches</p>
+      <div class="sidebar-header">
+        <span class="sidebar-label">Searches</span>
+        <button id="sidebar-toggle-btn" class="sidebar-toggle-btn" aria-label="Collapse sidebar">◀</button>
+      </div>
       <ul class="search-list" id="search-list" role="listbox" aria-label="Product searches"></ul>
       <div class="sidebar-footer">
         <a href="/privacy" class="sidebar-footer-link">Privacy</a>
@@ -53,6 +56,8 @@
         <button id="edit-search-btn" class="btn-run" hidden>Edit</button>
         <button id="run-search-btn" class="btn-run" hidden>Run ▶</button>
       </div>
+
+      <div id="criteria-bar" class="criteria-bar" hidden></div>
 
       <div id="results-panel">
         <p class="empty-state">Select a search from the left to view results.</p>

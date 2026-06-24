@@ -10,6 +10,27 @@
   let me           = { role: "free", anonymous: true };
   let _loadSeq     = 0;
 
+  // ── Sidebar collapse ──────────────────────────────────────────────────────
+  const sidebarEl      = document.getElementById("sidebar");
+  const sidebarToggle  = document.getElementById("sidebar-toggle-btn");
+
+  function setSidebarCollapsed(collapsed) {
+    sidebarEl.classList.toggle("collapsed", collapsed);
+    if (sidebarToggle) {
+      sidebarToggle.textContent = collapsed ? "▶" : "◀";
+      sidebarToggle.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
+    }
+    try { localStorage.setItem("sa-sidebar-collapsed", collapsed ? "1" : ""); } catch {}
+  }
+
+  sidebarToggle?.addEventListener("click", () => {
+    setSidebarCollapsed(!sidebarEl.classList.contains("collapsed"));
+  });
+
+  try {
+    if (localStorage.getItem("sa-sidebar-collapsed") === "1") setSidebarCollapsed(true);
+  } catch {}
+
   // ── API ───────────────────────────────────────────────────────────────────
   async function api(path, { method = "GET", body } = {}) {
     const opts = { method, credentials: "same-origin", headers: {} };
@@ -361,6 +382,25 @@
     });
   }
 
+  // ── Criteria bar ─────────────────────────────────────────────────────────
+  function renderCriteriaBar(config) {
+    const bar = document.getElementById("criteria-bar");
+    if (!bar) return;
+    const c = config.criteria || {};
+    const chips = [];
+    if (c.category?.length) chips.push(...[].concat(c.category));
+    if (c.gender) chips.push(c.gender);
+    if (c.material?.length) chips.push(...[].concat(c.material));
+    if (c.sizes?.length) chips.push(`sizes: ${[].concat(c.sizes).join(", ")}`);
+    if (c.max_price != null) chips.push(`max ${c.max_price}`);
+    if (c.exclude?.length) chips.push(`excl. ${[].concat(c.exclude).join(", ")}`);
+    if (!chips.length && !c.extra_notes) { bar.hidden = true; return; }
+    let html = `<div class="criteria-summary">${chips.map(p => `<span class="criteria-chip">${esc(p)}</span>`).join("")}</div>`;
+    if (c.extra_notes) html += `<p class="criteria-notes">${esc(c.extra_notes)}</p>`;
+    bar.innerHTML = html;
+    bar.hidden = false;
+  }
+
   // ── Results rendering ─────────────────────────────────────────────────────
   const _PHRASES = ["Perfect match", "Wrong material", "Too expensive", "Wrong style", "Doesn't ship to me", "Out of stock"];
 
@@ -518,11 +558,17 @@
       el.classList.toggle("active", el.dataset.name === name));
 
     toolbar.hidden = true;
+    const criteriaBar = document.getElementById("criteria-bar");
+    if (criteriaBar) criteriaBar.hidden = true;
     resultsPanel.innerHTML = `<p class="loading">Loading dates…</p>`;
     try {
-      const dates = await api(`/api/results/${encodeURIComponent(name)}`);
+      const [dates, config] = await Promise.all([
+        api(`/api/results/${encodeURIComponent(name)}`),
+        api(`/api/search/${encodeURIComponent(name)}`).catch(() => null),
+      ]);
       dateSelect.innerHTML = dates.map(d => `<option value="${d}">${d}</option>`).join("");
       toolbar.hidden = false;
+      if (config) renderCriteriaBar(config);
       await loadRun(name, dates[0]);
     } catch {
       resultsPanel.innerHTML = `<p class="empty-state">No runs found for this search.</p>`;
