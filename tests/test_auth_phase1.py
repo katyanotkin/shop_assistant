@@ -169,3 +169,30 @@ def test_auth_callback_sets_session_cookie_on_success(client):
     assert r.status_code in (302, 307)
     assert r.headers["location"] == "/"
     assert "sa_session" in r.cookies
+
+
+# ── DELETE /api/me ────────────────────────────────────────────────────────────
+
+
+def test_delete_me_no_session_returns_401(client):
+    r = client.request("DELETE", "/api/me")
+    assert r.status_code == 401
+
+
+def test_delete_me_invalid_session_returns_401(client):
+    client.cookies.set("sa_session", "not.a.valid.jwt")
+    r = client.request("DELETE", "/api/me")
+    assert r.status_code == 401
+
+
+def test_delete_me_valid_session_deletes_user_and_clears_cookie(client):
+    token = _session_cookie(FREE_USER)
+    client.cookies.set("sa_session", token)
+    with patch("web.main.fc") as fc:
+        r = client.request("DELETE", "/api/me")
+    assert r.status_code == 200
+    assert r.json() == {"ok": True}
+    fc.delete_user.assert_called_once_with("user@example.com")
+    set_cookie = r.headers.get("set-cookie", "")
+    assert "sa_session" in set_cookie
+    assert "Max-Age=0" in set_cookie or "max-age=0" in set_cookie.lower() or "expires" in set_cookie.lower()
