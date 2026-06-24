@@ -61,3 +61,20 @@ def test_run_result_defaults():
     assert r.partial_matches == []
     assert r.no_match is False
     assert r.total_candidates == 0
+    assert r.config_snapshot is None
+
+
+def test_run_result_config_snapshot_roundtrip():
+    from core.models import SearchConfig, SearchCriteria
+
+    cfg = SearchConfig(
+        search_name="test",
+        criteria=SearchCriteria(category="coat", gender="women"),
+    )
+    r = RunResult(search_name="test", run_date="2024-01-01", config_snapshot=cfg)
+    assert r.config_snapshot is not None
+    assert r.config_snapshot.search_name == "test"
+    assert r.config_snapshot.criteria.gender == "women"
+    # Serialization must not raise and must preserve the snapshot
+    data = r.model_dump()
+    assert data["config_snapshot"]["search_name"] == "test"
