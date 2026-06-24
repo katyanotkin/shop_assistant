@@ -60,7 +60,7 @@ test: ## Run tests
 
 ## Smoke-test the live deployment (PROD_URL defaults to https://$(DOMAIN))
 validate-prod: ## Smoke-test production: make validate-prod [PROD_URL=https://...]
-	PROD_URL=$(PROD_URL) PYTHONPATH=. $(VENV)/bin/pytest tests/test_smoke.py -v
+	PROD_URL=$(PROD_URL) PYTHONPATH=. $(VENV)/bin/pytest tests/test_smoke.py tests/test_live_qatp.py -v
 
 ## Lint
 lint: ## Run ruff
