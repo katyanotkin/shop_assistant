@@ -221,25 +221,82 @@
       <input type="text" name="${name}" class="field-input" value="${value ?? ""}"></div>`;
   }
 
+  // Cosmetic preference only — unknown keys still render at end, no coupling to schema.
+  const _KEY_ORDER = ["category", "gender", "material", "lining", "length", "exclude", "sizes", "max_price", "extra_notes"];
+  const _TEXTAREA_KEYS = new Set(["extra_notes"]);
+  function _labelFor(k) { return k.replace(/_/g, " ").replace(/^./, c => c.toUpperCase()); }
+  function _orderCriteriaKeys(keys) {
+    return [...keys].sort((a, b) => {
+      const ri = _KEY_ORDER.indexOf(a), rj = _KEY_ORDER.indexOf(b);
+      return (ri === -1 ? 999 : ri) - (rj === -1 ? 999 : rj);
+    });
+  }
+
+  function criteriaRow(key, value) {
+    const label = _labelFor(key);
+    if (Array.isArray(value)) {
+      return `<div class="field-row">
+        <label class="field-label">${label}</label>
+        <div class="chip-field" data-key="${esc(key)}" data-chips='${esc(JSON.stringify(value))}'>
+          <div class="chip-list"></div>
+          <input type="text" class="chip-input field-input" placeholder="Add…" autocomplete="off">
+        </div>
+      </div>`;
+    }
+    const type = _TEXTAREA_KEYS.has(key) ? "textarea" : typeof value === "number" ? "number" : "text";
+    return fieldRow(label, `criteria.${key}`, value ?? "", type);
+  }
+
+  function bindCriteriaChips(field) {
+    let items = JSON.parse(field.dataset.chips || "[]");
+    const listEl = field.querySelector(".chip-list");
+    const input  = field.querySelector(".chip-input");
+
+    const sync = () => { field.dataset.chips = JSON.stringify(items); };
+
+    function renderChips() {
+      listEl.innerHTML = items.map(v => `
+        <span class="chip" data-val="${esc(v)}">${esc(v)
+        }<button type="button" class="chip-remove" aria-label="Remove ${esc(v)}">×</button></span>`).join("");
+      listEl.querySelectorAll(".chip-remove").forEach(btn => {
+        btn.addEventListener("click", () => {
+          items = items.filter(v => v !== btn.closest(".chip").dataset.val);
+          renderChips(); sync();
+        });
+      });
+    }
+    renderChips();
+
+    const add = () => {
+      const v = input.value.trim();
+      if (v && !items.includes(v)) { items.push(v); renderChips(); sync(); }
+      input.value = "";
+    };
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === ",") { e.preventDefault(); add(); }
+      if (e.key === "Backspace" && !input.value && items.length) {
+        items.pop(); renderChips(); sync();
+      }
+    });
+    input.addEventListener("blur", add);
+  }
+
   function renderEdit(cfg) {
-    const c = cfg.criteria || {};
+    const c   = cfg.criteria || {};
+    const vis = cfg.visibility || "public";
+    const rows = _orderCriteriaKeys(Object.keys(c)).map(k => criteriaRow(k, c[k])).join("");
     return `<div class="edit-form" data-name="${cfg.search_name}">
       <div class="edit-top">
         <label class="active-label">
           <input type="checkbox" name="active" ${cfg.active ? "checked" : ""}> Active
         </label>
+        <label class="active-label">
+          <input type="checkbox" name="visibility_private" ${vis === "private" ? "checked" : ""}> Private
+        </label>
       </div>
-      ${fieldRow("Category", "category", join(c.category))}
-      ${fieldRow("Gender", "gender", c.gender)}
-      ${fieldRow("Material", "material", join(c.material))}
-      ${fieldRow("Lining", "lining", join(c.lining))}
-      ${fieldRow("Length", "length", join(c.length))}
-      ${fieldRow("Exclude", "exclude", join(c.exclude))}
-      ${fieldRow("Sizes", "sizes", join(c.sizes))}
-      ${fieldRow("Max price", "max_price", c.max_price, "number")}
-      ${fieldRow("Notes", "extra_notes", c.extra_notes || "", "textarea")}
+      ${rows}
       ${fieldRow("Preferred shops", "preferred_shops", (cfg.preferred_shops || []).join("\n"), "textarea")}
-      <input type="hidden" name="example_urls" value="${(cfg.example_urls || []).join("\n")}">
+      <input type="hidden" name="example_urls" value="${esc((cfg.example_urls || []).join("\n"))}">
       <div class="action-row">
         <button class="btn-run btn-run-only">Run</button>
         <button class="btn-primary btn-save">Save</button>
@@ -254,26 +311,29 @@
 
   function collectConfig(form) {
     const g = n => form.querySelector(`[name="${n}"]`);
+    const criteria = {};
+    // Array fields: state lives in data-chips JSON on the div.
+    form.querySelectorAll(".chip-field").forEach(f => {
+      criteria[f.dataset.key] = JSON.parse(f.dataset.chips || "[]");
+    });
+    // Scalar fields: inputs namespaced as criteria.<key>.
+    form.querySelectorAll('[name^="criteria."]').forEach(el => {
+      const key = el.name.slice("criteria.".length);
+      const raw = el.value.trim();
+      criteria[key] = el.type === "number" ? (parseFloat(raw) || null) : (raw || null);
+    });
     return {
       search_name: form.dataset.name,
-      active: g("active").checked,
-      criteria: {
-        category:    split(g("category").value),
-        gender:      g("gender").value.trim(),
-        material:    split(g("material").value),
-        lining:      split(g("lining").value),
-        length:      split(g("length").value),
-        exclude:     split(g("exclude").value),
-        sizes:       split(g("sizes").value),
-        max_price:   parseFloat(g("max_price").value) || null,
-        extra_notes: g("extra_notes").value.trim() || null,
-      },
+      active:      g("active").checked,
+      visibility:  g("visibility_private").checked ? "private" : "public",
+      criteria,
       preferred_shops: g("preferred_shops").value.split("\n").map(s => s.trim()).filter(Boolean),
       example_urls:    g("example_urls").value.split("\n").map(s => s.trim()).filter(Boolean).slice(0, 3),
     };
   }
 
   function bindEdit(form, opts = {}) {
+    form.querySelectorAll(".chip-field").forEach(bindCriteriaChips);
     const msg        = form.querySelector(".save-msg");
     const setMsg     = (text, cls) => { msg.textContent = text; msg.className = `save-msg ${cls}`; };
     const btnSave    = form.querySelector(".btn-save");

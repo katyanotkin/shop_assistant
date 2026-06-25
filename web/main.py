@@ -163,8 +163,9 @@ def get_me(sa_admin: str | None = Cookie(default=None), sa_session: str | None =
 
 
 @app.get("/api/searches")
-def get_searches():
+def get_searches(sa_admin: str | None = Cookie(default=None)):
     configs = fc.list_searches(active_only=False)
+    include_private = bool(_settings.admin_password and sa_admin == _admin_token())
     return [
         {
             "name": c["search_name"],
@@ -172,6 +173,7 @@ def get_searches():
             "visibility": c.get("visibility", "public"),
         }
         for c in configs
+        if include_private or c.get("visibility", "public") == "public"
     ]
 
 
