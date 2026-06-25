@@ -61,6 +61,33 @@ def test_get_searches_uses_active_only_false(client):
     fc.list_searches.assert_called_with(active_only=False)
 
 
+def test_get_searches_hides_private_from_non_admin(client):
+    c, fc = client
+    fc.list_searches.return_value = [
+        {"search_name": "wax_coat", "active": True, "visibility": "public"},
+        {"search_name": "secret_search", "active": True, "visibility": "private"},
+    ]
+    r = c.get("/api/searches")
+    names = [s["name"] for s in r.json()]
+    assert "wax_coat" in names
+    assert "secret_search" not in names
+
+
+def test_get_searches_shows_private_to_admin(client):
+    import hashlib
+
+    c, fc = client
+    fc.list_searches.return_value = [
+        {"search_name": "wax_coat", "active": True, "visibility": "public"},
+        {"search_name": "secret_search", "active": True, "visibility": "private"},
+    ]
+    token = hashlib.sha256(b"sa:hunter2").hexdigest()
+    r = c.get("/api/searches", cookies={"sa_admin": token})
+    names = [s["name"] for s in r.json()]
+    assert "wax_coat" in names
+    assert "secret_search" in names
+
+
 # ── GET /api/results/{search_name} ───────────────────────────────────────────
 
 

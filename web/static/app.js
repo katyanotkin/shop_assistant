@@ -237,7 +237,7 @@
     if (Array.isArray(value)) {
       return `<div class="field-row">
         <label class="field-label">${label}</label>
-        <div class="chip-field" data-key="${esc(key)}" data-chips='${esc(JSON.stringify(value))}'>
+        <div class="chip-field" data-key="${esc(key)}" data-chips="${esc(JSON.stringify(value))}">
           <div class="chip-list"></div>
           <input type="text" class="chip-input field-input" placeholder="Add…" autocomplete="off">
         </div>
