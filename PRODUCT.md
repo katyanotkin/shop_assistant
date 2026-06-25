@@ -27,7 +27,7 @@ You will see a two-field form:
 - **Search name** — a short identifier, lowercase with underscores (e.g. `wax_coat`). This becomes the permanent ID for this search.
 - **Describe what you want** — free-form text. Write naturally: material, style, length, size, price limit, any shops you prefer. Example: *"women's waxed cotton coat, midi or longer, natural lining or unlined, size M or L, under £500, prefer Barbour and House of Bruar"*.
 
-Click **Generate config**. The AI reads your description and produces a structured configuration with separate fields for category, gender, material, lining, length, excluded materials, sizes, max price, and preferred shops. The generated config appears in an editable form. Review every field — the AI will get most things right but you may want to add or remove values.
+Click **Generate config**. The AI reads your description and produces a structured configuration populated only with fields mentioned or implied by your text — `category` is always present; every other field (gender, material, lining, etc.) is included only if the description calls for it. The generated config appears in an editable form. Optional fields can be added with the chip buttons in the **Add:** row, or removed with the × button on each field. Review the populated fields — the AI will get most things right but you may want to add, remove, or adjust values.
 
 When you are satisfied, click **Save** to store the config, or **Save & Run** to store it and immediately run the first search.
 
@@ -104,7 +104,7 @@ In the admin panel, select a search from the sidebar. Click **Run** to trigger a
 
 ### Editing a search config
 
-Select a search from the sidebar. The Edit config tab shows all fields. Each field that takes multiple values (category, material, sizes, etc.) is a comma-separated list. Preferred shops is a newline-separated list of URLs. Click **Save** to update the config without running.
+Select a search from the sidebar. The Edit config tab shows the fields currently set on the search. `category` is always visible and cannot be removed. All other fields are optional: present fields show an × button to remove them; hidden fields appear as chip buttons in an **Add:** row at the bottom of the form — click a chip to reveal that field. Each field that takes multiple values (material, sizes, etc.) is a comma-separated list. Preferred shops is a newline-separated list of URLs. Click **Save** to update the config without running.
 
 ### Scheduled runs
 

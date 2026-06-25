@@ -53,7 +53,7 @@ MAX_CANDIDATES=20             # max URLs to evaluate per run
 
 ### Add a search
 
-Go to `/admin`, log in, and click **+ New search** in the sidebar. Enter a short search name (lowercase, underscores) and describe what you want in plain text — material, style, size, price ceiling, preferred shops. Click **Generate config**: Gemini produces a structured config which appears in an editable form. Review every field, then click **Save** or **Save & Run**.
+Go to `/admin`, log in, and click **+ New search** in the sidebar. Enter a short search name (lowercase, underscores) and describe what you want in plain text — material, style, size, price ceiling, preferred shops. Click **Generate config**: Gemini produces a structured config populated only with fields mentioned or implied by the description — `category` is always present, everything else is conditional. The config appears in an editable form. Optional fields can be added using the chip buttons in the **Add:** row, or removed with the × button on each field. Review the populated fields, then click **Save** or **Save & Run**.
 
 ### Dev / bulk import (CLI)
 
@@ -89,7 +89,7 @@ make add FILE=searches/wax_coat.json
 | `search_name` | yes | Unique ID — used in file names and Firestore |
 | `active` | yes | `false` skips this search on batch runs |
 | `category` | yes | Product type keyword(s) |
-| `gender` | yes | `"women"`, `"men"`, `"unisex"` |
+| `gender` | no | `"women"`, `"men"`, `"unisex"` |
 | `material` | no | Accepted outer materials |
 | `lining` | no | Accepted lining materials |
 | `length` | no | Accepted lengths — any match satisfies (e.g. `"thigh"`, `"midi"`, `"long"`, `"maxi"`) |
@@ -215,7 +215,7 @@ core/
   fetcher.py           # HTTP fetch + HTML → plain text
   ranker.py            # Gemini scoring of individual product pages
   runner.py            # orchestrator: search → fetch → rank → save → notify
-  notifier.py          # Gmail notification on new matches
+  notifier.py          # Gmail notifier — optional, not active in production
   firestore_client.py  # Firestore read/write helpers
   generator.py         # generate structured search config from free-text description
   feedback.py          # learn cycle: distil feedback → signal for next run
@@ -241,7 +241,9 @@ Makefile               # Convenience targets
 | Agent | When to use |
 |---|---|
 | `senior-architect` | Reviewing pipeline design, Gemini prompt strategy, GCP cost |
+| `senior-web-engineer` | JS/CSS/HTML correctness, FastAPI routing, auth/cookie mechanics, XSS; can review and implement |
 | `code-reviewer` | After any code change — quality, security, performance, prompt fragility |
 | `qa-engineer` | Adding or fixing tests; always mocks Vertex AI and Firestore |
 | `ui-ux-engineer` | Web UI design critiques, CSS changes, layout decisions |
-| `writer` | After significant feature additions, update README.md |
+| `product-manager` | Role/permission decisions, feature gating, user journey questions, user-facing copy |
+| `writer` | After significant feature additions or removals, update README.md |
