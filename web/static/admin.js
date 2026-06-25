@@ -102,7 +102,7 @@
   // add or remove them via the field picker.
   const CRITERIA_FIELDS = [
     { name: "category",        label: "Category",        type: "text",     immutable: true  },
-    { name: "gender",          label: "Gender",          type: "text",     immutable: true  },
+    { name: "gender",          label: "Gender",          type: "text",     immutable: false },
     { name: "material",        label: "Material",        type: "text",     immutable: false },
     { name: "lining",          label: "Lining",          type: "text",     immutable: false },
     { name: "length",          label: "Length",          type: "text",     immutable: false },
@@ -163,11 +163,9 @@
       ${criteriaRows}
       ${topRows}
       <input type="hidden" name="example_urls" value="${(cfg.example_urls || []).join("\n")}">
-      <div class="add-field-row">
-        <select class="add-field-select" aria-label="Add a field">
-          <option value="">+ Add field…</option>
-          ${allOptional.map(f => `<option value="${f.name}">${f.label}</option>`).join("")}
-        </select>
+      <div class="add-field-row" aria-label="Add a field">
+        <span class="add-field-label">Add:</span>
+        ${allOptional.map(f => `<button type="button" class="btn-add-field" data-field="${f.name}">${f.label}</button>`).join("")}
       </div>
       <div class="action-row">
         <button class="btn-run btn-run-only">Run</button>
@@ -225,24 +223,20 @@
   function bindFieldControls(form) {
     const allOptional = [...CRITERIA_FIELDS, ...TOP_LEVEL_FIELDS].filter(f => !f.immutable);
 
-    function syncSelect() {
-      const sel = form.querySelector(".add-field-select");
-      if (!sel) return;
+    function syncChips() {
       allOptional.forEach(f => {
-        const opt = sel.querySelector(`option[value="${f.name}"]`);
-        if (!opt) return;
+        const chip = form.querySelector(`.btn-add-field[data-field="${f.name}"]`);
+        if (!chip) return;
         const row = form.querySelector(`.field-row[data-field-name="${f.name}"]`);
-        opt.hidden = row && !row.hidden;
+        chip.hidden = row && !row.hidden;
       });
-      // Reset to placeholder after any change
-      sel.value = "";
     }
 
     function removeRow(row) {
       row.hidden = true;
       const el = row.querySelector("input, textarea");
       if (el) el.value = "";
-      syncSelect();
+      syncChips();
     }
 
     function showRow(name) {
@@ -250,21 +244,18 @@
       if (!row) return;
       row.hidden = false;
       row.querySelector("input, textarea")?.focus();
-      syncSelect();
+      syncChips();
     }
 
     form.querySelectorAll(".btn-field-remove").forEach(btn => {
       btn.addEventListener("click", () => removeRow(btn.closest(".field-row")));
     });
 
-    const sel = form.querySelector(".add-field-select");
-    if (sel) {
-      sel.addEventListener("change", () => {
-        if (sel.value) showRow(sel.value);
-      });
-    }
+    form.querySelectorAll(".btn-add-field").forEach(chip => {
+      chip.addEventListener("click", () => showRow(chip.dataset.field));
+    });
 
-    syncSelect();
+    syncChips();
   }
 
   function bindEdit(form, opts = {}) {
@@ -444,7 +435,7 @@
       </div>
       <div class="field-row">
         <label class="field-label">Describe what you want</label>
-        <textarea id="gen-desc" class="field-input" rows="6" placeholder="I'm looking for a women's waxed cotton coat, midi length, natural lining…"></textarea>
+        <textarea id="gen-desc" class="field-input" rows="6" placeholder="Describe what you want — include any relevant details: category, gender, material, size, max price, preferred shops, things to exclude…"></textarea>
       </div>
       <div class="action-row">
         <button id="gen-btn" class="btn-primary">Generate config</button>

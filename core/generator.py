@@ -19,26 +19,28 @@ Return ONLY a JSON object with this exact structure (no markdown fences):
   "active": true,
   "criteria": {{
     "category": ["..."],
-    "gender": "women|men|unisex",
-    "material": [],
-    "lining": [],
-    "length": [],
-    "exclude": [],
-    "sizes": [],
+    "gender": null,
+    "material": null,
+    "lining": null,
+    "length": null,
+    "exclude": null,
+    "sizes": null,
     "max_price": null,
-    "extra_notes": ""
+    "extra_notes": null
   }},
   "preferred_shops": []
 }}
 
 Rules:
-- category: main product type(s) — always required, infer from description
-- gender: infer from description; default "unisex" if unclear
-- Use empty arrays [] for fields not mentioned in the description
-- max_price: number or null
-- extra_notes: any nuance not captured by other fields; empty string if none
-- preferred_shops: empty unless user names specific shops
-- Only populate values the user actually mentioned or strongly implied
+- category: ALWAYS required — list the main product type(s) inferred from the description
+- gender: include ONLY for clothing/fashion items where gender is relevant;
+  omit (null) for home goods, accessories, tools, etc.
+- material, lining, length, exclude, sizes: include ONLY if mentioned or strongly
+  implied by the description; leave null otherwise
+- max_price: number if mentioned, otherwise null
+- extra_notes: short string for nuance not captured by other fields; null if nothing to add
+- preferred_shops: list if user names specific shops, otherwise empty array
+- DO NOT invent or assume values — only include what the description actually says
 """
 
 

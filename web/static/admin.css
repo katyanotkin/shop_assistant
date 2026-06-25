@@ -412,24 +412,40 @@
 .btn-field-remove:hover { color: var(--score-red); background: #fee2e2; }
 
 .add-field-row {
-  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
   margin-bottom: 4px;
 }
 
-.add-field-select {
-  padding: 5px 8px;
+.add-field-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-right: 2px;
+}
+
+.btn-add-field {
+  padding: 3px 10px;
   font-size: 12px;
   font-family: inherit;
   color: var(--text-muted);
   background: var(--page-bg);
   border: 1px dashed var(--card-border);
-  border-radius: 6px;
+  border-radius: 12px;
   cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
+  transition: color 0.1s, border-color 0.1s, background 0.1s;
 }
-.add-field-select:hover { border-color: var(--button-primary-bg); color: var(--button-primary-bg); }
-.add-field-select:focus { outline: 2px solid var(--button-primary-bg); outline-offset: 1px; }
+.btn-add-field:hover {
+  color: var(--button-primary-bg);
+  border-color: var(--button-primary-bg);
+  background: var(--card-bg);
+}
+.btn-add-field:focus { outline: 2px solid var(--button-primary-bg); outline-offset: 1px; }
 
 /* ── Logout button ───────────────────────────────────────────────────────── */
 

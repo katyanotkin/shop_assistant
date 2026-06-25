@@ -8,7 +8,7 @@ Web app that monitors online shops for products matching saved search criteria. 
 2. **Search** — Gemini with Google Search grounding returns product URLs (no API key needed)
 3. **Fetch** — each URL is fetched and stripped to plain text
 4. **Rank** — Gemini scores each page 0–10 against your criteria
-5. **Save & notify** — results written to CSV + Firestore; email sent on new matches
+5. **Save** — results saved to Firestore; the web UI updates automatically
 
 A lightweight web UI reads results from Firestore and displays them by search and date. An admin panel (password-protected) lets you create and edit searches, trigger runs, and leave feedback on results.
 
@@ -42,11 +42,6 @@ GOOGLE_CLOUD_PROJECT=your-gcp-project-id
 
 # Admin UI (optional — omit to disable the /admin panel)
 ADMIN_PASSWORD=choose-a-strong-password
-
-# Email notifications (optional — omit both to use CSV output only)
-NOTIFY_EMAIL=you@gmail.com
-GMAIL_APP_PASSWORD=xxxx_xxxx_xxxx_xxxx   # 16-char App Password from myaccount.google.com/apppasswords
-GMAIL_FROM=you@gmail.com                  # defaults to NOTIFY_EMAIL if omitted
 
 # Scoring thresholds (optional, shown with defaults)
 MATCH_SCORE_THRESHOLD=7.0     # score >= this → full match
@@ -199,10 +194,9 @@ For serverless: deploy `run.py run` to Cloud Run Jobs and trigger via Cloud Sche
 
 | Location | Contents |
 |---|---|
-| `results/<name>_<date>.csv` | Tab-separated: score, title, URL, price, matched/unmatched criteria |
+| `results/<name>_<date>.csv` | CLI runs only — tab-separated: score, title, URL, price, matched/unmatched criteria |
 | Firestore `shop_searches/<name>` | Search config (source of truth at runtime) |
 | Firestore `shop_results/<name>/runs/<date>` | Full run result with all matches |
-| Email | Sent only when new matches appear (requires `NOTIFY_EMAIL` + `GMAIL_APP_PASSWORD`) |
 
 ## GCP services & permissions
 
