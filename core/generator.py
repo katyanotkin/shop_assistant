@@ -13,34 +13,34 @@ the user wants to buy, generate a structured search configuration JSON.
 Description: {description}
 Search name (snake_case identifier): {search_name}
 
-Return ONLY a JSON object with this exact structure (no markdown fences):
+Return ONLY a JSON object (no markdown fences). Omit any field that has no value — \
+do NOT include null values or empty arrays:
 {{
   "search_name": "{search_name}",
   "active": true,
   "criteria": {{
     "category": ["..."],
-    "gender": null,
-    "material": null,
-    "lining": null,
-    "length": null,
-    "exclude": null,
-    "sizes": null,
-    "max_price": null,
-    "extra_notes": null
+    <only the fields relevant to this product type>
   }},
   "preferred_shops": []
 }}
 
 Rules:
-- category: ALWAYS required — list the main product type(s) inferred from the description
-- gender: include ONLY for clothing/fashion items where gender is relevant;
-  omit (null) for home goods, accessories, tools, etc.
-- material, lining, length, exclude, sizes: include ONLY if mentioned or strongly
-  implied by the description; leave null otherwise
-- max_price: number if mentioned, otherwise null
-- extra_notes: short string for nuance not captured by other fields; null if nothing to add
-- preferred_shops: list if user names specific shops, otherwise empty array
-- DO NOT invent or assume values — only include what the description actually says
+- "category": ALWAYS required — list the main product type(s) inferred from the description.
+- Choose field names appropriate for the product type. Do NOT force everything into \
+  clothing fields. Examples by category:
+    Clothing/fashion  → gender, material, lining, length, sizes, exclude
+    Furniture/storage → dimensions (e.g. "max 60×35×180 cm"), color_exclude, \
+features (list of required attributes e.g. ["shelves", "with doors"]), capacity
+    Electronics       → brand, connectivity, battery_life, screen_size
+    Any other item    → invent descriptive snake_case field names that capture \
+the key criteria
+- "max_price": number if a price limit is mentioned; omit otherwise.
+- "extra_notes": one short string for nuance not captured by structured fields; omit if not needed.
+- "preferred_shops": list of shop URLs if the user names specific shops; omit or use [] otherwise.
+- All field names must be snake_case.
+- Only include fields with concrete values — omit anything not mentioned or clearly implied.
+- DO NOT invent or assume values the description does not support.
 """
 
 

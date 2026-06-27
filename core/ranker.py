@@ -39,16 +39,22 @@ Return ONLY a JSON object:
 }}
 
 Hard rules (violations → score 0):
-- Product must match at least one value in `category`
-- Product must match `gender` (or be unisex)
-- Score 0 if not a product page at all
+- Product must match at least one value in `category` — this is always enforced.
+- If `gender` is present in criteria: product must match it (or be unisex); otherwise ignore.
+- Score 0 if not a product page at all.
 
 Soft rules (violations reduce score, do not zero it):
-- material / lining / sizes / length: satisfied if ANY listed value matches
-- exclude: if ANY excluded material is detected, cap score at 3
-- max_price: up to 50% over limit → score ≤ 6, note "price over budget"; more than 50% over → score ≤ 3
+- For any criteria field that lists acceptable values (arrays), the requirement is satisfied \
+if ANY listed value matches the product. If none match, reduce the score.
+- Fields ending in `_exclude` or named `exclude`: if ANY excluded value is present in the \
+product, cap score at 3.
+- `max_price`: up to 50% over limit → score ≤ 6, note "price over budget"; \
+more than 50% over → score ≤ 3.
+- For non-standard fields (dimensions, features, capacity, color_exclude, etc.): apply \
+common-sense matching — treat them as strong requirements and reduce the score \
+proportionally if the product does not satisfy them.
 
-Keep matched/unmatched labels concise (2-5 words) — no raw JSON field names.
+Keep matched/unmatched labels concise (2-5 words) — use plain English, not raw JSON field names.
 Return only the JSON object, no markdown, no extra text."""
 
 
@@ -73,7 +79,7 @@ def rank_candidate(
         response = client.models.generate_content(
             model=GEMINI_MODEL,
             contents=_PROMPT.format(
-                criteria=criteria.model_dump_json(indent=2),
+                criteria=criteria.model_dump_json(indent=2, exclude_defaults=True),
                 feedback_section=format_feedback_section(feedback_notes),
                 example_section=_example_section(example_urls or []),
                 text=text,

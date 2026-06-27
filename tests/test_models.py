@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -32,9 +34,14 @@ def test_search_criteria_full():
     assert c.extra_notes == "must be waterproof"
 
 
-def test_search_criteria_missing_required_fields():
+def test_search_criteria_requires_category():
     with pytest.raises(ValidationError):
-        SearchCriteria(category="jacket")
+        SearchCriteria()  # category is the only required field
+
+
+def test_search_criteria_gender_is_optional():
+    sc = SearchCriteria(category="jacket")  # no gender → valid
+    assert sc.gender is None
 
 
 def test_product_match_defaults_is_new_false():
@@ -78,3 +85,41 @@ def test_run_result_config_snapshot_roundtrip():
     # Serialization must not raise and must preserve the snapshot
     data = r.model_dump()
     assert data["config_snapshot"]["search_name"] == "test"
+
+
+# --- extra="allow" and exclude_defaults behaviour ---
+
+
+def test_extra_fields_survive_through_search_criteria():
+    sc = SearchCriteria(
+        category=["bathroom cabinet"],
+        dimensions="max 60×35×180 cm",
+        has_shelves=True,
+    )
+    # Extra fields are accessible as attributes
+    assert sc.dimensions == "max 60×35×180 cm"
+    assert sc.has_shelves is True
+    # Extra fields survive model_dump()
+    dumped = sc.model_dump()
+    assert dumped["dimensions"] == "max 60×35×180 cm"
+    assert dumped["has_shelves"] is True
+
+
+def test_exclude_defaults_omits_empty_clothing_fields():
+    # Furniture-style criteria: no clothing fields set
+    sc = SearchCriteria(category=["bathroom cabinet"], dimensions="max 60cm")
+    data = json.loads(sc.model_dump_json(exclude_defaults=True))
+    # Clothing fields at their defaults must be absent
+    for absent_field in ("material", "lining", "length", "exclude", "sizes", "gender"):
+        assert absent_field not in data, f"Expected '{absent_field}' to be excluded but it was present"
+    # Required non-default field and extra field must be present
+    assert "category" in data
+    assert data.get("dimensions") == "max 60cm"
+
+
+def test_exclude_defaults_keeps_set_clothing_fields():
+    # Clothing criteria with material explicitly set
+    sc = SearchCriteria(category=["wool coat"], material=["wool"])
+    data = json.loads(sc.model_dump_json(exclude_defaults=True))
+    assert "material" in data
+    assert data["material"] == ["wool"]

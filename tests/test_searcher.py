@@ -162,3 +162,55 @@ def test_search_products_respects_max_results():
         result = search_products(CRITERIA, "my-project", max_results=4)
 
     assert len(result) == 4
+
+
+# --- _search_shop: gender handling ---
+
+
+def test_search_shop_gender_none_no_none_in_query():
+    from core.searcher import _search_shop
+
+    criteria = SearchCriteria(category=["bathroom cabinet"])
+    client = MagicMock()
+    # _grounded_search catches all errors internally; an unspecced MagicMock response is fine
+    _search_shop("https://www.somestore.com/", criteria, client)
+
+    call_args = client.models.generate_content.call_args
+    contents = call_args[1]["contents"] if "contents" in call_args[1] else call_args[0][1]
+    # gender=None must not produce the literal string "None" in the search query
+    assert "None" not in contents
+
+
+def test_search_shop_gender_set_includes_gender_in_query():
+    from core.searcher import _search_shop
+
+    criteria = SearchCriteria(category=["jacket"], gender="women")
+    client = MagicMock()
+    _search_shop("https://www.somestore.com/", criteria, client)
+
+    call_args = client.models.generate_content.call_args
+    contents = call_args[1]["contents"] if "contents" in call_args[1] else call_args[0][1]
+    assert "women" in contents
+
+
+# --- _plan_queries: exclude_defaults removes empty clothing fields ---
+
+
+def test_plan_queries_furniture_empty_clothing_fields_absent():
+    criteria = SearchCriteria(category=["bathroom cabinet"], dimensions="max 60cm")
+    queries = ["query one", "query two", "query three"]
+    client = _make_client(json.dumps(queries))
+
+    _plan_queries(criteria, client)
+
+    call_args = client.models.generate_content.call_args
+    prompt = call_args[1]["contents"] if "contents" in call_args[1] else call_args[0][1]
+
+    # Empty clothing list fields must be excluded from the criteria JSON in the prompt.
+    # Check JSON-key form to avoid false matches against the static prompt text
+    # (which uses plain English like "materials" and "gender").
+    assert '"material"' not in prompt
+    assert '"lining"' not in prompt
+    # Category value and extra field must be present
+    assert "bathroom cabinet" in prompt
+    assert '"dimensions"' in prompt

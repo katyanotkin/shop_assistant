@@ -447,6 +447,30 @@
 }
 .btn-add-field:focus { outline: 2px solid var(--button-primary-bg); outline-offset: 1px; }
 
+.custom-field-name {
+  padding: 3px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-main);
+  background: var(--page-bg);
+  border: 1px dashed var(--card-border);
+  border-radius: 12px;
+  width: 130px;
+}
+.custom-field-name:focus { outline: 2px solid var(--button-primary-bg); outline-offset: 1px; border-style: solid; }
+.btn-add-custom {
+  padding: 3px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--button-primary-bg);
+  background: var(--page-bg);
+  border: 1px dashed var(--button-primary-bg);
+  border-radius: 12px;
+  cursor: pointer;
+}
+.btn-add-custom:hover { background: var(--card-bg); }
+
 /* ── Logout button ───────────────────────────────────────────────────────── */
 
 .btn-logout {

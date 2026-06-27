@@ -96,6 +96,7 @@
 
   function split(v) { return v.split(",").map(s => s.trim()).filter(Boolean); }
   function join(a)  { return (a || []).join(", "); }
+  function toLabel(name) { return name.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()); }
 
   // Immutable fields are always shown and cannot be removed.
   // Optional fields are shown only when the config has a value; the user can
@@ -146,6 +147,19 @@
       return fieldRow(f.label, f.name, value, f.type, f.immutable);
     }).join("\n");
 
+    const knownNames = new Set(CRITERIA_FIELDS.map(f => f.name));
+    const customRows = Object.keys(c)
+      .filter(k => !knownNames.has(k))
+      .map(k => {
+        const raw = c[k];
+        const value = Array.isArray(raw) ? join(raw) : String(raw ?? "");
+        return `<div class="field-row field-row--opt field-row--custom" data-field-name="${esc(k)}">
+          <label class="field-label">${esc(toLabel(k))}</label>
+          <input type="text" name="${esc(k)}" class="field-input" value="${esc(value)}">
+          <button type="button" class="btn-field-remove" aria-label="Remove ${esc(toLabel(k))}">×</button>
+        </div>`;
+      }).join("\n");
+
     const topRows = TOP_LEVEL_FIELDS.map(f => {
       const raw = cfg[f.name];
       const value = Array.isArray(raw) ? raw.join("\n") : (raw ?? "");
@@ -161,11 +175,14 @@
         </label>
       </div>
       ${criteriaRows}
+      ${customRows}
       ${topRows}
       <input type="hidden" name="example_urls" value="${(cfg.example_urls || []).join("\n")}">
       <div class="add-field-row" aria-label="Add a field">
         <span class="add-field-label">Add:</span>
         ${allOptional.map(f => `<button type="button" class="btn-add-field" data-field="${f.name}">${f.label}</button>`).join("")}
+        <input type="text" class="custom-field-name" placeholder="custom field…" aria-label="Custom field name">
+        <button type="button" class="btn-add-custom">+</button>
       </div>
       <div class="action-row">
         <button class="btn-run btn-run-only">Run</button>
@@ -202,6 +219,17 @@
         const v = el.value.trim();
         if (v) criteria[f.name] = v;
       }
+    });
+
+    form.querySelectorAll(".field-row--custom").forEach(row => {
+      if (row.hidden) return;
+      const name = row.dataset.fieldName;
+      const el = row.querySelector("input, textarea");
+      if (!el) return;
+      const v = el.value.trim();
+      if (!v) return;
+      const parts = split(v);
+      criteria[name] = parts.length > 1 ? parts : v;
     });
 
     const preferredShopsRow = form.querySelector('.field-row[data-field-name="preferred_shops"]');
@@ -254,6 +282,28 @@
     form.querySelectorAll(".btn-add-field").forEach(chip => {
       chip.addEventListener("click", () => showRow(chip.dataset.field));
     });
+
+    const customNameInput = form.querySelector(".custom-field-name");
+    const btnAddCustom = form.querySelector(".btn-add-custom");
+    if (btnAddCustom && customNameInput) {
+      function addCustomField() {
+        const rawName = customNameInput.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+        if (!rawName) return;
+        const existing = form.querySelector(`.field-row[data-field-name="${rawName}"]`);
+        if (existing) { existing.hidden = false; existing.querySelector("input, textarea")?.focus(); syncChips(); customNameInput.value = ""; return; }
+        const label = toLabel(rawName);
+        const row = document.createElement("div");
+        row.className = "field-row field-row--opt field-row--custom";
+        row.dataset.fieldName = rawName;
+        row.innerHTML = `<label class="field-label">${esc(label)}</label><input type="text" name="${esc(rawName)}" class="field-input" value=""><button type="button" class="btn-field-remove" aria-label="Remove ${esc(label)}">×</button>`;
+        form.querySelector(".add-field-row").before(row);
+        row.querySelector(".btn-field-remove").addEventListener("click", () => removeRow(row));
+        row.querySelector("input").focus();
+        customNameInput.value = "";
+      }
+      btnAddCustom.addEventListener("click", addCustomField);
+      customNameInput.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addCustomField(); } });
+    }
 
     syncChips();
   }

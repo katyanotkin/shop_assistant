@@ -1,9 +1,11 @@
 from typing import Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class SearchCriteria(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     category: list[str]
 
     @field_validator("category", mode="before")
@@ -13,7 +15,7 @@ class SearchCriteria(BaseModel):
             return [v]
         return v
 
-    gender: str
+    gender: Optional[str] = None
     material: list[str] = []
     length: list[str] = []
     lining: list[str] = []

@@ -91,3 +91,45 @@ def test_rank_candidate_zero_score_has_empty_defaults():
     assert result["price"] is None
     assert result["matched"] == []
     assert result["unmatched"] == []
+
+
+# --- exclude_defaults=True in ranker prompt ---
+
+_FURNITURE_CRITERIA = SearchCriteria(
+    category=["bathroom cabinet"],
+    dimensions="max 60cm",
+    has_shelves=True,
+)
+
+_FURNITURE_RESPONSE = {
+    "title": "Bathroom Cabinet",
+    "price": 199.99,
+    "score": 8,
+    "matched": ["shelves"],
+    "unmatched": [],
+    "notes": "Good match.",
+}
+
+
+def _get_ranker_prompt(criteria: SearchCriteria, client_response: dict) -> str:
+    """Call rank_candidate and return the full prompt string sent to the model."""
+    client = _make_client(json.dumps(client_response))
+    rank_candidate("https://example.com", "some product text", criteria, client)
+    call_args = client.models.generate_content.call_args
+    return call_args[1]["contents"] if "contents" in call_args[1] else call_args[0][1]
+
+
+def test_furniture_criteria_extra_fields_appear_in_prompt():
+    prompt = _get_ranker_prompt(_FURNITURE_CRITERIA, _FURNITURE_RESPONSE)
+    # The extra field "dimensions" must be present as a JSON key in the criteria section
+    assert '"dimensions"' in prompt
+    # "material" is at its default ([]) so exclude_defaults=True must have dropped it
+    assert '"material"' not in prompt
+
+
+def test_furniture_criteria_gender_absent_from_prompt():
+    prompt = _get_ranker_prompt(_FURNITURE_CRITERIA, _FURNITURE_RESPONSE)
+    # gender=None is the default; exclude_defaults=True must have dropped it.
+    # Static prompt text uses `gender` in backticks, not "gender" as a JSON key,
+    # so checking for the JSON-key form '"gender"' is unambiguous.
+    assert '"gender"' not in prompt

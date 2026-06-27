@@ -17,16 +17,34 @@ Criteria (JSON):
 {criteria}
 {feedback_section}
 
-Query format — follow this order strictly:
-1. Discovery query: "who sells {{gender}} {{material}} {{category terms}}?" — use ALL category values
-2. Specific query: material + ALL category terms joined by "or" + gender + buying intent (buy/shop/for sale)
-3. Specific query: material + ALL category terms + sizes + gender + for sale
+Strategy — follow this order:
+1. Discovery query: "who sells [key criteria] [all category terms]?" \
+— pick the most distinctive criteria to narrow results
+2. Specific query: key criteria + ALL category terms joined by "or" + buying intent (buy/shop/for sale)
+3. Specific query: key criteria + ALL category terms + additional constraints + for sale
 
-Example for women's waxed cotton coat/jacket/trench M/L:
+Extract the most important search terms from the criteria. Prioritise:
+- category (always use ALL values)
+- materials, colours, finishes, or physical attributes that narrow the field
+- size, dimensions, or capacity constraints if present
+- gender (only for clothing/fashion)
+- price range if specified (e.g. "under £500")
+- exclude any values from fields ending in `_exclude` or named `exclude`
+
+Examples:
+
+Women's waxed cotton coat/jacket/trench M/L:
 [
   "who sells women waxed cotton coat jacket trench?",
   "waxed cotton coat or jacket or trench women buy",
   "waxed cotton coat jacket trench women size M L for sale"
+]
+
+Bathroom cabinet not white with shelves max 60 cm wide:
+[
+  "who sells bathroom cabinet with shelves not white?",
+  "bathroom cabinet or bathroom storage unit shelves not white buy",
+  "bathroom storage cabinet shelves dark colour max 60cm for sale"
 ]
 
 Return ONLY a JSON array of 3 strings, no markdown, no extra text."""
@@ -36,7 +54,7 @@ def _plan_queries(criteria: models.SearchCriteria, client: genai.Client, feedbac
     response = client.models.generate_content(
         model=GEMINI_MODEL,
         contents=_PLAN_PROMPT.format(
-            criteria=criteria.model_dump_json(indent=2),
+            criteria=criteria.model_dump_json(indent=2, exclude_defaults=True),
             feedback_section=format_feedback_section(feedback_notes),
         ),
         config=types.GenerateContentConfig(temperature=0),
@@ -53,8 +71,12 @@ def _search_shop(shop_url: str, criteria: models.SearchCriteria, client: genai.C
     """Grounded search scoped to one preferred shop."""
     domain = urlparse(shop_url).netloc.removeprefix("www.")
     cats = " OR ".join(criteria.category)
-    material = criteria.material[0] if criteria.material else ""
-    query = f"site:{domain} ({cats}) {material} {criteria.gender}"
+    parts = [f"({cats})"]
+    if criteria.material:
+        parts.append(criteria.material[0])
+    if criteria.gender:
+        parts.append(criteria.gender)
+    query = f"site:{domain} " + " ".join(parts)
     return _grounded_search(query, client)
 
 
