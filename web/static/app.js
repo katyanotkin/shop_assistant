@@ -120,7 +120,7 @@
     if (!slot) return;
     if (me.anonymous) {
       slot.innerHTML = `<a href="/auth/login" class="topbar-signin-btn">Sign in</a>`;
-    } else if (me.role !== "admin") {
+    } else {
       const name = esc(me.name || me.email || "");
       slot.innerHTML = `<span class="topbar-username" title="${esc(me.email || "")}">${name}</span>
         <button id="signout-btn" class="topbar-signout-btn">Sign out</button>
