@@ -17,6 +17,7 @@ Uses httpx so that follow_redirects can be controlled precisely per request.
 """
 
 import os
+import re
 
 import httpx
 import pytest
@@ -28,6 +29,12 @@ REDIRECT_CODES = (301, 302, 303, 307, 308)
 # A syntactically-valid search name that will not exist. Deliberately avoids
 # Firestore's reserved __name__ pattern so we exercise the genuine 404 path.
 UNKNOWN_SEARCH = "no_such_search_qa_probe"
+
+# Allowed visibility values the public /api/searches endpoint may return.
+VISIBILITY_VALUES = {"public", "private", "common"}
+
+# Pattern for a run-date string as returned by /api/results/<name>.
+RUN_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 # ---------------------------------------------------------------------------
 # Shared helpers / fixtures
@@ -44,9 +51,14 @@ def _get(path: str, *, follow_redirects: bool = True, timeout: int = 15) -> http
     return httpx.get(PROD_URL + path, follow_redirects=follow_redirects, timeout=timeout)
 
 
-def _post(path: str, *, timeout: int = 15) -> httpx.Response:
+def _post(path: str, *, json: dict | None = None, timeout: int = 15) -> httpx.Response:
     _skip()
-    return httpx.post(PROD_URL + path, follow_redirects=False, timeout=timeout)
+    return httpx.post(PROD_URL + path, json=json, follow_redirects=False, timeout=timeout)
+
+
+def _put(path: str, *, json: dict | None = None, timeout: int = 15) -> httpx.Response:
+    _skip()
+    return httpx.put(PROD_URL + path, json=json, follow_redirects=False, timeout=timeout)
 
 
 def _is_json(resp: httpx.Response) -> bool:
@@ -77,6 +89,23 @@ def discovered_search():
     if not name:
         pytest.skip("First search entry has no 'name' field to test against")
     return name
+
+
+@pytest.fixture(scope="module")
+def discovered_run(discovered_search):
+    """Discover the most recent run date for the discovered search.
+
+    Hits /api/results/<discovered_search> and returns the first date string,
+    or skips if no run dates exist yet for that search.
+    """
+    _skip()
+    resp = httpx.get(PROD_URL + f"/api/results/{discovered_search}", timeout=15)
+    if resp.status_code != 200:
+        pytest.skip(f"/api/results/{discovered_search} returned {resp.status_code}; cannot discover a run date")
+    dates = resp.json()
+    if not isinstance(dates, list) or not dates:
+        pytest.skip(f"No run dates available for search '{discovered_search}'")
+    return dates[0]
 
 
 # ---------------------------------------------------------------------------
@@ -203,6 +232,34 @@ class TestApiSearches:
 
 
 # ---------------------------------------------------------------------------
+# A. /api/searches — visibility field
+# ---------------------------------------------------------------------------
+
+
+class TestApiSearchesVisibility:
+    """Every search entry returned by GET /api/searches must expose a
+    'visibility' field with a recognised value."""
+
+    def test_entries_have_visibility_field(self):
+        data = _get("/api/searches").json()
+        if not isinstance(data, list) or not data:
+            pytest.skip("/api/searches returned an empty list — nothing to assert")
+        for i, item in enumerate(data):
+            assert "visibility" in item, f"/api/searches item[{i}] is missing the 'visibility' field: {item!r}"
+
+    def test_visibility_values_are_known(self):
+        data = _get("/api/searches").json()
+        if not isinstance(data, list) or not data:
+            pytest.skip("/api/searches returned an empty list — nothing to assert")
+        for i, item in enumerate(data):
+            v = item.get("visibility")
+            assert v in VISIBILITY_VALUES, (
+                f"/api/searches item[{i}] has unrecognised visibility {v!r}; "
+                f"expected one of {sorted(VISIBILITY_VALUES)}"
+            )
+
+
+# ---------------------------------------------------------------------------
 # 4. JSON API — /api/search/<name> (discovered at runtime)
 # ---------------------------------------------------------------------------
 
@@ -286,6 +343,29 @@ class TestAuthRoutes:
 
 
 # ---------------------------------------------------------------------------
+# D. /auth/login — OAuth configured: must redirect to Google
+# ---------------------------------------------------------------------------
+
+
+class TestAuthLoginOAuth:
+    """Now that OAuth is configured in production, /auth/login must issue a
+    redirect whose Location header points to accounts.google.com."""
+
+    def test_login_is_a_redirect(self):
+        resp = _get("/auth/login", follow_redirects=False)
+        assert resp.status_code in REDIRECT_CODES, (
+            f"GET /auth/login returned {resp.status_code}; expected a 3xx redirect. " "OAuth may not be configured."
+        )
+
+    def test_login_redirects_to_google(self):
+        resp = _get("/auth/login", follow_redirects=False)
+        location = resp.headers.get("location", "")
+        assert "accounts.google.com" in location, (
+            f"GET /auth/login Location header is {location!r}; " "expected it to contain 'accounts.google.com'"
+        )
+
+
+# ---------------------------------------------------------------------------
 # 7. Admin protection — guarded routes must not leak to anonymous clients
 # ---------------------------------------------------------------------------
 
@@ -315,3 +395,142 @@ class TestAdminProtection:
             401,
             403,
         ), f"{path} returned {resp.status_code} for anonymous client; expected 401/403"
+
+
+# ---------------------------------------------------------------------------
+# B. /api/results/{search_name} — run-date list
+# ---------------------------------------------------------------------------
+
+
+class TestApiResultsDates:
+    """GET /api/results/<name> must return a JSON array of date strings."""
+
+    def test_returns_200(self, discovered_search):
+        resp = _get(f"/api/results/{discovered_search}")
+        assert resp.status_code == 200, f"/api/results/{discovered_search} returned {resp.status_code}"
+
+    def test_content_type_is_json(self, discovered_search):
+        resp = _get(f"/api/results/{discovered_search}")
+        assert _is_json(resp), f"/api/results/{discovered_search} content-type is not JSON"
+
+    def test_body_is_json_array(self, discovered_search):
+        data = _get(f"/api/results/{discovered_search}").json()
+        assert isinstance(data, list), f"/api/results/{discovered_search} body is not a JSON array; got {type(data)}"
+
+    def test_entries_look_like_dates(self, discovered_search):
+        """Every element in the array must be a YYYY-MM-DD date string."""
+        data = _get(f"/api/results/{discovered_search}").json()
+        if not data:
+            pytest.skip(f"No run dates returned for '{discovered_search}' — nothing to validate")
+        for i, entry in enumerate(data):
+            assert isinstance(entry, str) and RUN_DATE_RE.match(entry), (
+                f"/api/results/{discovered_search} item[{i}] {entry!r} " "does not match YYYY-MM-DD"
+            )
+
+    def test_unknown_search_returns_404(self):
+        resp = _get(f"/api/results/{UNKNOWN_SEARCH}")
+        assert resp.status_code == 404, f"/api/results/<missing> returned {resp.status_code}; expected 404"
+
+
+# ---------------------------------------------------------------------------
+# C. /api/results/{search_name}/{run_date} — run result shape
+# ---------------------------------------------------------------------------
+
+
+class TestApiResultsRunDetail:
+    """GET /api/results/<name>/<date> must return a well-shaped result object."""
+
+    def test_returns_200(self, discovered_search, discovered_run):
+        resp = _get(f"/api/results/{discovered_search}/{discovered_run}")
+        assert resp.status_code == 200, f"/api/results/{discovered_search}/{discovered_run} returned {resp.status_code}"
+
+    def test_content_type_is_json(self, discovered_search, discovered_run):
+        resp = _get(f"/api/results/{discovered_search}/{discovered_run}")
+        assert _is_json(resp), f"/api/results/{discovered_search}/{discovered_run} content-type is not JSON"
+
+    def test_body_is_json_object(self, discovered_search, discovered_run):
+        data = _get(f"/api/results/{discovered_search}/{discovered_run}").json()
+        assert isinstance(data, dict), (
+            f"/api/results/{discovered_search}/{discovered_run} body is not a JSON object; " f"got {type(data)}"
+        )
+
+    def test_has_matches_key(self, discovered_search, discovered_run):
+        data = _get(f"/api/results/{discovered_search}/{discovered_run}").json()
+        assert "matches" in data, (
+            f"/api/results/{discovered_search}/{discovered_run} missing 'matches' key: " f"{list(data.keys())}"
+        )
+        assert isinstance(data["matches"], list), f"'matches' should be a list; got {type(data['matches'])}"
+
+    def test_has_partial_matches_key(self, discovered_search, discovered_run):
+        data = _get(f"/api/results/{discovered_search}/{discovered_run}").json()
+        assert "partial_matches" in data, (
+            f"/api/results/{discovered_search}/{discovered_run} missing 'partial_matches' key: " f"{list(data.keys())}"
+        )
+        assert isinstance(
+            data["partial_matches"], list
+        ), f"'partial_matches' should be a list; got {type(data['partial_matches'])}"
+
+    def test_match_items_have_required_fields(self, discovered_search, discovered_run):
+        """Each item in 'matches' and 'partial_matches' must carry at minimum
+        url, score, and title (title may be null but the key must be present)."""
+        data = _get(f"/api/results/{discovered_search}/{discovered_run}").json()
+        required = {"url", "score", "title"}
+        for list_key in ("matches", "partial_matches"):
+            items = data.get(list_key, [])
+            for i, item in enumerate(items):
+                missing = required - set(item.keys())
+                assert not missing, (
+                    f"/api/results/{discovered_search}/{discovered_run} "
+                    f"{list_key}[{i}] missing fields {missing}: {item!r}"
+                )
+
+
+# ---------------------------------------------------------------------------
+# E. PUT /api/feedback/{search_name}/{run_date}/batch — admin protected
+# ---------------------------------------------------------------------------
+
+
+class TestFeedbackBatchProtection:
+    """PUT /api/feedback/<name>/<date>/batch must reject unauthenticated callers."""
+
+    def test_rejects_anonymous_with_dummy_date(self, discovered_search):
+        """Use a future dummy date (2099-01-01) so the auth check fires before
+        any date-validation logic that might 404 on unknown dates."""
+        resp = _put(
+            f"/api/feedback/{discovered_search}/2099-01-01/batch",
+            json={},
+        )
+        assert resp.status_code in (401, 403), (
+            f"PUT /api/feedback/{discovered_search}/2099-01-01/batch "
+            f"returned {resp.status_code} for anonymous client; expected 401/403"
+        )
+
+
+# ---------------------------------------------------------------------------
+# F. POST /api/admin/run/{name} — admin protected
+# ---------------------------------------------------------------------------
+
+
+class TestAdminRunProtection:
+    """POST /api/admin/run/<name> must reject unauthenticated callers."""
+
+    def test_rejects_anonymous(self):
+        resp = _post("/api/admin/run/anything")
+        assert resp.status_code in (401, 403), (
+            f"POST /api/admin/run/anything returned {resp.status_code} " "for anonymous client; expected 401/403"
+        )
+
+
+# ---------------------------------------------------------------------------
+# G. POST /api/admin/search/generate — admin protected
+# ---------------------------------------------------------------------------
+
+
+class TestAdminSearchGenerateProtection:
+    """POST /api/admin/search/generate must reject unauthenticated callers."""
+
+    def test_rejects_anonymous(self):
+        resp = _post("/api/admin/search/generate", json={})
+        assert resp.status_code in (401, 403), (
+            f"POST /api/admin/search/generate returned {resp.status_code} " "for anonymous client; expected 401/403"
+        )
