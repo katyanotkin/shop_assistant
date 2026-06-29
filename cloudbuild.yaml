@@ -24,7 +24,7 @@ steps:
       - --platform=managed
       - --allow-unauthenticated
       - --set-env-vars=GOOGLE_CLOUD_PROJECT=$PROJECT_ID
-      - --set-secrets=ADMIN_PASSWORD=shop-assistant-admin-password:latest
+      - --set-secrets=ADMIN_PASSWORD=shop-assistant-admin-password:latest,GOOGLE_CLIENT_ID=shop-assistant-google-client-id:latest,GOOGLE_CLIENT_SECRET=shop-assistant-google-client-secret:latest,SESSION_SECRET=shop-assistant-session-secret:latest,BOOTSTRAP_ADMIN_EMAIL=shop-assistant-bootstrap-admin-email:latest
 
 images:
   - us-east1-docker.pkg.dev/$PROJECT_ID/shop-assistant/web:$COMMIT_SHA
