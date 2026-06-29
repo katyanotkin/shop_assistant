@@ -102,15 +102,17 @@
 
   // ── Admin UI state ────────────────────────────────────────────────────────
   function updateAdminUI() {
-    const editBtn = document.getElementById("edit-search-btn");
-    const runBtn  = document.getElementById("run-search-btn");
-    const topBtn  = document.getElementById("topbar-admin-btn");
+    const editBtn      = document.getElementById("edit-search-btn");
+    const runBtn       = document.getElementById("run-search-btn");
+    const topBtn       = document.getElementById("topbar-admin-btn");
+    const newSearchBtn = document.getElementById("btn-new-search");
     if (editBtn) editBtn.hidden = !isAdmin;
     if (runBtn)  runBtn.hidden  = !isAdmin;
     if (topBtn) {
       topBtn.textContent = isAdmin ? "Admin ✓" : "Admin";
       topBtn.classList.toggle("topbar-admin-btn--active", isAdmin);
     }
+    if (newSearchBtn) newSearchBtn.hidden = !isAdmin;
   }
 
   function updateUserSlot() {
@@ -209,21 +211,22 @@
   }
 
   // ── Edit form ─────────────────────────────────────────────────────────────
-  function fieldRow(label, name, value, type = "text") {
+  function fieldRow(label, name, value, type = "text", removeBtn = "") {
     if (type === "textarea") return `<div class="field-row">
       <label class="field-label">${label}</label>
-      <textarea name="${name}" class="field-input" rows="3">${value}</textarea></div>`;
+      <textarea name="${name}" class="field-input" rows="3">${value}</textarea>${removeBtn}</div>`;
     if (type === "number") return `<div class="field-row">
       <label class="field-label">${label}</label>
-      <input type="number" name="${name}" class="field-input" value="${value ?? ""}" step="any"></div>`;
+      <input type="number" name="${name}" class="field-input" value="${value ?? ""}" step="any">${removeBtn}</div>`;
     return `<div class="field-row">
       <label class="field-label">${label}</label>
-      <input type="text" name="${name}" class="field-input" value="${value ?? ""}"></div>`;
+      <input type="text" name="${name}" class="field-input" value="${value ?? ""}">${removeBtn}</div>`;
   }
 
   // Cosmetic preference only — unknown keys still render at end, no coupling to schema.
   const _KEY_ORDER = ["category", "gender", "material", "lining", "length", "exclude", "sizes", "max_price", "extra_notes"];
   const _TEXTAREA_KEYS = new Set(["extra_notes"]);
+  const _IMMUTABLE_KEYS = new Set(["category"]);
   function _labelFor(k) { return k.replace(/_/g, " ").replace(/^./, c => c.toUpperCase()); }
   function _orderCriteriaKeys(keys) {
     return [...keys].sort((a, b) => {
@@ -234,6 +237,8 @@
 
   function criteriaRow(key, value) {
     const label = _labelFor(key);
+    const removeBtn = _IMMUTABLE_KEYS.has(key) ? "" :
+      `<button type="button" class="btn-field-remove" aria-label="Remove ${label}">×</button>`;
     if (Array.isArray(value)) {
       return `<div class="field-row">
         <label class="field-label">${label}</label>
@@ -241,10 +246,11 @@
           <div class="chip-list"></div>
           <input type="text" class="chip-input field-input" placeholder="Add…" autocomplete="off">
         </div>
+        ${removeBtn}
       </div>`;
     }
     const type = _TEXTAREA_KEYS.has(key) ? "textarea" : typeof value === "number" ? "number" : "text";
-    return fieldRow(label, `criteria.${key}`, value ?? "", type);
+    return fieldRow(label, `criteria.${key}`, value ?? "", type, removeBtn);
   }
 
   function bindCriteriaChips(field) {
@@ -334,6 +340,9 @@
 
   function bindEdit(form, opts = {}) {
     form.querySelectorAll(".chip-field").forEach(bindCriteriaChips);
+    form.querySelectorAll(".btn-field-remove").forEach(btn => {
+      btn.addEventListener("click", () => btn.closest(".field-row").remove());
+    });
     const msg        = form.querySelector(".save-msg");
     const setMsg     = (text, cls) => { msg.textContent = text; msg.className = `save-msg ${cls}`; };
     const btnSave    = form.querySelector(".btn-save");
@@ -348,6 +357,7 @@
         await api(`/api/admin/search/${cfg.search_name}`, { method: "PUT", body: cfg });
         setMsg("Saved.", "ok");
         setTimeout(() => setMsg("", ""), 2500);
+        opts.onSave?.(cfg.search_name)?.catch(() => {});
       } catch (e) { setMsg(e.message, "err"); }
     });
 
@@ -655,6 +665,112 @@
     if (activeSearch) loadRun(activeSearch, dateSelect.value);
   });
 
+  // ── Sidebar builder ───────────────────────────────────────────────────────
+  function buildSearchList(searches) {
+    const common     = searches.filter(s => s.visibility !== "private");
+    const mine       = searches.filter(s => s.visibility === "private" && s.owned);
+    const showLabels = mine.length > 0;
+
+    function itemHTML(s) {
+      return `<li role="option" tabindex="0" data-name="${esc(s.name)}" class="${s.active ? "" : "inactive-search"}">
+        <span>${esc(s.name.replace(/_/g, " "))}</span>
+        <button class="copy-link-btn" title="Copy link" aria-label="Copy link to ${esc(s.name)}">⎘</button>
+      </li>`;
+    }
+
+    let html = "";
+    if (showLabels && common.length) html += `<li class="search-group-label">Public</li>`;
+    html += common.map(itemHTML).join("");
+    if (mine.length) {
+      html += `<li class="search-group-label">My searches</li>`;
+      html += mine.map(itemHTML).join("");
+    }
+    searchList.innerHTML = html;
+
+    searchList.querySelectorAll("li[role='option']").forEach(el => {
+      el.addEventListener("click", () => selectSearch(el.dataset.name));
+      el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") selectSearch(el.dataset.name); });
+    });
+
+    searchList.querySelectorAll(".copy-link-btn").forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        const name = btn.closest("li").dataset.name;
+        navigator.clipboard.writeText(`${location.origin}/${name}`)
+          .then(() => { btn.textContent = "✓"; setTimeout(() => { btn.textContent = "⎘"; }, 1500); })
+          .catch(() => { btn.textContent = "✗"; setTimeout(() => { btn.textContent = "⎘"; }, 1500); });
+      });
+    });
+  }
+
+  async function refreshSidebar(selectName) {
+    const searches = await api("/api/searches");
+    buildSearchList(searches);
+    if (selectName) selectSearch(selectName);
+  }
+
+  function renderGenerate() {
+    return `<div class="edit-panel-header">
+        <span class="edit-panel-title">New search</span>
+        <button id="close-generate-btn" class="edit-panel-close" aria-label="Close">×</button>
+      </div>
+      <div class="generate-panel">
+        <div class="field-row">
+          <label class="field-label">Search name</label>
+          <input type="text" id="gen-name" class="field-input" placeholder="e.g. wool_coat (lowercase, underscores)">
+        </div>
+        <div class="field-row">
+          <label class="field-label">Describe what you want</label>
+          <textarea id="gen-desc" class="field-input" rows="6" placeholder="Describe what you want — include any relevant details: category, gender, material, size, max price, preferred shops, things to exclude…"></textarea>
+        </div>
+        <div class="action-row">
+          <button id="gen-btn" class="btn-primary">Generate config</button>
+          <span id="gen-msg" class="save-msg"></span>
+        </div>
+      </div>`;
+  }
+
+  function bindGenerate() {
+    document.getElementById("close-generate-btn").addEventListener("click", () => { editPanel.hidden = true; });
+    const btn    = document.getElementById("gen-btn");
+    const msg    = document.getElementById("gen-msg");
+    const setMsg = (text, cls) => { msg.textContent = text; msg.className = `save-msg ${cls}`; };
+
+    btn.addEventListener("click", async () => {
+      const name = document.getElementById("gen-name").value.trim().toLowerCase().replace(/\s+/g, "_");
+      const desc = document.getElementById("gen-desc").value.trim();
+      if (!name) { setMsg("Search name required.", "err"); return; }
+      if (desc.length < 10) { setMsg("Description too short.", "err"); return; }
+
+      btn.disabled = true;
+      setMsg("Generating…", "");
+      try {
+        const cfg = await api("/api/admin/search/generate", { method: "POST", body: { search_name: name, description: desc } });
+        editPanel.innerHTML = `<div class="edit-panel-header">
+            <span class="edit-panel-title">${esc(cfg.search_name.replace(/_/g, " "))}</span>
+            <button id="close-edit-btn" class="edit-panel-close" aria-label="Close">\xd7</button>
+          </div>
+          <p class="save-msg ok" style="margin-bottom:12px">Generated — review, then Save or Save &amp; Run.</p>` +
+          renderEdit(cfg) + renderReferences();
+        document.getElementById("close-edit-btn").addEventListener("click", () => { editPanel.hidden = true; });
+        const form = editPanel.querySelector(".edit-form");
+        bindEdit(form, {
+          onSave: n => refreshSidebar(n),
+          onAfterRun: async () => {
+            const dates = await api(`/api/results/${encodeURIComponent(cfg.search_name)}`);
+            dateSelect.innerHTML = dates.map(d => `<option value="${d}">${d}</option>`).join("");
+            toolbar.hidden = false;
+            await loadRun(cfg.search_name, dates[0]);
+          },
+        });
+        bindReferences(editPanel.querySelector(".references-card"), form, name);
+      } catch (e) {
+        setMsg(e.message, "err");
+        btn.disabled = false;
+      }
+    });
+  }
+
   // ── Init ─────────────────────────────────────────────────────────────────
   async function init() {
     try {
@@ -666,39 +782,12 @@
       isAdmin = me.role === "admin";
       updateAdminUI();
       updateUserSlot();
-      const common = searches.filter(s => s.visibility !== "private");
-      const mine   = searches.filter(s => s.visibility === "private" && s.owned);
-      const showLabels = mine.length > 0;
+      buildSearchList(searches);
 
-      function itemHTML(s) {
-        return `<li role="option" tabindex="0" data-name="${s.name}" class="${s.active ? "" : "inactive-search"}">
-          <span>${s.name.replace(/_/g, " ")}</span>
-          <button class="copy-link-btn" title="Copy link" aria-label="Copy link to ${s.name}">⎘</button>
-        </li>`;
-      }
-
-      let html = "";
-      if (showLabels && common.length) html += `<li class="search-group-label">Public</li>`;
-      html += common.map(itemHTML).join("");
-      if (mine.length) {
-        html += `<li class="search-group-label">My searches</li>`;
-        html += mine.map(itemHTML).join("");
-      }
-      searchList.innerHTML = html;
-
-      searchList.querySelectorAll("li[role='option']").forEach(el => {
-        el.addEventListener("click", () => selectSearch(el.dataset.name));
-        el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") selectSearch(el.dataset.name); });
-      });
-
-      searchList.querySelectorAll(".copy-link-btn").forEach(btn => {
-        btn.addEventListener("click", e => {
-          e.stopPropagation();
-          const name = btn.closest("li").dataset.name;
-          navigator.clipboard.writeText(`${location.origin}/${name}`)
-            .then(() => { btn.textContent = "✓"; setTimeout(() => { btn.textContent = "⎘"; }, 1500); })
-            .catch(() => { btn.textContent = "✗"; setTimeout(() => { btn.textContent = "⎘"; }, 1500); });
-        });
+      document.getElementById("btn-new-search")?.addEventListener("click", () => {
+        editPanel.hidden = false;
+        editPanel.innerHTML = renderGenerate();
+        bindGenerate();
       });
 
       const fromPath = decodeURIComponent(window.location.pathname.slice(1));

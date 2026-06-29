@@ -130,14 +130,14 @@ Every account has one of three roles:
 
 | Capability | Visitor (no account) | Free | Premium | Admin |
 |---|---|---|---|---|
-| Browse common results | ✓ | ✓ | ✓ | ✓ |
+| Browse public results | ✓ | ✓ | ✓ | ✓ |
 | Sign in | — | ✓ | ✓ | ✓ |
 | Create 1 private search | — | ✓ | ✓ | ✓ |
 | Run own search (within 1 month of creation) | — | ✓ | ✓ | ✓ |
 | Create unlimited searches | — | — | ✓ | ✓ |
 | Run searches after 1 month | — | — | ✓ | ✓ |
 | View own private results & leave feedback | — | ✓ | ✓ | ✓ |
-| Promote any search to common | — | — | — | ✓ |
+| Promote any search to public | — | — | — | ✓ |
 | View all searches (any owner) | — | — | — | ✓ |
 | View all users & manage roles | — | — | — | ✓ |
 | Edit any search config | — | — | — | ✓ |
@@ -146,7 +146,7 @@ Every account has one of three roles:
 
 Users sign in with Google. Each user's searches and results are private — only visible to that user and to the admin.
 
-**Free tier** gives users 1 private search. They can create it, configure it, and run it for up to one month from the date the search was created. After one month, runs are disabled; the search and its results remain readable. Promotion to common does not change or reset the run window — the same 1-month clock applies regardless.
+**Free tier** gives users 1 private search. They can create it, configure it, and run it for up to one month from the date the search was created. After one month, runs are disabled; the search and its results remain readable. Promotion to public does not change or reset the run window — the same 1-month clock applies regardless.
 
 When a free user tries a gated action the UI shows: *"You're on the Free plan. Contact us to get full access."*
 
@@ -154,7 +154,7 @@ When a free user tries a gated action the UI shows: *"You're on the Free plan. C
 
 ### Common results
 
-The admin can promote any search — their own or a user's — to **common**. Promoted searches appear on the public results page as a curated showcase:
+The admin can promote any search — their own or a user's — to **public**. Promoted searches appear on the public results page as a curated showcase:
 
 - The search config is visible to everyone but not editable by visitors or other users.
 - Results appear exactly as they do for the owner.
@@ -170,6 +170,6 @@ Admin is a full superuser:
 
 - Sees all searches from all users, not just their own.
 - Can edit, run, or delete any search regardless of owner.
-- Promotes and demotes any search between private and common.
+- Promotes and demotes any search between private and public.
 - Views the user list and changes any user's role.
 - Cannot accidentally remove the last admin account (the action is blocked).
