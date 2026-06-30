@@ -126,7 +126,12 @@
         <button id="signout-btn" class="topbar-signout-btn">Sign out</button>
         <button id="delete-account-btn" class="topbar-signout-btn topbar-delete-btn">Delete account</button>`;
       document.getElementById("signout-btn")?.addEventListener("click", async () => {
-        try { await fetch("/auth/logout", { method: "POST", credentials: "same-origin" }); } catch {}
+        try {
+          await Promise.all([
+            fetch("/auth/logout", { method: "POST", credentials: "same-origin" }),
+            fetch("/api/admin/logout", { method: "POST", credentials: "same-origin" }),
+          ]);
+        } catch {}
         window.location.href = "/";
       });
       document.getElementById("delete-account-btn")?.addEventListener("click", async () => {
