@@ -120,6 +120,32 @@ def test_admin_save_search_with_valid_cookie(authed_client):
     assert r.status_code == 200
 
 
+# ── POST /api/admin/logout ───────────────────────────────────────────────────
+
+
+def test_admin_logout_returns_200(client):
+    r = client.post("/api/admin/logout")
+    assert r.status_code == 200
+    assert r.json() == {"ok": True}
+
+
+def test_admin_logout_clears_sa_admin_cookie(authed_client):
+    authed_client.post("/api/admin/logout")
+    r = authed_client.get("/api/admin/me")
+    assert r.json() == {"admin": False}
+
+
+def test_admin_logout_works_without_auth(client):
+    r = client.post("/api/admin/logout")
+    assert r.status_code == 200
+
+
+def test_admin_logout_sets_secure_flag_on_https(client):
+    r = client.post("/api/admin/logout", headers={"x-forwarded-proto": "https"})
+    set_cookie = r.headers.get("set-cookie", "")
+    assert "Secure" in set_cookie
+
+
 # ── GET /api/admin/me ─────────────────────────────────────────────────────────
 
 

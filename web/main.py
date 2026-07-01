@@ -129,8 +129,10 @@ def auth_callback(
 
 
 @app.post("/auth/logout")
-def auth_logout_user(response: Response):
-    response.delete_cookie("sa_session", samesite="lax")
+def auth_logout_user(request: Request, response: Response):
+    https = _is_https(request)
+    response.delete_cookie("sa_session", samesite="lax", secure=https)
+    response.delete_cookie("sa_admin", httponly=True, samesite="strict", secure=https)
     return {"ok": True}
 
 
@@ -153,8 +155,10 @@ def search_page(search_name: str):
 
 @app.get("/api/me")
 def get_me(sa_admin: str | None = Cookie(default=None), sa_session: str | None = Cookie(default=None)):
-    if _settings.admin_password and sa_admin == _admin_token():
-        return {"role": "admin", "anonymous": False}
+    if _settings.admin_password and sa_admin == _admin_token() and not sa_session:
+        # Password-only admin: role is admin but no Google identity yet.
+        # Return anonymous so the topbar shows "Sign in" rather than an empty name badge.
+        return {"role": "admin", "anonymous": True}
     if sa_session:
         user = verify_session_token(sa_session, _settings.session_secret)
         if user:
@@ -240,8 +244,10 @@ async def admin_login(request: Request):
 
 
 @app.post("/api/admin/logout")
-def admin_logout(response: Response):
-    response.delete_cookie("sa_admin", httponly=True, samesite="strict")
+def admin_logout(request: Request, response: Response):
+    https = _is_https(request)
+    response.delete_cookie("sa_admin", httponly=True, samesite="strict", secure=https)
+    response.delete_cookie("sa_session", samesite="lax", secure=https)
     return {"ok": True}
 
 

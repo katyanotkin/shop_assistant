@@ -75,10 +75,12 @@ def test_me_returns_admin_when_admin_cookie_set(client):
     r = client.get("/api/me")
     data = r.json()
     assert data["role"] == "admin"
-    assert data["anonymous"] is False
+    # Password-only admin has no Google identity — anonymous=True so the
+    # topbar shows "Sign in" rather than an empty name badge.
+    assert data["anonymous"] is True
 
 
-def test_me_admin_cookie_takes_precedence_over_session(client):
+def test_me_admin_cookie_with_session_returns_session_identity(client):
     import hashlib
 
     admin_token = hashlib.sha256(b"sa:hunter2").hexdigest()
@@ -86,7 +88,11 @@ def test_me_admin_cookie_takes_precedence_over_session(client):
     client.cookies.set("sa_admin", admin_token)
     client.cookies.set("sa_session", session_token)
     r = client.get("/api/me")
-    assert r.json()["role"] == "admin"
+    # When both cookies are present the OAuth session resolves the identity.
+    # The admin role comes from the session user's Firestore role, not sa_admin.
+    data = r.json()
+    assert data["anonymous"] is False
+    assert data["role"] == FREE_USER["role"]
 
 
 # ── GET /auth/login ───────────────────────────────────────────────────────────

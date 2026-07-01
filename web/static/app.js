@@ -108,10 +108,7 @@
     const newSearchBtn = document.getElementById("btn-new-search");
     if (editBtn) editBtn.hidden = !isAdmin;
     if (runBtn)  runBtn.hidden  = !isAdmin;
-    if (topBtn) {
-      topBtn.textContent = isAdmin ? "Admin ✓" : "Admin";
-      topBtn.classList.toggle("topbar-admin-btn--active", isAdmin);
-    }
+    if (topBtn) topBtn.hidden = !isAdmin;
     if (newSearchBtn) newSearchBtn.hidden = !isAdmin;
   }
 
