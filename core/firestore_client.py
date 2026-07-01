@@ -101,6 +101,44 @@ def save_feedback_batch(search_name: str, run_date: str, items: list[tuple[str, 
         doc_ref.set({"feedback": {_url_key(url): {"url": url, "text": text} for url, text in items}}, merge=True)
 
 
+def get_user(email: str) -> dict | None:
+    from core.auth import user_doc_id
+
+    doc = get_db().collection("users").document(user_doc_id(email)).get()
+    return doc.to_dict() if doc.exists else None
+
+
+def list_users() -> list[dict]:
+    docs = get_db().collection("users").stream()
+    return [d.to_dict() | {"uid": d.id} for d in docs]
+
+
+def update_user_role(uid: str, role: str) -> None:
+    try:
+        get_db().collection("users").document(uid).update({"role": role})
+    except NotFound:
+        raise ValueError(f"User {uid} not found")
+
+
+def list_user_searches(owner_id: str) -> list[dict]:
+    return [
+        d.to_dict()
+        for d in get_db()
+        .collection("shop_searches")
+        .where(filter=firestore.FieldFilter("owner_id", "==", owner_id))
+        .limit(1)
+        .stream()
+    ]
+
+
+def update_search_visibility(search_name: str, visibility: str) -> None:
+    get_db().collection("shop_searches").document(search_name).update({"visibility": visibility})
+
+
+def delete_search_config(search_name: str) -> None:
+    get_db().collection("shop_searches").document(search_name).delete()
+
+
 def upsert_user(email: str, display_name: str, photo_url: str, bootstrap_admin_email: str | None = None) -> dict:
     from datetime import datetime, timezone
 

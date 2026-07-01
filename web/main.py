@@ -1,4 +1,6 @@
 import hashlib
+import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Request
@@ -216,22 +218,31 @@ def get_me(sa_admin: str | None = Cookie(default=None), sa_session: str | None =
     if sa_session:
         user = verify_session_token(sa_session, _settings.session_secret)
         if user:
-            return {"role": user["role"], "anonymous": False, "name": user.get("name"), "email": user.get("sub")}
+            # Re-read role from Firestore so admin promotions take effect without re-login.
+            db_user = fc.get_user(user["sub"])
+            role = db_user["role"] if (isinstance(db_user, dict) and "role" in db_user) else user["role"]
+            return {"role": role, "anonymous": False, "name": user.get("name"), "email": user.get("sub")}
     return {"role": "free", "anonymous": True}
 
 
 @app.get("/api/searches")
-def get_searches(sa_admin: str | None = Cookie(default=None)):
+def get_searches(
+    sa_admin: str | None = Cookie(default=None),
+    sa_session: str | None = Cookie(default=None),
+):
     configs = fc.list_searches(active_only=False)
-    include_private = bool(_settings.admin_password and sa_admin == _admin_token())
+    is_admin = _is_admin(sa_admin, sa_session)
+    user = verify_session_token(sa_session, _settings.session_secret) if sa_session else None
+    user_email = user["sub"] if user else None
     return [
         {
             "name": c["search_name"],
             "active": c.get("active", True),
             "visibility": c.get("visibility", "public"),
+            "owned": c.get("owner_id") == user_email if user_email else False,
         }
         for c in configs
-        if include_private or c.get("visibility", "public") == "public"
+        if is_admin or c.get("visibility", "public") == "public" or (user_email and c.get("owner_id") == user_email)
     ]
 
 
@@ -348,4 +359,143 @@ class RunOptions(BaseModel):
 @app.post("/api/admin/run/{name}", dependencies=[Depends(_require_admin)])
 def admin_run_search(name: str, options: RunOptions = RunOptions()):
     result = run_search(name, _settings, learn=options.learn)
+    return {"ok": True, "matches": len(result.matches), "partial": len(result.partial_matches)}
+
+
+# ── Admin: users + search visibility ─────────────────────────────────────────
+
+
+class UpdateRoleBody(BaseModel):
+    role: str = Field(pattern=r"^(free|premium|admin)$")
+
+
+class UpdateVisibilityBody(BaseModel):
+    visibility: str = Field(pattern=r"^(public|private)$")
+
+
+@app.get("/api/admin/users", dependencies=[Depends(_require_admin)])
+def admin_list_users():
+    return fc.list_users()
+
+
+@app.patch("/api/admin/user/{uid}/role", dependencies=[Depends(_require_admin)])
+def admin_update_user_role(uid: str, body: UpdateRoleBody):
+    try:
+        fc.update_user_role(uid, body.role)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"ok": True}
+
+
+@app.patch("/api/admin/search/{name}/visibility", dependencies=[Depends(_require_admin)])
+def admin_update_search_visibility(name: str, body: UpdateVisibilityBody):
+    config = fc.load_search_config(name)
+    if not config:
+        raise HTTPException(status_code=404, detail="Search not found")
+    fc.update_search_visibility(name, body.visibility)
+    return {"ok": True}
+
+
+# ── User (authenticated, non-admin) ──────────────────────────────────────────
+
+
+_SEARCH_NAME_RE = re.compile(r"^[a-z0-9_]{1,64}$")
+
+
+def _session_user(sa_session: str | None) -> dict | None:
+    """Decode session JWT and refresh role from Firestore so promotions take effect without re-login."""
+    if not sa_session:
+        return None
+    user = verify_session_token(sa_session, _settings.session_secret)
+    if not user:
+        return None
+    db_user = fc.get_user(user["sub"])
+    if isinstance(db_user, dict) and "role" in db_user:
+        user = {**user, "role": db_user["role"]}
+    return user
+
+
+@app.post("/api/user/search/generate")
+def user_generate_search(body: GenerateBody, sa_session: str | None = Cookie(default=None)):
+    user = _session_user(sa_session)
+    if not user:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    if user.get("role") == "free":
+        owned = {s["search_name"] for s in fc.list_user_searches(user["sub"])}
+        if owned and body.search_name not in owned:
+            raise HTTPException(status_code=403, detail="Free plan allows one search. Contact us to upgrade.")
+    try:
+        config = generate_search_config(body.description, body.search_name, _settings.google_cloud_project)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    config["description"] = body.description
+    config["visibility"] = "private"
+    config["owner_id"] = user["sub"]
+    return config
+
+
+@app.put("/api/user/search/{name}")
+async def user_save_search(name: str, request: Request, sa_session: str | None = Cookie(default=None)):
+    if not _SEARCH_NAME_RE.match(name):
+        raise HTTPException(
+            status_code=422, detail="Invalid search name: lowercase letters, digits, underscores only (max 64 chars)"
+        )
+    user = _session_user(sa_session)
+    if not user:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    config = await request.json()
+    existing = fc.load_search_config(name)
+    if existing and existing.get("owner_id") != user["sub"]:
+        raise HTTPException(status_code=403, detail="Not your search")
+    if not existing and user.get("role") == "free":
+        if fc.list_user_searches(user["sub"]):
+            raise HTTPException(status_code=403, detail="Free plan allows one search. Contact us to upgrade.")
+    config["search_name"] = name
+    config["owner_id"] = user["sub"]
+    config["visibility"] = existing.get("visibility", "private") if existing else "private"
+    config["created_at"] = (
+        existing["created_at"] if existing and "created_at" in existing else datetime.now(timezone.utc)
+    )
+    fc.save_search_config(config)
+    return {"ok": True}
+
+
+@app.delete("/api/user/search/{name}")
+def user_delete_search(name: str, sa_session: str | None = Cookie(default=None)):
+    user = _session_user(sa_session)
+    if not user:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    config = fc.load_search_config(name)
+    if not config:
+        raise HTTPException(status_code=404, detail="Search not found")
+    if config.get("owner_id") != user["sub"]:
+        raise HTTPException(status_code=403, detail="Not your search")
+    fc.delete_search_config(name)
+    return {"ok": True}
+
+
+@app.post("/api/user/search/{name}/run")
+def user_run_search(name: str, sa_session: str | None = Cookie(default=None)):
+    user = _session_user(sa_session)
+    if not user:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    config = fc.load_search_config(name)
+    if not config:
+        raise HTTPException(status_code=404, detail="Search not found")
+    is_owner = config.get("owner_id") == user["sub"]
+    if not is_owner and user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Not your search")
+    if user.get("role") == "free" and is_owner:
+        created_at = config.get("created_at")
+        if created_at:
+            if not isinstance(created_at, datetime):
+                created_at = datetime.fromisoformat(str(created_at))
+            if not created_at.tzinfo:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+            if (datetime.now(timezone.utc) - created_at).days > 30:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Free plan: 30-day run window has expired. Contact us to upgrade.",
+                )
+    result = run_search(name, _settings, learn=True)
     return {"ok": True, "matches": len(result.matches), "partial": len(result.partial_matches)}

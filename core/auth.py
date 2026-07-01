@@ -30,6 +30,7 @@ def google_auth_url(client_id: str, redirect_uri: str, state: str) -> str:
         "scope": _SCOPES,
         "state": state,
         "access_type": "online",
+        "prompt": "select_account",
     }
     return f"{_GOOGLE_AUTH_URL}?{urlencode(params)}"
 

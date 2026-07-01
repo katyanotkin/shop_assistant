@@ -173,7 +173,8 @@ body {
 
 .sidebar.collapsed .search-list,
 .sidebar.collapsed .sidebar-footer,
-.sidebar.collapsed .sidebar-label {
+.sidebar.collapsed .sidebar-label,
+.sidebar.collapsed #new-search-container {
   display: none;
 }
 

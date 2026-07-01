@@ -496,6 +496,88 @@
     });
   }
 
+  // ── Config header (search name + visibility toggle) ──────────────────────
+
+  function renderConfigHeader(cfg) {
+    const vis = cfg.visibility || "public";
+    return `<div class="config-header-row">
+      <span class="config-search-name">${esc(cfg.search_name.replace(/_/g, " "))}</span>
+      <button type="button" class="btn-visibility btn-run" data-name="${esc(cfg.search_name)}" data-visibility="${esc(vis)}">
+        ${vis === "public" ? "Make private" : "Make public"}
+      </button>
+      <span class="visibility-msg save-msg"></span>
+    </div>`;
+  }
+
+  function bindVisibilityToggle(headerRow) {
+    const btn   = headerRow?.querySelector(".btn-visibility");
+    const msgEl = headerRow?.querySelector(".visibility-msg");
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+      const name    = btn.dataset.name;
+      const current = btn.dataset.visibility;
+      const next    = current === "public" ? "private" : "public";
+      btn.disabled  = true;
+      try {
+        await api("PATCH", `/api/admin/search/${encodeURIComponent(name)}/visibility`, { visibility: next });
+        btn.dataset.visibility = next;
+        btn.textContent        = next === "public" ? "Make private" : "Make public";
+        if (msgEl) { msgEl.textContent = "Saved"; msgEl.className = "visibility-msg save-msg ok"; setTimeout(() => { msgEl.textContent = ""; }, 2500); }
+      } catch (e) {
+        if (msgEl) { msgEl.textContent = e.message; msgEl.className = "visibility-msg save-msg err"; }
+      }
+      btn.disabled = false;
+    });
+  }
+
+  // ── Users tab ─────────────────────────────────────────────────────────────
+
+  function renderUsersTable(users) {
+    if (!users.length) return `<p class="empty-state">No users yet.</p>`;
+    return `<table class="users-table">
+      <thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead>
+      <tbody>${users.map(u => `<tr>
+        <td>${esc(u.display_name || "")}</td>
+        <td>${esc(u.email || "")}</td>
+        <td>
+          <select class="role-select" data-uid="${esc(u.uid)}">
+            ${["free", "premium", "admin"].map(r => `<option value="${r}" ${u.role === r ? "selected" : ""}>${r}</option>`).join("")}
+          </select>
+          <span class="role-saved-msg save-msg"></span>
+        </td>
+      </tr>`).join("")}</tbody>
+    </table>`;
+  }
+
+  async function loadUsers() {
+    activeName = null;
+    searchList.querySelectorAll("li").forEach(el => el.classList.remove("active"));
+    configContent.innerHTML   = `<p class="loading">Loading users…</p>`;
+    resultsPanel.innerHTML    = `<p class="empty-state">Select a search to view results.</p>`;
+    try {
+      const users = await api("GET", "/api/admin/users");
+      configContent.innerHTML = renderUsersTable(users);
+      configContent.querySelectorAll(".role-select").forEach(select => {
+        select.addEventListener("change", async () => {
+          const uid   = select.dataset.uid;
+          const role  = select.value;
+          const msgEl = select.parentElement.querySelector(".role-saved-msg");
+          select.disabled = true;
+          if (msgEl) { msgEl.textContent = "Saving…"; msgEl.className = "role-saved-msg save-msg"; }
+          try {
+            await api("PATCH", `/api/admin/user/${encodeURIComponent(uid)}/role`, { role });
+            if (msgEl) { msgEl.textContent = "Saved"; msgEl.className = "role-saved-msg save-msg ok"; setTimeout(() => { msgEl.textContent = ""; }, 2500); }
+          } catch (e) {
+            if (msgEl) { msgEl.textContent = e.message; msgEl.className = "role-saved-msg save-msg err"; }
+          }
+          select.disabled = false;
+        });
+      });
+    } catch (e) {
+      configContent.innerHTML = `<p class="empty-state">Failed to load users: ${esc(e.message)}</p>`;
+    }
+  }
+
   async function refreshSidebar(selectName) {
     const searches = await api("GET", "/api/admin/searches");
     searchList.innerHTML = searches.map(s =>
@@ -526,12 +608,13 @@
 
     try {
       const cfg = await api("GET", `/api/admin/search/${name}`);
-      configContent.innerHTML= renderEdit(cfg) + renderReferences();
+      configContent.innerHTML = renderConfigHeader(cfg) + renderEdit(cfg) + renderReferences();
+      bindVisibilityToggle(configContent.querySelector(".config-header-row"));
       const form = configPanel.querySelector(".edit-form");
       bindEdit(form);
       bindReferences(configPanel.querySelector(".references-card"), form, name);
     } catch (e) {
-      configContent.innerHTML= `<p class="empty-state">${e.message}</p>`;
+      configContent.innerHTML = `<p class="empty-state">${esc(e.message)}</p>`;
     }
 
     loadResults(name);
@@ -581,6 +664,8 @@
       resultsPanel.innerHTML = `<p class="empty-state">Save the new search, then run it to see results.</p>`;
       bindGenerate();
     });
+
+    document.getElementById("btn-users")?.addEventListener("click", loadUsers);
 
     document.getElementById("btn-logout")?.addEventListener("click", async () => {
       try { await fetch("/auth/logout", { method: "POST", credentials: "same-origin" }); } catch {}

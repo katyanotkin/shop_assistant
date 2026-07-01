@@ -1,12 +1,18 @@
 (() => {
-  const searchList   = document.getElementById("search-list");
-  const toolbar      = document.getElementById("toolbar");
-  const dateSelect   = document.getElementById("date-select");
-  const resultsPanel = document.getElementById("results-panel");
+  const searchList        = document.getElementById("search-list");
+  const toolbar           = document.getElementById("toolbar");
+  const dateSelect        = document.getElementById("date-select");
+  const resultsPanel      = document.getElementById("results-panel");
+  const createPanel       = document.getElementById("create-panel");
+  const runSearchBtn      = document.getElementById("run-search-btn");
+  const newSearchContainer = document.getElementById("new-search-container");
 
   let activeSearch = null;
   let me           = { role: "free", anonymous: true };
   let _loadSeq     = 0;
+  let _searches    = [];
+  let _savedToolbarVisible  = false;
+  let _savedCriteriaVisible = false;
 
   // ── Sidebar collapse ──────────────────────────────────────────────────────
   const sidebarEl     = document.getElementById("sidebar");
@@ -101,6 +107,28 @@
     }
   }
 
+  // ── New search button ─────────────────────────────────────────────────────
+  function updateNewSearchBtn(searches) {
+    if (!newSearchContainer) return;
+    const mine = searches.filter(s => s.owned);
+    if (me.anonymous) {
+      newSearchContainer.hidden = true;
+      return;
+    }
+    if (me.role === "admin") {
+      newSearchContainer.innerHTML = `<a href="/admin" class="btn-new-search">Admin panel</a>`;
+      newSearchContainer.hidden = false;
+      return;
+    }
+    if (me.role === "premium" || (me.role === "free" && mine.length === 0)) {
+      newSearchContainer.innerHTML = `<button id="new-search-btn" class="btn-new-search">+ New search</button>`;
+      newSearchContainer.hidden = false;
+      document.getElementById("new-search-btn").addEventListener("click", openCreatePanel);
+      return;
+    }
+    newSearchContainer.hidden = true;
+  }
+
   // ── Criteria bar ─────────────────────────────────────────────────────────
   function renderCriteriaBar(config) {
     const bar = document.getElementById("criteria-bar");
@@ -193,6 +221,9 @@
 
   async function selectSearch(name, { replace = false } = {}) {
     if (activeSearch === name) return;
+
+    if (!createPanel.hidden) closeCreatePanel();
+
     activeSearch = name;
     if (replace) history.replaceState({}, "", "/" + encodeURIComponent(name));
     else         history.pushState({}, "", "/" + encodeURIComponent(name));
@@ -201,9 +232,11 @@
     document.querySelectorAll(".search-list li").forEach(el =>
       el.classList.toggle("active", el.dataset.name === name));
 
+    runSearchBtn.hidden = true;
     toolbar.hidden = true;
     const criteriaBar = document.getElementById("criteria-bar");
     if (criteriaBar) criteriaBar.hidden = true;
+    resultsPanel.hidden = false;
     resultsPanel.innerHTML = `<p class="loading">Loading dates…</p>`;
     try {
       const [dates, config] = await Promise.all([
@@ -213,6 +246,8 @@
       dateSelect.innerHTML = dates.map(d => `<option value="${d}">${d}</option>`).join("");
       toolbar.hidden = false;
       if (config) renderCriteriaBar(config);
+      const owned = _searches.find(s => s.name === name)?.owned || false;
+      runSearchBtn.hidden = !owned;
       await loadRun(name, dates[0]);
     } catch {
       resultsPanel.innerHTML = `<p class="empty-state">No runs found for this search.</p>`;
@@ -223,10 +258,152 @@
     if (activeSearch) loadRun(activeSearch, dateSelect.value);
   });
 
+  runSearchBtn.addEventListener("click", async () => {
+    const name = activeSearch;
+    if (!name) return;
+    runSearchBtn.disabled = true;
+    const origText = runSearchBtn.textContent;
+    runSearchBtn.textContent = "Running…";
+    try {
+      await api(`/api/user/search/${encodeURIComponent(name)}/run`, { method: "POST" });
+      const dates = await api(`/api/results/${encodeURIComponent(name)}`);
+      dateSelect.innerHTML = dates.map(d => `<option value="${d}">${d}</option>`).join("");
+      if (dates.length) await loadRun(name, dates[0]);
+    } catch (e) {
+      resultsPanel.innerHTML = `<p class="empty-state">Run failed: ${esc(e.message)}</p>`;
+    } finally {
+      runSearchBtn.textContent = origText;
+      runSearchBtn.disabled = false;
+    }
+  });
+
+  // ── Create search panel ───────────────────────────────────────────────────
+  function openCreatePanel() {
+    _savedToolbarVisible = !toolbar.hidden;
+    const criteriaBar = document.getElementById("criteria-bar");
+    _savedCriteriaVisible = criteriaBar ? !criteriaBar.hidden : false;
+    toolbar.hidden = true;
+    if (criteriaBar) criteriaBar.hidden = true;
+    resultsPanel.hidden = true;
+    createPanel.innerHTML = renderCreatePanel();
+    createPanel.hidden = false;
+    bindCreatePanel();
+  }
+
+  function closeCreatePanel() {
+    createPanel.hidden = true;
+    resultsPanel.hidden = false;
+    if (_savedToolbarVisible) toolbar.hidden = false;
+    const criteriaBar = document.getElementById("criteria-bar");
+    if (criteriaBar && _savedCriteriaVisible) criteriaBar.hidden = false;
+  }
+
+  function renderCreatePanel() {
+    return `<div class="generate-panel">
+      <h2 class="generate-title">New search</h2>
+      <div class="field-row">
+        <label class="field-label" for="cs-name">Name</label>
+        <input type="text" id="cs-name" class="field-input" placeholder="e.g. wool_coat" autocomplete="off">
+      </div>
+      <div class="field-row">
+        <label class="field-label" for="cs-desc">Description</label>
+        <textarea id="cs-desc" class="field-input" rows="6" placeholder="Describe what you want — category, material, size, max price, shops to search…"></textarea>
+      </div>
+      <div class="action-row">
+        <button id="cs-generate-btn" class="btn-primary">Generate</button>
+        <button id="cs-cancel-btn" class="btn-run">Cancel</button>
+        <span id="cs-msg" class="save-msg"></span>
+      </div>
+      <div id="cs-preview" hidden>
+        <pre id="cs-config-pre" class="cs-config-pre"></pre>
+        <div class="action-row">
+          <button id="cs-save-btn" class="btn-primary">Save</button>
+          <button id="cs-run-btn" class="btn-run" hidden>Run</button>
+          <span id="cs-save-msg" class="save-msg"></span>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function bindCreatePanel() {
+    let generatedConfig = null;
+    let savedName       = null;
+
+    const msg    = document.getElementById("cs-msg");
+    const setMsg = (text, cls) => { msg.textContent = text; msg.className = `save-msg ${cls}`; };
+
+    document.getElementById("cs-cancel-btn").addEventListener("click", closeCreatePanel);
+
+    document.getElementById("cs-generate-btn").addEventListener("click", async () => {
+      const nameVal = document.getElementById("cs-name").value.trim().toLowerCase();
+      const desc    = document.getElementById("cs-desc").value.trim();
+      if (!nameVal || !/^[a-z0-9_]+$/.test(nameVal)) {
+        setMsg("Name must be lowercase letters, numbers, and underscores only.", "err");
+        return;
+      }
+      if (desc.length < 10) { setMsg("Description must be at least 10 characters.", "err"); return; }
+
+      const genBtn = document.getElementById("cs-generate-btn");
+      genBtn.disabled = true;
+      setMsg("Generating…", "");
+      try {
+        generatedConfig = await api("/api/user/search/generate", { method: "POST", body: { search_name: nameVal, description: desc } });
+        document.getElementById("cs-config-pre").textContent = JSON.stringify(generatedConfig, null, 2);
+        document.getElementById("cs-preview").hidden = false;
+        setMsg("", "");
+      } catch (e) {
+        setMsg(e.message, "err");
+        genBtn.disabled = false;
+      }
+    });
+
+    document.getElementById("cs-save-btn").addEventListener("click", async () => {
+      if (!generatedConfig) return;
+      const saveBtn = document.getElementById("cs-save-btn");
+      const saveMsg = document.getElementById("cs-save-msg");
+      const setSaveMsg = (t, cls) => { saveMsg.textContent = t; saveMsg.className = `save-msg ${cls}`; };
+      saveBtn.disabled = true;
+      setSaveMsg("Saving…", "");
+      try {
+        const name = generatedConfig.search_name;
+        await api(`/api/user/search/${encodeURIComponent(name)}`, { method: "PUT", body: generatedConfig });
+        savedName = name;
+        setSaveMsg("Saved.", "ok");
+        document.getElementById("cs-run-btn").hidden = false;
+        const searches = await api("/api/searches");
+        _searches = searches;
+        buildSearchList(searches);
+        updateNewSearchBtn(searches);
+      } catch (e) {
+        setSaveMsg(e.message, "err");
+        saveBtn.disabled = false;
+      }
+    });
+
+    document.getElementById("cs-run-btn").addEventListener("click", async () => {
+      if (!savedName) return;
+      const runBtn = document.getElementById("cs-run-btn");
+      const saveMsg = document.getElementById("cs-save-msg");
+      const setSaveMsg = (t, cls) => { saveMsg.textContent = t; saveMsg.className = `save-msg ${cls}`; };
+      runBtn.disabled = true;
+      setSaveMsg("Running…", "");
+      try {
+        await api(`/api/user/search/${encodeURIComponent(savedName)}/run`, { method: "POST" });
+        const name = savedName;
+        closeCreatePanel();
+        activeSearch = null;
+        selectSearch(name);
+      } catch (e) {
+        setSaveMsg(e.message, "err");
+        runBtn.disabled = false;
+      }
+    });
+  }
+
   // ── Sidebar ───────────────────────────────────────────────────────────────
   function buildSearchList(searches) {
-    const common     = searches.filter(s => s.visibility !== "private");
-    const mine       = searches.filter(s => s.visibility === "private" && s.owned);
+    const mine       = searches.filter(s => s.owned);
+    const common     = searches.filter(s => !s.owned);
     const showLabels = mine.length > 0;
 
     function itemHTML(s) {
@@ -237,12 +414,12 @@
     }
 
     let html = "";
-    if (showLabels && common.length) html += `<li class="search-group-label">Public</li>`;
-    html += common.map(itemHTML).join("");
     if (mine.length) {
       html += `<li class="search-group-label">My searches</li>`;
       html += mine.map(itemHTML).join("");
     }
+    if (showLabels && common.length) html += `<li class="search-group-label">Public</li>`;
+    html += common.map(itemHTML).join("");
     searchList.innerHTML = html;
 
     searchList.querySelectorAll("li[role='option']").forEach(el => {
@@ -259,6 +436,11 @@
           .catch(() => { btn.textContent = "✗"; setTimeout(() => { btn.textContent = "⎘"; }, 1500); });
       });
     });
+
+    if (activeSearch) {
+      searchList.querySelectorAll("li[role='option']").forEach(el =>
+        el.classList.toggle("active", el.dataset.name === activeSearch));
+    }
   }
 
   // ── Init ─────────────────────────────────────────────────────────────────
@@ -269,8 +451,10 @@
         api("/api/me").catch(() => ({ role: "free", anonymous: true })),
       ]);
       me = meResult;
+      _searches = searches;
       updateUserSlot();
       buildSearchList(searches);
+      updateNewSearchBtn(searches);
 
       const fromPath = decodeURIComponent(window.location.pathname.slice(1));
       const initial  = searches.find(s => s.name === fromPath) ? fromPath : searches[0]?.name;
