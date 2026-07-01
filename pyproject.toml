@@ -19,6 +19,7 @@ dependencies = [
     "google-cloud-aiplatform>=1.60",
     "google-cloud-firestore>=2.16",
     "fastapi>=0.115",
+    "python-multipart>=0.0.9",
     "uvicorn>=0.30",
     "PyJWT>=2.8",
 ]

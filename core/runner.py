@@ -151,6 +151,7 @@ def run_search(search_name: str, settings: Settings, dry_run: bool = False, lear
         active=config.get("active", True),
         owner_id=config.get("owner_id", "admin"),
         visibility=config.get("visibility", "public"),
+        description=config.get("description"),
         criteria=criteria,
         preferred_shops=shops,
         feedback_notes=feedback_notes or None,

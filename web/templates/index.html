@@ -11,18 +11,6 @@
   <meta name="theme-color" content="#F59E0B">
 </head>
 <body>
-  <div id="login-overlay" class="login-overlay" hidden>
-    <form id="login-form" class="login-card">
-      <h2 class="login-title">Admin sign in</h2>
-      <p id="login-err" class="login-err" hidden></p>
-      <input type="password" id="admin-pwd" class="field-input" placeholder="Password" autofocus>
-      <div class="login-actions">
-        <button type="submit" class="btn-primary">Sign in</button>
-        <button type="button" id="login-cancel" class="btn-run">Cancel</button>
-      </div>
-    </form>
-  </div>
-
   <header class="topbar">
     <span class="topbar-logo">
       <img src="/static/shpopassistant.svg" alt="" class="topbar-logo-img" width="30" height="30">
@@ -31,7 +19,6 @@
     </span>
     <div class="topbar-actions">
       <div id="user-slot" class="topbar-user-slot"></div>
-      <button id="topbar-admin-btn" class="topbar-admin-btn" hidden>Admin</button>
     </div>
   </header>
 
@@ -42,7 +29,6 @@
         <button id="sidebar-toggle-btn" class="sidebar-toggle-btn" aria-label="Collapse sidebar">◀</button>
       </div>
       <ul class="search-list" id="search-list" role="listbox" aria-label="Product searches"></ul>
-      <button id="btn-new-search" class="btn-new-search" hidden>+ New search</button>
       <div class="sidebar-footer">
         <a href="/privacy" class="sidebar-footer-link">Privacy</a>
         <span class="sidebar-footer-sep">·</span>
@@ -54,8 +40,6 @@
       <div class="toolbar" id="toolbar" hidden>
         <label for="date-select" class="date-label">Run date</label>
         <select id="date-select" class="date-select" aria-label="Run date"></select>
-        <button id="edit-search-btn" class="btn-run" hidden>Edit</button>
-        <button id="run-search-btn" class="btn-run" hidden>Run ▶</button>
       </div>
 
       <div id="criteria-bar" class="criteria-bar" hidden></div>
@@ -64,8 +48,6 @@
         <p class="empty-state">Select a search from the left to view results.</p>
       </div>
     </main>
-
-    <aside id="edit-panel" class="edit-panel" hidden></aside>
   </div>
 
   <script src="/static/app.js"></script>

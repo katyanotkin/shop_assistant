@@ -38,14 +38,14 @@ def test_index_contains_app_name(client):
 # ── GET /admin ────────────────────────────────────────────────────────────────
 
 
-def test_admin_redirects_to_root(client):
+def test_admin_redirects_when_unauthenticated(client):
     r = client.get("/admin")
     assert r.status_code == 302
 
 
-def test_admin_redirect_location_is_root(client):
+def test_admin_redirect_location_is_login_page(client):
     r = client.get("/admin")
-    assert r.headers["location"] == "/"
+    assert r.headers["location"] == "/admin/login"
 
 
 # ── GET /{search_name} (catch-all) ───────────────────────────────────────────

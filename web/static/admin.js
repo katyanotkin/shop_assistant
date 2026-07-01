@@ -1,6 +1,4 @@
 (() => {
-  const loginOverlay = document.getElementById("login-overlay");
-  const adminLayout  = document.getElementById("admin-layout");
   const searchList   = document.getElementById("admin-search-list");
   const configPanel   = document.getElementById("config-panel");
   const configContent = document.getElementById("config-content");
@@ -17,32 +15,6 @@
     if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
     return r.json();
   }
-
-  // ── Auth ─────────────────────────────────────────────────────────────────
-
-  function showLogin(err) {
-    loginOverlay.hidden = false;
-    adminLayout.hidden = true;
-    const errEl = document.getElementById("login-err");
-    errEl.textContent = err || "";
-    errEl.hidden = !err;
-    document.getElementById("pwd").value = "";
-  }
-
-  document.getElementById("login-form").addEventListener("submit", async e => {
-    e.preventDefault();
-    try {
-      await api("POST", "/api/admin/login", { password: document.getElementById("pwd").value });
-    } catch {
-      showLogin("Wrong password.");
-      return;
-    }
-    try {
-      await init();
-    } catch {
-      showLogin("Login accepted but auth check failed — check server logs.");
-    }
-  });
 
   // ── Helpers shared with app.js ────────────────────────────────────────────
 
@@ -62,9 +34,13 @@
   }
 
   function scoreClass(s) { return s >= 7 ? "green" : s >= 4 ? "amber" : "red"; }
-  function tag(text, cls) { return `<span class="tag ${cls}">${text}</span>`; }
+  function tag(text, cls) { return `<span class="tag ${cls}">${esc(text)}</span>`; }
   function esc(s) {
     return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function safeHref(url) {
+    try { const u = new URL(url); return (u.protocol === "https:" || u.protocol === "http:") ? url : "#"; }
+    catch { return "#"; }
   }
 
   function renderResultCard(m) {
@@ -73,7 +49,7 @@
     const titleInner = site && m.title
       ? `<span class="card-site">${esc(site)}</span><span class="card-sep"> | </span>${esc(m.title)}`
       : esc(m.title || "(no title)");
-    const titleText = `<a class="card-title-link" href="${esc(m.url)}" target="_blank" rel="noopener">${titleInner}</a>`;
+    const titleText = `<a class="card-title-link" href="${esc(safeHref(m.url))}" target="_blank" rel="noopener">${titleInner}</a>`;
     const price = m.price != null ? `<span class="card-price">${esc(String(m.price))}</span>` : "";
     const newTag = m.is_new ? tag("NEW", "tag-new") : "";
     const criteria = [
@@ -523,8 +499,8 @@
   async function refreshSidebar(selectName) {
     const searches = await api("GET", "/api/admin/searches");
     searchList.innerHTML = searches.map(s =>
-      `<li role="option" data-name="${s.search_name}" class="${s.active ? "" : "inactive-search"}">
-        ${s.search_name.replace(/_/g, " ")}
+      `<li role="option" data-name="${esc(s.search_name)}" class="${s.active ? "" : "inactive-search"}">
+        ${esc(s.search_name.replace(/_/g, " "))}
       </li>`).join("");
     searchList.querySelectorAll("li").forEach(el =>
       el.addEventListener("click", () => selectSearch(el.dataset.name)));
@@ -587,12 +563,10 @@
 
   async function init() {
     const searches = await api("GET", "/api/admin/searches");
-    loginOverlay.hidden = true;
-    adminLayout.hidden = false;
 
     searchList.innerHTML = searches.map(s =>
-      `<li role="option" data-name="${s.search_name}" class="${s.active ? "" : "inactive-search"}">
-        ${s.search_name.replace(/_/g, " ")}
+      `<li role="option" data-name="${esc(s.search_name)}" class="${s.active ? "" : "inactive-search"}">
+        ${esc(s.search_name.replace(/_/g, " "))}
       </li>`).join("");
 
     searchList.querySelectorAll("li").forEach(el =>
@@ -609,10 +583,13 @@
     });
 
     document.getElementById("btn-logout")?.addEventListener("click", async () => {
-      try { await api("POST", "/api/admin/logout"); } catch { /* ignore */ }
-      window.location.href = "/";
+      try { await fetch("/auth/logout", { method: "POST", credentials: "same-origin" }); } catch {}
+      window.location.href = "/admin/login";
     });
   }
 
-  init().catch(e => { if (e.status === 401) showLogin(); });
+  init().catch(e => {
+    if (e.status === 401) { window.location.href = "/admin/login"; return; }
+    document.body.innerHTML = `<p style="padding:2rem;color:var(--score-red,red)">Failed to load admin: ${esc(e.message)}. <a href="/admin/login">Sign in again</a></p>`;
+  });
 })();

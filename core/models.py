@@ -30,6 +30,7 @@ class SearchConfig(BaseModel):
     active: bool = True
     owner_id: str = "admin"
     visibility: str = "public"  # "public" | "private"
+    description: Optional[str] = None  # original freeform text used to generate this config
     criteria: SearchCriteria
     preferred_shops: list[str] = []
     feedback_notes: Optional[str] = None

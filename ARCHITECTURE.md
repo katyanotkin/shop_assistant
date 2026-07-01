@@ -118,8 +118,12 @@ Document ID = `search_name` (e.g. `wax_coat`).
 |-------|------|-------------|
 | `search_name` | string | Primary key, matches document ID |
 | `active` | bool | Included in results UI; inactive searches still appear in admin |
-| `criteria` | map | `SearchCriteria` fields: `category[]`, `gender`, `material[]`, `lining[]`, `length[]`, `exclude[]`, `sizes[]`, `max_price`, `extra_notes` |
+| `visibility` | string | `"public"` (default) or `"private"` |
+| `owner_id` | string | `"admin"` or a user email; controls who sees private searches |
+| `description` | string | Original free-text description used to generate the config; preserved across edits |
+| `criteria` | map | `SearchCriteria` fields: `category[]` (required) plus any product-appropriate fields (`gender`, `material[]`, `lining[]`, `length[]`, `exclude[]`, `sizes[]`, `max_price`, `extra_notes`, or custom fields for non-clothing categories) |
 | `preferred_shops` | string[] | URLs of preferred retailers; searched first each run |
+| `example_urls` | string[] | Up to 3 product URLs the admin marked as ideal matches; fed to the ranker for calibration |
 | `feedback_notes` | string | Distilled product preferences from learn cycle; injected into prompts |
 | `avoid_shops` | string[] | Domains filtered from candidates; written by learn cycle |
 
@@ -135,6 +139,7 @@ Document ID = `run_date` (ISO date string, e.g. `2026-06-20`).
 | `partial_matches` | ProductMatch[] | Score ≥ partial threshold |
 | `no_match` | bool | True when both lists are empty |
 | `total_candidates` | int | Number of URLs fetched and ranked |
+| `config_snapshot` | SearchConfig | Full copy of the search config at the time of the run — preserved even if the live config is later edited |
 | `feedback` | map | Keyed by MD5 hex of URL; each value is `{url: string, text: string}` |
 
 **Why MD5 keys for feedback:** Firestore field paths use `/` as a path separator, and product URLs contain slashes. Storing them raw as field names would break Firestore's nested-field update syntax. MD5 hex strings are safe field names. The `_decode_feedback` helper converts back to `{url: text}` before serving the frontend.
@@ -151,28 +156,50 @@ Base URL: `https://shopassistant.verbboard.com`
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/` | Main results page (HTML) |
-| `GET` | `/api/searches` | List all searches: `[{name, active}]` |
+| `GET` | `/` | Main results page (HTML) — read-only, no admin UI |
+| `GET` | `/api/searches` | List searches visible to the caller: `[{name, active, visibility}]` |
+| `GET` | `/api/search/{name}` | Public search config (criteria + preferred_shops only) |
 | `GET` | `/api/results/{search_name}` | List run dates for a search (descending), 404 if none |
-| `GET` | `/api/results/{search_name}/{run_date}` | Full run document; `feedback` field decoded to `{url: text}` |
-| `GET` | `/api/admin/me` | `{admin: bool}` — checks `sa_admin` cookie without requiring it |
+| `GET` | `/api/results/{search_name}/{run_date}` | Full run document; `feedback` decoded to `{url: text}` |
+| `GET` | `/api/me` | `{role, anonymous, name?, email?}` — current user identity from session or admin cookie |
 
-### Admin endpoints (require `sa_admin` cookie)
+### Auth endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/admin` | Admin page (HTML) |
-| `POST` | `/api/admin/login` | Accepts `{password}`, sets `sa_admin` cookie on success |
+| `GET` | `/auth/login` | Redirect to Google OAuth; accepts `?next=<path>` to set post-login destination |
+| `GET` | `/auth/callback` | OAuth callback; sets `sa_session` cookie, redirects to `next` (default `/`) |
+| `POST` | `/auth/logout` | Clears `sa_session` and `sa_admin` cookies |
+
+### Admin page endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/admin` | Admin panel (HTML); redirects to `/admin/login` if not authenticated |
+| `GET` | `/admin/login` | Admin login page (Google sign-in + password form) |
+| `POST` | `/admin/login` | Form-based password login; sets `sa_admin` cookie, redirects to `/admin` |
+
+### Admin API endpoints (require `sa_admin` or `sa_session` with `role=admin`)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/admin/login` | JSON password login: `{password}` → sets `sa_admin` cookie |
+| `POST` | `/api/admin/logout` | Clears both `sa_admin` and `sa_session` cookies |
+| `GET` | `/api/admin/me` | `{admin: bool}` — checks `sa_admin` cookie |
 | `GET` | `/api/admin/searches` | Full search configs including `feedback_notes`, `avoid_shops` |
 | `GET` | `/api/admin/search/{name}` | Single search config |
 | `PUT` | `/api/admin/search/{name}` | Upsert search config |
-| `POST` | `/api/admin/search/generate` | `{search_name, description}` → Gemini-generated config JSON |
+| `POST` | `/api/admin/search/generate` | `{search_name, description}` → Gemini config JSON with `description` preserved |
 | `POST` | `/api/admin/run/{name}` | Trigger a search run synchronously; returns `{ok, matches, partial}` |
-| `PUT` | `/api/feedback/{search_name}/{run_date}/batch` | Save feedback for multiple URLs; body: `{items: [{url, text}]}` |
+| `PUT` | `/api/feedback/{search_name}/{run_date}/batch` | Save feedback; body: `{items: [{url, text}]}` |
 
-**Auth mechanism:** `ADMIN_PASSWORD` env var. Login hashes `"sa:{password}"` with SHA-256 and stores the hex digest in the `sa_admin` HttpOnly cookie. The `_require_admin` dependency compares the cookie value to the expected digest. Cookie is `secure=True` when the request arrives over HTTPS (detected via `x-forwarded-proto` header or URL scheme).
+**Auth mechanisms:**
 
-**Feedback batch write:** `save_feedback_batch` issues a single Firestore `update()` call with all fields at once (`feedback.<md5>` per URL). If the document does not exist (e.g. dry-run result), it falls back to `set(..., merge=True)`. Items with empty `text` are excluded by the caller.
+- **Password (`sa_admin` cookie):** `ADMIN_PASSWORD` env var. Login hashes `"sa:{password}"` with SHA-256 and stores the hex digest as an HttpOnly, SameSite=Strict cookie. Checked by `_require_admin` dependency and `_is_admin()` helper.
+- **Google OAuth (`sa_session` cookie):** JWT signed with `SESSION_SECRET`. Set on `/auth/callback` after Google verifies identity. User record stored in Firestore `users` collection; `role` field determines access. `BOOTSTRAP_ADMIN_EMAIL` is promoted to `admin` on first login.
+- **Both cookies present:** OAuth session identity wins for `/api/me`. Both are cleared on any logout.
+
+**Feedback batch write:** `save_feedback_batch` issues a single Firestore `update()` call (`feedback.<md5>` per URL). Falls back to `set(..., merge=True)` if the document doesn't exist. Items with empty `text` are excluded by the caller.
 
 ---
 
@@ -184,9 +211,10 @@ Base URL: `https://shopassistant.verbboard.com`
 | Image registry | Artifact Registry: `us-east1-docker.pkg.dev/$PROJECT_ID/shop-assistant/web` |
 | Build trigger | Cloud Build trigger `main-deploy` — fires on push to `main` branch of `katyanotkin/shop_assistant` (ignores `*.md`, `.gitignore`, `searches/**`) |
 | Build steps | `docker build -f Dockerfile.web` → `docker push` → `gcloud run deploy` |
-| Secrets | `ADMIN_PASSWORD` injected from Secret Manager secret `shop-assistant-admin-password:latest` |
+| Secrets | Injected from Secret Manager via `--set-secrets` in `cloudbuild.yaml`: `ADMIN_PASSWORD`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, `BOOTSTRAP_ADMIN_EMAIL` |
 | Service account | `cloudbuild-deployer@knotmem26.iam.gserviceaccount.com` |
 | Vertex AI | `us-central1` (separate from Cloud Run region) |
 | Web process | `uvicorn web.main:app --host 0.0.0.0 --port 8080` inside `python:3.12-slim` |
+| Live regression | After deploy, run `BASE_URL=https://shopassistant.verbboard.com python -m pytest tests/test_live_qatp.py -v` |
 
 The web image excludes `run.py`, `searches/`, `tests/`, and `results/` — only `core/` and `web/` are copied into the container.

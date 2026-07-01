@@ -40,8 +40,11 @@ def _admin_token() -> str:
     return hashlib.sha256(f"sa:{_settings.admin_password}".encode()).hexdigest()
 
 
-def _require_admin(sa_admin: str | None = Cookie(default=None)) -> None:
-    if not _settings.admin_password or sa_admin != _admin_token():
+def _require_admin(
+    sa_admin: str | None = Cookie(default=None),
+    sa_session: str | None = Cookie(default=None),
+) -> None:
+    if not _is_admin(sa_admin, sa_session):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
@@ -57,6 +60,18 @@ def _is_https(request: Request) -> bool:
     return request.headers.get("x-forwarded-proto") == "https" or request.url.scheme == "https"
 
 
+def _is_admin(sa_admin: str | None, sa_session: str | None) -> bool:
+    if _settings.admin_password and sa_admin == _admin_token():
+        return True
+    if sa_session:
+        user = verify_session_token(sa_session, _settings.session_secret)
+        return bool(user and user.get("role") == "admin")
+    return False
+
+
+_ADMIN_LOGIN_HTML = _inject_brand((Path(__file__).parent / "templates" / "admin_login.html").read_text())
+
+
 @app.get("/manifest.json")
 def manifest():
     return Response(content=_MANIFEST, media_type="application/manifest+json")
@@ -67,9 +82,30 @@ def index():
     return _HTML
 
 
+@app.get("/admin/login", response_class=HTMLResponse)
+def admin_login_page():
+    return HTMLResponse(_ADMIN_LOGIN_HTML)
+
+
+@app.post("/admin/login")
+async def admin_login_form(request: Request):
+    form = await request.form()
+    password = form.get("password", "")
+    if not _settings.admin_password or password != _settings.admin_password:
+        return RedirectResponse(url="/admin/login?error=1", status_code=303)
+    resp = RedirectResponse(url="/admin", status_code=303)
+    resp.set_cookie("sa_admin", _admin_token(), httponly=True, samesite="strict", secure=_is_https(request))
+    return resp
+
+
 @app.get("/admin")
-def admin_page():
-    return RedirectResponse(url="/", status_code=302)
+def admin_page(
+    sa_admin: str | None = Cookie(default=None),
+    sa_session: str | None = Cookie(default=None),
+):
+    if not _is_admin(sa_admin, sa_session):
+        return RedirectResponse(url="/admin/login", status_code=302)
+    return HTMLResponse(_ADMIN_HTML)
 
 
 @app.get("/privacy", response_class=HTMLResponse)
@@ -83,13 +119,19 @@ def terms_page():
 
 
 @app.get("/auth/login")
-def auth_login(request: Request):
+def auth_login(request: Request, next: str = "/"):
     if not _settings.google_client_id:
         raise HTTPException(status_code=503, detail="Google OAuth not configured")
+    # Validate next is a safe relative path (no protocol, no open redirect).
+    # Reject //evil.com (protocol-relative), ://evil.com, and anything not starting with /.
+    if not next.startswith("/") or next.startswith("//") or "://" in next:
+        next = "/"
     state = new_state()
     url = google_auth_url(_settings.google_client_id, _oauth_redirect_uri(request), state)
     resp = RedirectResponse(url=url)
-    resp.set_cookie("sa_oauth_state", state, httponly=True, samesite="lax", secure=_is_https(request), max_age=300)
+    https = _is_https(request)
+    resp.set_cookie("sa_oauth_state", state, httponly=True, samesite="lax", secure=https, max_age=300)
+    resp.set_cookie("sa_oauth_next", next, httponly=True, samesite="lax", secure=https, max_age=300)
     return resp
 
 
@@ -100,6 +142,7 @@ def auth_callback(
     state: str | None = None,
     error: str | None = None,
     sa_oauth_state: str | None = Cookie(default=None),
+    sa_oauth_next: str | None = Cookie(default=None),
 ):
     if error or not code or not state or not sa_oauth_state or state != sa_oauth_state:
         return RedirectResponse(url="/?auth_error=1", status_code=302)
@@ -120,8 +163,19 @@ def auth_callback(
         bootstrap_admin_email=_settings.bootstrap_admin_email,
     )
     token = create_session_token(user, _settings.session_secret)
-    resp = RedirectResponse(url="/", status_code=302)
+    next_url = (
+        sa_oauth_next
+        if (
+            sa_oauth_next
+            and sa_oauth_next.startswith("/")
+            and not sa_oauth_next.startswith("//")
+            and "://" not in sa_oauth_next
+        )
+        else "/"
+    )
+    resp = RedirectResponse(url=next_url, status_code=302)
     resp.delete_cookie("sa_oauth_state", samesite="lax")
+    resp.delete_cookie("sa_oauth_next", samesite="lax")
     resp.set_cookie(
         "sa_session", token, httponly=True, samesite="lax", secure=_is_https(request), max_age=60 * 60 * 24 * 30
     )
@@ -283,6 +337,7 @@ def admin_generate_search(body: GenerateBody):
         config = generate_search_config(body.description, body.search_name, _settings.google_cloud_project)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    config["description"] = body.description
     return config
 
 

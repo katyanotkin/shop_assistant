@@ -56,6 +56,16 @@ Invoke the `writer` agent to update **README.md** after any user-facing feature 
 
 Do not update README inline — delegate to the writer agent. Brief the agent with: what changed, what sections to update, what not to touch.
 
+## Phase 8 — Live regression (after Cloud Build completes)
+
+After pushing to `main`, wait for Cloud Build to finish deploying to Cloud Run, then run the live QATP suite:
+
+```bash
+BASE_URL=https://shopassistant.verbboard.com python -m pytest tests/test_live_qatp.py -v
+```
+
+Run `make validate-prod` first to confirm the service is up. Fix any regression before closing the PR.
+
 ---
 
 Trivial one-liners (typo fix, single-constant change): phases 2, 5, and 7 may be skipped.
@@ -64,9 +74,9 @@ Trivial one-liners (typo fix, single-constant change): phases 2, 5, and 7 may be
 
 ## Creating a new search (user workflow)
 
-Admin is integrated into the results page — there is no separate admin page.
+Admin interface lives at `/admin` — separate from the public results page at `/`.
 
-1. **Sign in** — click "Admin" in the top-right corner. Enter the admin password in the modal.
-2. **New search** — in the admin panel (opens from the Edit button in the toolbar), use the "+ New search" flow: describe what you want in free-form text; Gemini generates an initial structured config.
-3. **Review** — inspect the generated fields in the edit panel; edit anything wrong or missing.
+1. **Sign in** — go to `/admin`. If not authenticated, you are redirected to `/admin/login`. Sign in with Google (primary) or enter the admin password.
+2. **New search** — click "+ New search" in the left sidebar. Describe what you want in free-form text; Gemini generates an initial structured config.
+3. **Review** — inspect the generated fields in the config panel; edit anything wrong or missing.
 4. **Save & Run** — run the first search to see candidates; use the feedback area under each result card to refine over time.
