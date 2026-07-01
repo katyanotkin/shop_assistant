@@ -61,7 +61,7 @@ Do not update README inline — delegate to the writer agent. Brief the agent wi
 After pushing to `main`, wait for Cloud Build to finish deploying to Cloud Run, then run the live QATP suite:
 
 ```bash
-BASE_URL=https://shopassistant.verbboard.com python -m pytest tests/test_live_qatp.py -v
+PROD_URL=https://shopassistant.verbboard.com python -m pytest tests/test_live_qatp.py -v
 ```
 
 Run `make validate-prod` first to confirm the service is up. Fix any regression before closing the PR.
