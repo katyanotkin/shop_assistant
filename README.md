@@ -55,6 +55,18 @@ MAX_CANDIDATES=20             # max URLs to evaluate per run
 
 Go to `/admin`, log in, and click **+ New search** in the sidebar. Enter a short search name (lowercase, underscores) and describe what you want in plain text — material, style, size, price ceiling, preferred shops. Click **Generate config**: Gemini produces a structured config populated only with fields mentioned or implied by the description — `category` is always present, everything else is conditional. The config appears in an editable form. Optional fields can be added using the chip buttons in the **Add:** row, or removed with the × button on each field. Review the populated fields, then click **Save** or **Save & Run**.
 
+### Create a search (signed-in users)
+
+Signed-in users on the main page (`/`) can create one private search without admin access.
+
+After signing in, a **+ New search** button appears in the sidebar. Free-plan users with one search already saved see no button. Admin-role users see an **Admin panel** link instead and use `/admin`.
+
+Click **+ New search**: enter a search name (lowercase, underscores) and describe what you want. Click **Generate**: Gemini produces a structured config identical to the admin flow. A JSON preview appears. Click **Save** to store it; a **Run** button then appears. Click **Run** to execute the search immediately.
+
+The search appears under **My searches** in the sidebar. A **Run** button also appears in the toolbar when an owned search is selected.
+
+Free-plan searches can be run for 30 days from the date they were created. After 30 days the Run endpoint returns an error message ("contact us to upgrade").
+
 ### Dev / bulk import (CLI)
 
 ```bash
@@ -118,6 +130,14 @@ make add FILE=searches/wax_coat.json
 
 This overwrites the Firestore document in place. You can also edit directly in the admin UI.
 
+### Toggle visibility (admin)
+
+When viewing any search config in `/admin`, a **Make public** / **Make private** button appears in the config header. Clicking it switches the search's visibility immediately. Private searches are visible only to their owner and admins. Public searches appear on the main page for everyone. Admins can toggle visibility on any search regardless of owner.
+
+### Manage users (admin)
+
+In `/admin`, click **Users** in the sidebar to see a table of all registered users with their name, email, and current role. Change the role dropdown (`free` / `premium` / `admin`) to update a user's role immediately — no re-login required for the user. There is no payment integration; qualifying for premium is decided outside the product.
+
 ## Feedback & learning
 
 When logged in as admin, each result card on the results page shows a feedback textarea with quick-phrase buttons ("Wrong material", "Doesn't ship to me", etc.). Click **Save all feedback** to write all non-empty fields in one batch.
@@ -136,7 +156,9 @@ make local-run    # installs fastapi + uvicorn into .venv, starts on http://loca
 
 The UI reads directly from Firestore — no CLI run needed. Select a search from the sidebar, pick a date (defaults to latest), and browse scored results.
 
-The results page (`/`) is public. The admin panel (`/admin`) requires the `ADMIN_PASSWORD` set in `.env`.
+The results page (`/`) is public. Signed-in users see their own private searches listed above the public searches in the sidebar and can create and run them from the main page. The admin panel (`/admin`) is accessible via `ADMIN_PASSWORD` or via Google sign-in for accounts with the `admin` role.
+
+Google sign-in requires `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, and optionally `BOOTSTRAP_ADMIN_EMAIL` in `.env` (see `.env.sample`). The sign-in flow always prompts the Google account chooser on every login.
 
 ### Host on Cloud Run
 
@@ -211,6 +233,8 @@ No Google Custom Search API key is required — search uses Gemini's built-in Go
 
 ```
 core/
+  auth.py              # Google OAuth helpers and JWT session management
+  brand.py             # App name/motto constants
   searcher.py          # AI planner + grounded search → candidate URLs
   fetcher.py           # HTTP fetch + HTML → plain text
   ranker.py            # Gemini scoring of individual product pages
@@ -224,11 +248,14 @@ core/
 web/
   main.py              # FastAPI app — serves UI and REST API
   static/app.css       # Styles (vanilla CSS, no framework)
-  static/app.js        # Client logic for the public results page
+  static/app.js        # Client logic for the public results page and user search creation
   static/admin.css     # Admin panel styles
-  static/admin.js      # Admin panel logic: new search, generate, run, feedback
+  static/admin.js      # Admin panel logic: new search, generate, run, feedback, users tab, visibility toggle
   templates/index.html # Public results page shell
   templates/admin.html # Admin panel shell
+  templates/admin_login.html # Password login form for /admin/login
+  templates/privacy.html     # Privacy policy page
+  templates/terms.html       # Terms of service page
 searches/              # Search config JSON files (commit these)
 results/               # CSV output — gitignore this directory
 run.py                 # CLI entry point
