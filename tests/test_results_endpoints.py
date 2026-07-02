@@ -162,3 +162,69 @@ def test_get_run_returns_matches_field(client):
     r = c.get("/api/results/wax_coat/2026-06-21")
     assert r.status_code == 200
     assert len(r.json()["matches"]) == 1
+
+
+def test_get_run_redacts_feedback_from_anonymous_caller(client):
+    c, fc = client
+    fc.load_run.return_value = {
+        "search_name": "wax_coat",
+        "run_date": "2026-06-21",
+        "matches": [],
+        "partial_matches": [],
+        "feedback": {"https://example.com/a": "great fit"},
+    }
+    r = c.get("/api/results/wax_coat/2026-06-21")
+    assert r.status_code == 200
+    assert r.json()["feedback"] == {}
+
+
+def test_get_run_shows_feedback_to_admin(client):
+    import hashlib
+
+    c, fc = client
+    fc.load_run.return_value = {
+        "search_name": "wax_coat",
+        "run_date": "2026-06-21",
+        "matches": [],
+        "partial_matches": [],
+        "feedback": {"https://example.com/a": "great fit"},
+    }
+    token = hashlib.sha256(b"sa:hunter2").hexdigest()
+    r = c.get("/api/results/wax_coat/2026-06-21", cookies={"sa_admin": token})
+    assert r.json()["feedback"] == {"https://example.com/a": "great fit"}
+
+
+def test_get_run_shows_feedback_to_owner(client):
+    from core.auth import create_session_token
+
+    c, fc = client
+    fc.load_search_config.return_value = {"search_name": "wax_coat", "owner_id": "owner@x.com"}
+    fc.load_run.return_value = {
+        "search_name": "wax_coat",
+        "run_date": "2026-06-21",
+        "matches": [],
+        "partial_matches": [],
+        "feedback": {"https://example.com/a": "great fit"},
+    }
+    with patch.object(main_module._settings, "session_secret", "test-secret"):
+        token = create_session_token({"email": "owner@x.com", "role": "free"}, "test-secret")
+        r = c.get("/api/results/wax_coat/2026-06-21", cookies={"sa_session": token})
+    assert r.json()["feedback"] == {"https://example.com/a": "great fit"}
+
+
+def test_get_run_redacts_feedback_from_non_owner_session(client):
+    from core.auth import create_session_token
+
+    c, fc = client
+    fc.load_search_config.return_value = {"search_name": "wax_coat", "owner_id": "owner@x.com"}
+    fc.load_run.return_value = {
+        "search_name": "wax_coat",
+        "run_date": "2026-06-21",
+        "matches": [],
+        "partial_matches": [],
+        "feedback": {"https://example.com/a": "great fit"},
+    }
+    with patch.object(main_module._settings, "session_secret", "test-secret"):
+        token = create_session_token({"email": "other@x.com", "role": "free"}, "test-secret")
+        r = c.get("/api/results/wax_coat/2026-06-21", cookies={"sa_session": token})
+    assert r.json()["feedback"] == {}

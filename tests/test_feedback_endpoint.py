@@ -5,18 +5,29 @@ import pytest
 from fastapi.testclient import TestClient
 
 import web.main as main_module
+from core.auth import create_session_token
 from web.main import app
 
 PASSWORD = "testpass"
+SECRET = "test-secret"
 TOKEN = hashlib.sha256(f"sa:{PASSWORD}".encode()).hexdigest()
+
+_OWNER = {"email": "owner@x.com", "display_name": "Owner", "photo_url": "", "role": "free"}
+_OTHER_USER = {"email": "other@x.com", "display_name": "Other", "photo_url": "", "role": "free"}
+
+
+def _tok(user_dict: dict) -> str:
+    return create_session_token(user_dict, SECRET)
 
 
 @pytest.fixture()
 def client():
     with patch.object(main_module, "_settings") as s:
         s.admin_password = PASSWORD
+        s.session_secret = SECRET
         with patch("web.main.fc") as fc:
             fc.list_searches.return_value = []
+            fc.get_user.return_value = None
             with TestClient(app, raise_server_exceptions=True) as c:
                 yield c
 
@@ -37,6 +48,29 @@ def test_feedback_batch_requires_auth(client):
         json={"items": [{"url": "https://example.com/a", "text": "good"}]},
     )
     assert r.status_code == 401
+
+
+def test_feedback_batch_owner_session_allowed(client):
+    client.cookies.set("sa_session", _tok(_OWNER))
+    with patch("web.main.fc") as mock_fc:
+        mock_fc.load_search_config.return_value = {"search_name": "wax_coat", "owner_id": "owner@x.com"}
+        r = client.put(
+            "/api/feedback/wax_coat/2026-06-19/batch",
+            json={"items": [{"url": "https://example.com/a", "text": "good"}]},
+        )
+    assert r.status_code == 200
+    mock_fc.save_feedback_batch.assert_called_once()
+
+
+def test_feedback_batch_non_owner_session_rejected(client):
+    client.cookies.set("sa_session", _tok(_OTHER_USER))
+    with patch("web.main.fc") as mock_fc:
+        mock_fc.load_search_config.return_value = {"search_name": "wax_coat", "owner_id": "owner@x.com"}
+        r = client.put(
+            "/api/feedback/wax_coat/2026-06-19/batch",
+            json={"items": [{"url": "https://example.com/a", "text": "good"}]},
+        )
+    assert r.status_code == 403
 
 
 def test_feedback_batch_saves_all_items(authed_client):

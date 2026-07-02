@@ -503,19 +503,6 @@ body {
 }
 .feedback-text:focus { outline: 2px solid var(--button-primary-bg); outline-offset: 1px; background: var(--card-bg); }
 
-.feedback-submit {
-  padding: 5px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--button-primary-bg);
-  background: none;
-  border: 1px solid var(--button-primary-bg);
-  border-radius: 6px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.feedback-submit:hover { background: #eff6ff; }
-
 .feedback-charcount {
   display: block;
   margin-top: 3px;

@@ -351,6 +351,48 @@ def test_user_generate_derives_search_name_from_title(client):
     gen.assert_called_once_with("stand-alone bathroom cabinet, wood or metal", "bathroom_cabinet_2", "fake-project")
 
 
+# ── GET /api/user/search/{name} ───────────────────────────────────────────────
+
+
+def test_user_get_search_requires_auth(client):
+    c, _ = client
+    r = c.get("/api/user/search/wool_coat")
+    assert r.status_code == 401
+
+
+def test_user_get_search_404_when_not_found(client):
+    c, mock_fc = client
+    mock_fc.load_search_config.return_value = None
+    c.cookies.set("sa_session", _tok(_FREE_USER))
+    r = c.get("/api/user/search/wool_coat")
+    assert r.status_code == 404
+
+
+def test_user_get_search_403_when_not_owner(client):
+    c, mock_fc = client
+    mock_fc.load_search_config.return_value = {"search_name": "wool_coat", "owner_id": "other@x.com"}
+    c.cookies.set("sa_session", _tok(_FREE_USER))
+    r = c.get("/api/user/search/wool_coat")
+    assert r.status_code == 403
+
+
+def test_user_get_search_returns_full_config_for_owner(client):
+    c, mock_fc = client
+    mock_fc.load_search_config.return_value = dict(_FAKE_CONFIG, owner_id=_FREE_USER["email"])
+    c.cookies.set("sa_session", _tok(_FREE_USER))
+    r = c.get("/api/user/search/wool_coat")
+    assert r.status_code == 200
+    assert r.json()["title"] == "Wool Coat"
+
+
+def test_user_get_search_returns_full_config_for_admin(client):
+    c, mock_fc = client
+    mock_fc.load_search_config.return_value = dict(_FAKE_CONFIG, owner_id="someone_else@x.com")
+    c.cookies.set("sa_session", _tok(_ADMIN_USER))
+    r = c.get("/api/user/search/wool_coat")
+    assert r.status_code == 200
+
+
 # ── PUT /api/user/search/{name} ───────────────────────────────────────────────
 
 

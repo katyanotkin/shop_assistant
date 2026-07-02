@@ -12,7 +12,7 @@ It is designed for searches that are hard to express in a single Google query an
 
 The web interface is at **shopassistant.verbboard.com**.
 
-The results page (`/`) is public — anyone with the URL can read results. Admin features (creating searches, triggering runs, editing configs, saving feedback) require a password.
+The results page (`/`) is public — anyone with the URL can read results. Admin features (creating searches for anyone, triggering runs, editing any config, viewing all users) require a password. Signed-in users can create, edit, delete, run, and leave feedback on their own search without a password — see "Planned: multi-user model" below.
 
 ---
 
@@ -64,9 +64,9 @@ Each result card shows:
 - A one-sentence explanation from the AI.
 - A link to the product page.
 
-### Step 4 — Give feedback (admin only)
+### Step 4 — Give feedback
 
-If you are logged in as admin, each result card has a feedback area below it. You can:
+If you are logged in as admin, or you own the search you are viewing, each result card has a feedback area below it. You can:
 
 - Type free-form text about why the product did or did not work for you.
 - Click any of the quick-phrase buttons (e.g. "Wrong material", "Doesn't ship to me", "Too expensive") to append that phrase to the feedback field. Multiple phrases can be combined.
@@ -93,10 +93,10 @@ Learn mode is on by default. You can turn it off per-run with the **Learn from f
 | Feature | Who can use it |
 |---------|---------------|
 | View results | Anyone (public) |
-| Create / edit searches | Admin (password required) |
-| Run a search manually | Admin |
-| Leave feedback on results | Admin |
-| Save feedback | Admin |
+| Create / edit searches (any user's) | Admin (password required) |
+| Run a search manually (any user's) | Admin |
+| Leave feedback on results | Admin, or the search's owner |
+| Save feedback | Admin, or the search's owner |
 
 ### Running a search manually
 
@@ -133,6 +133,7 @@ Every account has one of three roles:
 | Browse public results | ✓ | ✓ | ✓ | ✓ |
 | Sign in | — | ✓ | ✓ | ✓ |
 | Create 1 private search | — | ✓ | ✓ | ✓ |
+| Edit or delete own search | — | ✓ | ✓ | ✓ |
 | Run own search (within 1 month of creation) | — | ✓ | ✓ | ✓ |
 | Create unlimited searches | — | — | ✓ | ✓ |
 | Run searches after 1 month | — | — | ✓ | ✓ |
@@ -146,7 +147,7 @@ Every account has one of three roles:
 
 Users sign in with Google. Each user's searches and results are private — only visible to that user and to the admin.
 
-**Free tier** gives users 1 private search. They can create it, configure it, and run it for up to one month from the date the search was created. After one month, runs are disabled; the search and its results remain readable. Promotion to public does not change or reset the run window — the same 1-month clock applies regardless.
+**Free tier** gives users 1 private search. They can create it, configure it, edit or delete it, and run it for up to one month from the date the search was created. After one month, runs are disabled; the search and its results remain readable, and it can still be edited or deleted. Promotion to public does not change or reset the run window — the same 1-month clock applies regardless.
 
 When a free user tries a gated action the UI shows: *"You're on the Free plan. Contact us to get full access."*
 

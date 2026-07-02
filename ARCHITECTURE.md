@@ -161,7 +161,7 @@ Base URL: `https://shopassistant.verbboard.com`
 | `GET` | `/api/searches` | List searches visible to the caller: `[{name, title, active, visibility, owned}]` |
 | `GET` | `/api/search/{name}` | Public search config (criteria + preferred_shops only) |
 | `GET` | `/api/results/{search_name}` | List run dates for a search (descending), 404 if none |
-| `GET` | `/api/results/{search_name}/{run_date}` | Full run document; `feedback` decoded to `{url: text}` |
+| `GET` | `/api/results/{search_name}/{run_date}` | Full run document; `feedback` decoded to `{url: text}`. Redacted to `feedback: {}` unless the caller is the search's owner (`sa_session`) or an admin |
 | `GET` | `/api/me` | `{role, anonymous, name?, email?}` — current user identity from session or admin cookie |
 
 ### Auth endpoints
@@ -192,13 +192,17 @@ Base URL: `https://shopassistant.verbboard.com`
 | `PUT` | `/api/admin/search/{name}` | Upsert search config — loads the existing doc and merges the request body on top (`{**existing, **body}`), so fields the admin form doesn't send (`description`, `feedback_notes`, `owner_id`, `visibility`, `title`) are preserved rather than wiped |
 | `POST` | `/api/admin/search/generate` | `{search_name, description}` → Gemini config JSON; `description` preserved and `title` set to `search_name` title-cased |
 | `POST` | `/api/admin/run/{name}` | Trigger a search run synchronously; returns `{ok, matches, partial}` |
-| `PUT` | `/api/feedback/{search_name}/{run_date}/batch` | Save feedback; body: `{items: [{url, text}]}` |
 
-### User API endpoints (require `sa_session`)
+### User API endpoints (require `sa_session`, unless noted)
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/api/user/search/generate` | `{title, description}` → Gemini config JSON. `search_name` is server-derived from `title` via `generate_unique_search_name`. Response is the generated config plus `search_name`, `title`, `description`, `visibility: "private"`, `owner_id`. Free-plan users limited to one search |
+| `GET` | `/api/user/search/{name}` | Full search config; owner or admin only |
+| `PUT` | `/api/user/search/{name}` | Create or update a search config; owner only (or any signed-in user creating a new doc, subject to the free-plan one-search limit) |
+| `DELETE` | `/api/user/search/{name}` | Delete a search config; owner only |
+| `POST` | `/api/user/search/{name}/run` | Trigger a run for an owned search; owner or admin. Free-plan owners are blocked once the search is more than 30 days old |
+| `PUT` | `/api/feedback/{search_name}/{run_date}/batch` | Save feedback; body: `{items: [{url, text}]}`. Allowed for the search's owner (`sa_session`) or an admin — not restricted to `sa_admin` |
 
 **Auth mechanisms:**
 

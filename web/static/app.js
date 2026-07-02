@@ -5,12 +5,17 @@
   const resultsPanel      = document.getElementById("results-panel");
   const createPanel       = document.getElementById("create-panel");
   const runSearchBtn      = document.getElementById("run-search-btn");
+  const editSearchBtn     = document.getElementById("edit-search-btn");
+  const runGateMsg        = document.getElementById("run-gate-msg");
   const newSearchContainer = document.getElementById("new-search-container");
+
+  const _defaultTitle = document.title;
 
   let activeSearch = null;
   let me           = { role: "free", anonymous: true };
   let _loadSeq     = 0;
   let _searches    = [];
+  let _showFeedback = false;
   let _savedToolbarVisible  = false;
   let _savedCriteriaVisible = false;
 
@@ -72,6 +77,19 @@
       }
       return labels.join(" ") || parts[0];
     } catch { return ""; }
+  }
+
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const FREE_PLAN_MSG = "You're on the Free plan. Contact us to get full access.";
+
+  // Mirrors the backend's `(now - created_at).days > 30` (Python timedelta.days floors to
+  // whole elapsed days), so the button disables exactly when the server would 403.
+  function isRunWindowExpired(createdAt) {
+    if (!createdAt) return false;
+    const created = new Date(createdAt);
+    if (isNaN(created.getTime())) return false;
+    const elapsedDays = Math.floor((Date.now() - created.getTime()) / DAY_MS);
+    return elapsedDays > 30;
   }
 
   function scoreClass(s) { return s >= 7 ? "green" : s >= 4 ? "amber" : "red"; }
@@ -149,7 +167,7 @@
   }
 
   // ── Results rendering ─────────────────────────────────────────────────────
-  function renderCard(m) {
+  function renderCard(m, showFeedback, feedbackMap) {
     const sc       = scoreClass(m.score);
     const newTag   = m.is_new ? tag("NEW", "tag-new") : "";
     const price    = m.price != null ? `<span class="card-price">${esc(formatPrice(m.price))}</span>` : "";
@@ -163,6 +181,7 @@
       ? `<span class="card-site">${esc(site)}</span><span class="card-sep"> | </span>${esc(m.title)}`
       : esc(m.title || "(no title)");
     const titleText  = `<a class="card-title-link" href="${esc(safeHref(m.url))}" target="_blank" rel="noopener">${titleInner}</a>`;
+    const feedback   = showFeedback ? Feedback.renderFeedbackBlock(m.url, feedbackMap) : "";
     return `
       <div class="card">
         <div class="score-badge ${sc}">${Math.round(m.score)}</div>
@@ -171,6 +190,7 @@
           <div class="card-meta">${price}</div>
           ${criteria ? `<div class="criteria-row">${criteria}</div>` : ""}
           ${notes}
+          ${feedback}
         </div>
       </div>`;
   }
@@ -184,7 +204,7 @@
     return [...seen.values()];
   }
 
-  function renderResults(run) {
+  function renderResults(run, showFeedback) {
     if (run.no_match || (!run.matches?.length && !run.partial_matches?.length)) {
       resultsPanel.innerHTML = `<p class="empty-state">No matches found for this run.</p>`;
       return;
@@ -193,26 +213,34 @@
     const matchUrls = new Set(matches.map(m => m.url));
     const partials  = dedupeByUrl((run.partial_matches || []).filter(m => !matchUrls.has(m.url)));
     const label = run.config_snapshot?.title || (run.search_name || "").replace(/_/g, " ");
+    const feedbackMap = run.feedback || {};
     let html = `<p class="run-meta"><span class="run-search-label">${esc(label)}</span><span class="run-date-label">${esc(run.run_date || "")}</span><span class="run-candidates">${run.total_candidates ?? "?"} candidates</span></p>`;
+    if (showFeedback) html += Feedback.renderSaveAllRow();
     if (matches.length) html += `<div class="results-section">
       <p class="section-heading">Matches (${matches.length})</p>
-      <div class="cards">${matches.map(renderCard).join("")}</div>
+      <div class="cards">${matches.map(m => renderCard(m, showFeedback, feedbackMap)).join("")}</div>
     </div>`;
     if (partials.length) html += `<div class="results-section">
       <p class="section-heading">Partial matches (${partials.length})</p>
-      <div class="cards">${partials.map(renderCard).join("")}</div>
+      <div class="cards">${partials.map(m => renderCard(m, showFeedback, feedbackMap)).join("")}</div>
     </div>`;
     resultsPanel.innerHTML = html;
   }
 
   // ── Load / select ─────────────────────────────────────────────────────────
-  async function loadRun(searchName, runDate) {
+  async function loadRun(searchName, runDate, showFeedback) {
     const seq = ++_loadSeq;
     resultsPanel.innerHTML = `<p class="loading">Loading…</p>`;
     try {
       const run = await api(`/api/results/${encodeURIComponent(searchName)}/${encodeURIComponent(runDate)}`);
       if (seq !== _loadSeq) return;
-      renderResults(run);
+      renderResults(run, showFeedback);
+      if (showFeedback) {
+        Feedback.bindFeedback(resultsPanel, items => api(
+          `/api/feedback/${encodeURIComponent(searchName)}/${encodeURIComponent(runDate)}/batch`,
+          { method: "PUT", body: { items } },
+        ));
+      }
     } catch (e) {
       if (seq !== _loadSeq) return;
       resultsPanel.innerHTML = `<p class="empty-state">Failed to load results: ${esc(e.message)}</p>`;
@@ -234,29 +262,40 @@
       el.classList.toggle("active", el.dataset.name === name));
 
     runSearchBtn.hidden = true;
+    editSearchBtn.hidden = true;
+    runGateMsg.hidden = true;
     toolbar.hidden = true;
     const criteriaBar = document.getElementById("criteria-bar");
     if (criteriaBar) criteriaBar.hidden = true;
     resultsPanel.hidden = false;
     resultsPanel.innerHTML = `<p class="loading">Loading dates…</p>`;
     try {
-      const [dates, config] = await Promise.all([
+      const owned = _searches.find(s => s.name === name)?.owned || false;
+      const promises = [
         api(`/api/results/${encodeURIComponent(name)}`),
         api(`/api/search/${encodeURIComponent(name)}`).catch(() => null),
-      ]);
+      ];
+      if (owned) promises.push(api(`/api/user/search/${encodeURIComponent(name)}`).catch(() => null));
+      const [dates, config, ownerConfig] = await Promise.all(promises);
       dateSelect.innerHTML = dates.map(d => `<option value="${d}">${d}</option>`).join("");
       toolbar.hidden = false;
       if (config) renderCriteriaBar(config);
-      const owned = _searches.find(s => s.name === name)?.owned || false;
       runSearchBtn.hidden = !owned;
-      await loadRun(name, dates[0]);
+      const canEdit = owned && me.role !== "admin";
+      _showFeedback = canEdit;
+      editSearchBtn.hidden = !canEdit;
+      const expired = owned && me.role === "free" && isRunWindowExpired(ownerConfig && ownerConfig.created_at);
+      runSearchBtn.disabled = expired;
+      runGateMsg.hidden = !expired;
+      if (expired) runGateMsg.textContent = FREE_PLAN_MSG;
+      await loadRun(name, dates[0], _showFeedback);
     } catch {
       resultsPanel.innerHTML = `<p class="empty-state">No runs found for this search.</p>`;
     }
   }
 
   dateSelect.addEventListener("change", () => {
-    if (activeSearch) loadRun(activeSearch, dateSelect.value);
+    if (activeSearch) loadRun(activeSearch, dateSelect.value, _showFeedback);
   });
 
   runSearchBtn.addEventListener("click", async () => {
@@ -269,13 +308,17 @@
       await api(`/api/user/search/${encodeURIComponent(name)}/run`, { method: "POST" });
       const dates = await api(`/api/results/${encodeURIComponent(name)}`);
       dateSelect.innerHTML = dates.map(d => `<option value="${d}">${d}</option>`).join("");
-      if (dates.length) await loadRun(name, dates[0]);
+      if (dates.length) await loadRun(name, dates[0], _showFeedback);
     } catch (e) {
       resultsPanel.innerHTML = `<p class="empty-state">Run failed: ${esc(e.message)}</p>`;
     } finally {
       runSearchBtn.textContent = origText;
       runSearchBtn.disabled = false;
     }
+  });
+
+  editSearchBtn.addEventListener("click", () => {
+    if (activeSearch) openEditPanel(activeSearch);
   });
 
   // ── Create search panel ───────────────────────────────────────────────────
@@ -394,6 +437,109 @@
       } catch (e) {
         setSaveMsg(e.message, "err");
         runBtn.disabled = false;
+      }
+    });
+  }
+
+  // ── Edit search panel ─────────────────────────────────────────────────────
+  async function openEditPanel(name) {
+    _savedToolbarVisible = !toolbar.hidden;
+    const criteriaBar = document.getElementById("criteria-bar");
+    _savedCriteriaVisible = criteriaBar ? !criteriaBar.hidden : false;
+    toolbar.hidden = true;
+    if (criteriaBar) criteriaBar.hidden = true;
+    resultsPanel.hidden = true;
+    createPanel.innerHTML = `<p class="loading">Loading…</p>`;
+    createPanel.hidden = false;
+    try {
+      const cfg = await api(`/api/user/search/${encodeURIComponent(name)}`);
+      createPanel.innerHTML = renderEditPanel(cfg);
+      bindEditPanel(cfg);
+    } catch (e) {
+      createPanel.innerHTML = `<p class="empty-state">Failed to load search: ${esc(e.message)}</p>
+        <div class="action-row"><button id="edit-back-btn" class="btn-run">Back</button></div>`;
+      document.getElementById("edit-back-btn").addEventListener("click", closeCreatePanel);
+    }
+  }
+
+  function renderEditPanel(cfg) {
+    const actions = `<div class="action-row">
+      <button type="button" class="btn-primary" id="edit-save-btn">Save</button>
+      <button type="button" class="btn-run" id="edit-cancel-btn">Cancel</button>
+      <button type="button" class="btn-run edit-delete-btn" id="edit-delete-btn">Delete search</button>
+      <span class="save-msg" id="edit-save-msg"></span>
+    </div>`;
+    return `<div class="generate-panel">
+      <h2 class="generate-title">Edit search</h2>
+      <div class="field-row">
+        <label class="field-label" for="edit-title">Title</label>
+        <input type="text" id="edit-title" class="field-input" value="${esc(cfg.title || "")}" maxlength="200" autocomplete="off">
+      </div>
+      ${CriteriaForm.renderEdit(cfg, actions)}
+    </div>`;
+  }
+
+  function bindEditPanel(cfg) {
+    const form = createPanel.querySelector(".edit-form");
+    CriteriaForm.bindFieldControls(form);
+
+    const titleInput = document.getElementById("edit-title");
+    const saveMsg    = document.getElementById("edit-save-msg");
+    const setMsg     = (text, cls) => { saveMsg.textContent = text; saveMsg.className = `save-msg ${cls}`; };
+
+    document.getElementById("edit-cancel-btn").addEventListener("click", closeCreatePanel);
+
+    document.getElementById("edit-save-btn").addEventListener("click", async () => {
+      const title = titleInput.value.trim();
+      if (!title) { setMsg("Title is required.", "err"); return; }
+      const saveBtn = document.getElementById("edit-save-btn");
+      saveBtn.disabled = true;
+      setMsg("Saving…", "");
+      try {
+        const updated = { ...cfg, ...CriteriaForm.collectConfig(form), title };
+        await api(`/api/user/search/${encodeURIComponent(cfg.search_name)}`, { method: "PUT", body: updated });
+        setMsg("Saved.", "ok");
+        const searches = await api("/api/searches");
+        _searches = searches;
+        buildSearchList(searches);
+        updateNewSearchBtn(searches);
+        closeCreatePanel();
+        const name = cfg.search_name;
+        activeSearch = null;
+        selectSearch(name);
+      } catch (e) {
+        setMsg(e.message, "err");
+        saveBtn.disabled = false;
+      }
+    });
+
+    document.getElementById("edit-delete-btn").addEventListener("click", async () => {
+      if (!confirm(`Delete "${cfg.title || cfg.search_name}"? This cannot be undone.`)) return;
+      const delBtn = document.getElementById("edit-delete-btn");
+      delBtn.disabled = true;
+      setMsg("Deleting…", "");
+      try {
+        await api(`/api/user/search/${encodeURIComponent(cfg.search_name)}`, { method: "DELETE" });
+        activeSearch = null;
+        const searches = await api("/api/searches");
+        _searches = searches;
+        buildSearchList(searches);
+        updateNewSearchBtn(searches);
+        createPanel.hidden = true;
+        createPanel.innerHTML = "";
+        history.replaceState({}, "", "/");
+        document.title = _defaultTitle;
+        toolbar.hidden = true;
+        runSearchBtn.hidden = true;
+        editSearchBtn.hidden = true;
+        runGateMsg.hidden = true;
+        const criteriaBar = document.getElementById("criteria-bar");
+        if (criteriaBar) criteriaBar.hidden = true;
+        resultsPanel.hidden = false;
+        resultsPanel.innerHTML = `<p class="empty-state">Select a search from the left to view results.</p>`;
+      } catch (e) {
+        setMsg(e.message, "err");
+        delBtn.disabled = false;
       }
     });
   }

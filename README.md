@@ -140,7 +140,7 @@ In `/admin`, click **Users** in the sidebar to see a table of all registered use
 
 ## Feedback & learning
 
-When logged in as admin, each result card on the results page shows a feedback textarea with quick-phrase buttons ("Wrong material", "Doesn't ship to me", etc.). Click **Save all feedback** to write all non-empty fields in one batch.
+When logged in as admin, or as the owner of the search being viewed, each result card on the results page shows a feedback textarea with quick-phrase buttons ("Wrong material", "Doesn't ship to me", etc.). Click **Save all feedback** to write all non-empty fields in one batch.
 
 On the next run, if at least 3 feedback items exist across the last 10 runs, Gemini distils product-attribute preferences and any shop-level complaints into reusable signal. That signal is injected into the planning and scoring prompts for the next run, and shops with a clear pattern of complaints are filtered out automatically. You can disable this per-run with the **Learn from feedback** checkbox in the admin edit view.
 

@@ -217,11 +217,13 @@
 }
 
 .field-row {
-  display: grid;
-  grid-template-columns: 120px 1fr auto;
   align-items: start;
   gap: 10px;
   margin-bottom: 8px;
+}
+.field-row:not([hidden]) {
+  display: grid;
+  grid-template-columns: 120px 1fr auto;
 }
 .field-label {
   font-size: 12px; font-weight: 600;
@@ -259,6 +261,9 @@
   font-size: 13px; font-weight: 600; cursor: pointer;
 }
 .btn-run:hover { background: #eff6ff; }
+
+.edit-delete-btn { color: var(--score-red); border-color: var(--score-red); margin-left: auto; }
+.edit-delete-btn:hover { background: var(--score-red-bg); }
 
 .learn-label {
   display: flex; align-items: center; gap: 6px;
@@ -635,7 +640,7 @@
     width: auto;
     margin: 0;
   }
-  .field-row {
+  .field-row:not([hidden]) {
     grid-template-columns: 100px 1fr auto;
   }
 }

@@ -267,11 +267,32 @@ def get_run_dates(search_name: str):
     return dates
 
 
+def _is_owner_or_admin(
+    search_name: str,
+    sa_admin: str | None,
+    sa_session: str | None,
+) -> bool:
+    if _is_admin(sa_admin, sa_session):
+        return True
+    user = _session_user(sa_session)
+    if not user:
+        return False
+    config = fc.load_search_config(search_name)
+    return bool(config and config.get("owner_id") == user["sub"])
+
+
 @app.get("/api/results/{search_name}/{run_date}")
-def get_run(search_name: str, run_date: str):
+def get_run(
+    search_name: str,
+    run_date: str,
+    sa_admin: str | None = Cookie(default=None),
+    sa_session: str | None = Cookie(default=None),
+):
     run = fc.load_run(search_name, run_date)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
+    if not _is_owner_or_admin(search_name, sa_admin, sa_session):
+        run = {**run, "feedback": {}}
     return run
 
 
@@ -284,8 +305,18 @@ class FeedbackBatch(BaseModel):
     items: list[FeedbackBody] = Field(max_length=200)
 
 
-@app.put("/api/feedback/{search_name}/{run_date}/batch", dependencies=[Depends(_require_admin)])
-def put_feedback_batch(search_name: str, run_date: str, body: FeedbackBatch):
+@app.put("/api/feedback/{search_name}/{run_date}/batch")
+def put_feedback_batch(
+    search_name: str,
+    run_date: str,
+    body: FeedbackBatch,
+    sa_admin: str | None = Cookie(default=None),
+    sa_session: str | None = Cookie(default=None),
+):
+    if not _is_admin(sa_admin, sa_session) and not _session_user(sa_session):
+        raise HTTPException(status_code=401, detail="Sign in required")
+    if not _is_owner_or_admin(search_name, sa_admin, sa_session):
+        raise HTTPException(status_code=403, detail="Not your search")
     fc.save_feedback_batch(search_name, run_date, [(i.url, i.text.strip()) for i in body.items])
     return {"ok": True}
 
@@ -441,6 +472,23 @@ def user_generate_search(body: GenerateByTitleBody, sa_session: str | None = Coo
     config["description"] = body.description
     config["visibility"] = "private"
     config["owner_id"] = user["sub"]
+    return config
+
+
+@app.get("/api/user/search/{name}")
+def user_get_search(
+    name: str,
+    sa_admin: str | None = Cookie(default=None),
+    sa_session: str | None = Cookie(default=None),
+):
+    user = _session_user(sa_session)
+    if not user and not _is_admin(sa_admin, sa_session):
+        raise HTTPException(status_code=401, detail="Sign in required")
+    config = fc.load_search_config(name)
+    if not config:
+        raise HTTPException(status_code=404, detail="Search not found")
+    if not _is_admin(sa_admin, sa_session) and config.get("owner_id") != (user or {}).get("sub"):
+        raise HTTPException(status_code=403, detail="Not your search")
     return config
 
 
