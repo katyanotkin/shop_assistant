@@ -50,6 +50,14 @@ def test_feedback_batch_requires_auth(client):
     assert r.status_code == 401
 
 
+def test_feedback_batch_requires_auth_even_with_malformed_body(client):
+    """Auth must be checked via a Depends() dependency, not inline in the endpoint body —
+    otherwise FastAPI validates (and 422s on) the request body before auth ever runs,
+    leaking a 422 to an anonymous caller instead of 401."""
+    r = client.put("/api/feedback/wax_coat/2026-06-19/batch", json={})
+    assert r.status_code == 401
+
+
 def test_feedback_batch_owner_session_allowed(client):
     client.cookies.set("sa_session", _tok(_OWNER))
     with patch("web.main.fc") as mock_fc:

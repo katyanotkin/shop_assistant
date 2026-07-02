@@ -305,18 +305,25 @@ class FeedbackBatch(BaseModel):
     items: list[FeedbackBody] = Field(max_length=200)
 
 
-@app.put("/api/feedback/{search_name}/{run_date}/batch")
-def put_feedback_batch(
+def _require_feedback_access(
     search_name: str,
-    run_date: str,
-    body: FeedbackBatch,
     sa_admin: str | None = Cookie(default=None),
     sa_session: str | None = Cookie(default=None),
-):
-    if not _is_admin(sa_admin, sa_session) and not _session_user(sa_session):
-        raise HTTPException(status_code=401, detail="Sign in required")
+) -> None:
+    # A Depends()-based check (not inline in the endpoint body) is required here: FastAPI
+    # resolves dependencies before validating the request body, so this fires 401/403 even
+    # when the body is malformed/empty — an inline check would let a bad body 422 first,
+    # leaking whether a search exists to an unauthenticated caller.
+    if _is_admin(sa_admin, sa_session):
+        return
     if not _is_owner_or_admin(search_name, sa_admin, sa_session):
+        if not _session_user(sa_session):
+            raise HTTPException(status_code=401, detail="Sign in required")
         raise HTTPException(status_code=403, detail="Not your search")
+
+
+@app.put("/api/feedback/{search_name}/{run_date}/batch", dependencies=[Depends(_require_feedback_access)])
+def put_feedback_batch(search_name: str, run_date: str, body: FeedbackBatch):
     fc.save_feedback_batch(search_name, run_date, [(i.url, i.text.strip()) for i in body.items])
     return {"ok": True}
 
