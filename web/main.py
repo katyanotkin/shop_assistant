@@ -35,6 +35,7 @@ _HTML = _inject_brand((Path(__file__).parent / "templates" / "index.html").read_
 _ADMIN_HTML = _inject_brand((Path(__file__).parent / "templates" / "admin.html").read_text())
 _PRIVACY_HTML = _inject_brand((Path(__file__).parent / "templates" / "privacy.html").read_text())
 _TERMS_HTML = _inject_brand((Path(__file__).parent / "templates" / "terms.html").read_text())
+_FEEDBACK_HTML = _inject_brand((Path(__file__).parent / "templates" / "feedback.html").read_text())
 _MANIFEST = _inject_brand((Path(__file__).parent / "static" / "manifest.json").read_text())
 
 
@@ -118,6 +119,32 @@ def privacy_page():
 @app.get("/terms", response_class=HTMLResponse)
 def terms_page():
     return _TERMS_HTML
+
+
+@app.get("/feedback", response_class=HTMLResponse)
+def feedback_page():
+    return _FEEDBACK_HTML
+
+
+class ProductFeedbackBody(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+
+
+@app.post("/api/product-feedback")
+def submit_product_feedback(
+    body: ProductFeedbackBody,
+    sa_session: str | None = Cookie(default=None),
+):
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="Feedback text cannot be empty")
+    user = _session_user(sa_session)
+    if not user and len(text) > 500:
+        raise HTTPException(status_code=422, detail="Anonymous feedback is limited to 500 characters")
+    owner_id = user["sub"] if user else None
+    owner_name = user.get("name") if user else None
+    fc.save_product_feedback(text, owner_id=owner_id, owner_name=owner_name)
+    return {"ok": True}
 
 
 @app.get("/auth/login")

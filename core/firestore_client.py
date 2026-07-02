@@ -9,7 +9,7 @@ from core.slug import slugify
 
 _db: firestore.Client | None = None
 _MAX_SLUG_ATTEMPTS = 50
-_RESERVED_SEARCH_NAMES = {"admin", "privacy", "terms", "manifest.json", "static", "api", "auth"}
+_RESERVED_SEARCH_NAMES = {"admin", "privacy", "terms", "feedback", "manifest.json", "static", "api", "auth"}
 
 
 def get_db() -> firestore.Client:
@@ -234,3 +234,16 @@ def load_feedback_entries(search_name: str, limit: int = 10) -> list[dict]:
                 }
             )
     return entries
+
+
+def save_product_feedback(text: str, owner_id: str | None, owner_name: str | None) -> None:
+    from datetime import datetime, timezone
+
+    get_db().collection("product_feedback").add(
+        {
+            "text": text,
+            "owner_id": owner_id,  # the user's email, matching owner_id semantics elsewhere in this codebase
+            "owner_name": owner_name,
+            "created_at": datetime.now(timezone.utc),
+        }
+    )
