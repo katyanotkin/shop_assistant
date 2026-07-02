@@ -76,6 +76,7 @@ def test_run_result_config_snapshot_roundtrip():
 
     cfg = SearchConfig(
         search_name="test",
+        title="Test",
         criteria=SearchCriteria(category="coat", gender="women"),
     )
     r = RunResult(search_name="test", run_date="2024-01-01", config_snapshot=cfg)

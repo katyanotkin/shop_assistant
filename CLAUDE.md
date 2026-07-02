@@ -34,6 +34,7 @@ python run.py list
 ```json
 {
   "search_name": "wax_coat",
+  "title": "Wax Coat",
   "active": true,
   "criteria": {
     "category": ["coat", "trenchcoat"],

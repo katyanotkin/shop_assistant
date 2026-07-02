@@ -33,8 +33,10 @@ Return ONLY a JSON object:
   "title": "product name, or empty string if not a product page",
   "price": null or numeric price in USD/EUR/GBP,
   "score": integer 0-10,
-  "matched": ["brief label per satisfied requirement, e.g. 'waxed cotton', 'size M', 'price ok'"],
-  "unmatched": ["brief label per unsatisfied requirement, e.g. 'lining unclear', 'size not listed'"],
+  "matched": ["brief label per satisfied requirement (one per criteria FIELD, not per value), \
+e.g. 'waxed cotton', 'size M', 'price ok'"],
+  "unmatched": ["brief label per unsatisfied requirement (one per criteria FIELD, not per value), \
+e.g. 'lining unclear', 'size not listed'"],
   "notes": "one sentence explanation"
 }}
 
@@ -44,8 +46,12 @@ Hard rules (violations → score 0):
 - Score 0 if not a product page at all.
 
 Soft rules (violations reduce score, do not zero it):
-- For any criteria field that lists acceptable values (arrays), the requirement is satisfied \
-if ANY listed value matches the product. If none match, reduce the score.
+- For any criteria field that lists acceptable values (arrays, e.g. `material`, `length`, \
+`lining`, `sizes`), the field is a single requirement satisfied if ANY listed value matches \
+the product — the other listed values are alternatives, not separate requirements. If satisfied, \
+add ONE `matched` label naming the value that matched (e.g. "wood") and do NOT list the \
+unmatched alternatives from that same field (e.g. do not add "cloth" or "metal" to `unmatched`). \
+Only add the field to `unmatched` if NONE of its listed values match.
 - Fields ending in `_exclude` or named `exclude`: if ANY excluded value is present in the \
 product, cap score at 3.
 - `max_price`: up to 50% over limit → score ≤ 6, note "price over budget"; \

@@ -187,3 +187,48 @@ def test_load_run_not_found():
         result = fc.load_run("wax_coat", "2026-06-19")
 
     assert result is None
+
+
+# ── generate_unique_search_name ──────────────────────────────────────────────
+
+
+def test_generate_unique_search_name_no_collision():
+    with patch("core.firestore_client.load_search_config", return_value=None):
+        assert fc.generate_unique_search_name("Bathroom Cabinet") == "bathroom_cabinet"
+
+
+def test_generate_unique_search_name_appends_numeric_suffix_on_collision():
+    taken = {"bathroom_cabinet", "bathroom_cabinet_2"}
+    with patch("core.firestore_client.load_search_config", side_effect=lambda n: {} if n in taken else None):
+        assert fc.generate_unique_search_name("Bathroom Cabinet") == "bathroom_cabinet_3"
+
+
+def test_generate_unique_search_name_falls_back_to_uuid_when_attempts_exhausted():
+    with patch("core.firestore_client.load_search_config", return_value={}):
+        result = fc.generate_unique_search_name("Bathroom Cabinet")
+    assert result.startswith("bathroom_cabinet"[:57])
+    assert result != "bathroom_cabinet"
+
+
+def test_generate_unique_search_name_avoids_reserved_route_names():
+    with patch("core.firestore_client.load_search_config", return_value=None):
+        assert fc.generate_unique_search_name("Admin") == "admin_2"
+
+
+# ── save_search_config ───────────────────────────────────────────────────────
+
+
+def test_save_search_config_defaults_title_from_search_name():
+    mock_db = MagicMock()
+    config = {"search_name": "wool_coat"}
+    with patch("core.firestore_client.get_db", return_value=mock_db):
+        fc.save_search_config(config)
+    assert config["title"] == "Wool Coat"
+
+
+def test_save_search_config_preserves_explicit_title():
+    mock_db = MagicMock()
+    config = {"search_name": "wool_coat", "title": "My Cozy Coat"}
+    with patch("core.firestore_client.get_db", return_value=mock_db):
+        fc.save_search_config(config)
+    assert config["title"] == "My Cozy Coat"

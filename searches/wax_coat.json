@@ -1,5 +1,6 @@
 {
   "search_name": "wax_coat",
+  "title": "Wax Coat",
   "active": true,
   "criteria": {
     "category": ["coat", "jacket", "riding_coat", "trench"],

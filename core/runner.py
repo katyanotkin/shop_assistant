@@ -148,6 +148,7 @@ def run_search(search_name: str, settings: Settings, dry_run: bool = False, lear
 
     effective_config = models.SearchConfig(
         search_name=search_name,
+        title=config.get("title", ""),
         active=config.get("active", True),
         owner_id=config.get("owner_id", "admin"),
         visibility=config.get("visibility", "public"),

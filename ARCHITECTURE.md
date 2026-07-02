@@ -102,7 +102,7 @@ Runs at the start of each `run_search` call (unless `learn=False` or `dry_run`):
 | Searcher | `_grounded_search` | `GoogleSearch` | (default) | Called once per query + once per preferred shop |
 | Ranker | `rank_candidate` | None | 0 | Injects `feedback_notes` if present |
 | Learn | `learn_from_feedback` | None | 0 | Only when ≥ 3 feedback items exist |
-| Generate config | `generate_search_config` | None | 0 | Admin UI only; converts free text → `SearchConfig` JSON |
+| Generate config | `generate_search_config` | None | 0 | Admin and user "generate" flows; converts free text → `SearchConfig` JSON |
 
 All calls use `gemini-2.5-flash-lite` on Vertex AI in `us-central1`. Auth is Application Default Credentials.
 
@@ -116,7 +116,8 @@ Document ID = `search_name` (e.g. `wax_coat`).
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `search_name` | string | Primary key, matches document ID |
+| `search_name` | string | Primary key, matches document ID. URL slug, `^[a-z0-9_]{1,64}$`. For free users this is server-derived from `title` (see below); admins still type it directly |
+| `title` | string | Required. Free-form human-readable name. Free users type this directly; `search_name` is derived from it via `core/slug.py: slugify()` + `core/firestore_client.py: generate_unique_search_name()` (numeric-suffix dedup `_2`, `_3`, ... against a reserved-word blocklist, falling back to a uuid suffix after 50 attempts). Defaulted from `search_name` (title-cased) by `save_search_config` if not set, so CLI- and admin-created docs also get one |
 | `active` | bool | Included in results UI; inactive searches still appear in admin |
 | `visibility` | string | `"public"` (default) or `"private"` |
 | `owner_id` | string | `"admin"` or a user email; controls who sees private searches |
@@ -157,7 +158,7 @@ Base URL: `https://shopassistant.verbboard.com`
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/` | Main results page (HTML) — read-only, no admin UI |
-| `GET` | `/api/searches` | List searches visible to the caller: `[{name, active, visibility}]` |
+| `GET` | `/api/searches` | List searches visible to the caller: `[{name, title, active, visibility, owned}]` |
 | `GET` | `/api/search/{name}` | Public search config (criteria + preferred_shops only) |
 | `GET` | `/api/results/{search_name}` | List run dates for a search (descending), 404 if none |
 | `GET` | `/api/results/{search_name}/{run_date}` | Full run document; `feedback` decoded to `{url: text}` |
@@ -188,10 +189,16 @@ Base URL: `https://shopassistant.verbboard.com`
 | `GET` | `/api/admin/me` | `{admin: bool}` — checks `sa_admin` cookie |
 | `GET` | `/api/admin/searches` | Full search configs including `feedback_notes`, `avoid_shops` |
 | `GET` | `/api/admin/search/{name}` | Single search config |
-| `PUT` | `/api/admin/search/{name}` | Upsert search config |
-| `POST` | `/api/admin/search/generate` | `{search_name, description}` → Gemini config JSON with `description` preserved |
+| `PUT` | `/api/admin/search/{name}` | Upsert search config — loads the existing doc and merges the request body on top (`{**existing, **body}`), so fields the admin form doesn't send (`description`, `feedback_notes`, `owner_id`, `visibility`, `title`) are preserved rather than wiped |
+| `POST` | `/api/admin/search/generate` | `{search_name, description}` → Gemini config JSON; `description` preserved and `title` set to `search_name` title-cased |
 | `POST` | `/api/admin/run/{name}` | Trigger a search run synchronously; returns `{ok, matches, partial}` |
 | `PUT` | `/api/feedback/{search_name}/{run_date}/batch` | Save feedback; body: `{items: [{url, text}]}` |
+
+### User API endpoints (require `sa_session`)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/user/search/generate` | `{title, description}` → Gemini config JSON. `search_name` is server-derived from `title` via `generate_unique_search_name`. Response is the generated config plus `search_name`, `title`, `description`, `visibility: "private"`, `owner_id`. Free-plan users limited to one search |
 
 **Auth mechanisms:**
 

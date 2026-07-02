@@ -61,7 +61,7 @@ Signed-in users on the main page (`/`) can create one private search without adm
 
 After signing in, a **+ New search** button appears in the sidebar. Free-plan users with one search already saved see no button. Admin-role users see an **Admin panel** link instead and use `/admin`.
 
-Click **+ New search**: enter a search name (lowercase, underscores) and describe what you want. Click **Generate**: Gemini produces a structured config identical to the admin flow. A JSON preview appears. Click **Save** to store it; a **Run** button then appears. Click **Run** to execute the search immediately.
+Click **+ New search**: enter a title (free text) and describe what you want. Click **Generate**: Gemini produces a structured config identical to the admin flow; the search's Firestore ID is derived from the title. A JSON preview appears. Click **Save** to store it; a **Run** button then appears. Click **Run** to execute the search immediately.
 
 The search appears under **My searches** in the sidebar. A **Run** button also appears in the toolbar when an owned search is selected.
 

@@ -49,6 +49,7 @@ _PREMIUM_USER = {
 # Minimal search config that generate_search_config would produce.
 _FAKE_CONFIG = {
     "search_name": "wool_coat",
+    "title": "Wool Coat",
     "active": True,
     "criteria": {
         "category": ["coat"],
@@ -66,7 +67,7 @@ _FAKE_CONFIG = {
 
 # Body accepted by /api/user/search/generate (description meets 10-char minimum).
 _GENERATE_BODY = {
-    "search_name": "wool_coat",
+    "title": "Wool Coat",
     "description": "a warm wool coat for winter use in the city",
 }
 
@@ -98,6 +99,7 @@ def client():
             mock_fc.save_search_config.return_value = None
             mock_fc.list_users.return_value = []
             mock_fc.list_user_searches.return_value = []
+            mock_fc.generate_unique_search_name.return_value = "wool_coat"
             mock_fc.update_user_role.return_value = None
             mock_fc.update_search_visibility.return_value = None
             mock_fc.delete_search_config.return_value = None
@@ -174,6 +176,70 @@ def test_admin_update_role_rejects_invalid_role_value(client):
     assert r.status_code == 422
 
 
+# ── PUT /api/admin/search/{name} ──────────────────────────────────────────────
+
+
+def test_admin_save_search_requires_auth(client):
+    c, _ = client
+    r = c.put("/api/admin/search/wool_coat", json={"criteria": {"category": ["coat"]}})
+    assert r.status_code == 401
+
+
+def test_admin_save_search_preserves_fields_not_sent_by_client(client):
+    """admin.js's collectConfig() never sends title/description/feedback_notes/owner_id/
+    visibility — a merge, not an overwrite, must keep them from the existing doc."""
+    c, mock_fc = client
+    mock_fc.load_search_config.return_value = {
+        "search_name": "wool_coat",
+        "title": "Wool Coat",
+        "description": "a warm coat",
+        "feedback_notes": "prefers longer length",
+        "owner_id": "user@x.com",
+        "visibility": "private",
+        "criteria": {"category": ["coat"]},
+    }
+    c.cookies.set("sa_admin", TOKEN)
+    r = c.put("/api/admin/search/wool_coat", json={"active": False, "criteria": {"category": ["coat", "jacket"]}})
+    assert r.status_code == 200
+    saved = mock_fc.save_search_config.call_args[0][0]
+    assert saved["title"] == "Wool Coat"
+    assert saved["description"] == "a warm coat"
+    assert saved["feedback_notes"] == "prefers longer length"
+    assert saved["owner_id"] == "user@x.com"
+    assert saved["visibility"] == "private"
+    assert saved["active"] is False
+    assert saved["criteria"] == {"category": ["coat", "jacket"]}
+
+
+def test_admin_save_search_explicit_empty_list_clears_field(client):
+    c, mock_fc = client
+    mock_fc.load_search_config.return_value = {
+        "search_name": "wool_coat",
+        "title": "Wool Coat",
+        "preferred_shops": ["https://example.com"],
+        "criteria": {"category": ["coat"]},
+    }
+    c.cookies.set("sa_admin", TOKEN)
+    r = c.put(
+        "/api/admin/search/wool_coat",
+        json={"preferred_shops": [], "criteria": {"category": ["coat"]}},
+    )
+    assert r.status_code == 200
+    saved = mock_fc.save_search_config.call_args[0][0]
+    assert saved["preferred_shops"] == []
+
+
+def test_admin_save_search_new_search_gets_derived_title(client):
+    c, mock_fc = client
+    mock_fc.load_search_config.return_value = None  # brand new search
+    c.cookies.set("sa_admin", TOKEN)
+    r = c.put("/api/admin/search/wool_coat", json={"criteria": {"category": ["coat"]}})
+    assert r.status_code == 200
+    saved = mock_fc.save_search_config.call_args[0][0]
+    assert saved["search_name"] == "wool_coat"
+    assert "title" not in saved  # fc.save_search_config itself defaults it
+
+
 # ── PATCH /api/admin/search/{name}/visibility ─────────────────────────────────
 
 
@@ -236,17 +302,6 @@ def test_user_generate_free_with_one_other_search_returns_403(client):
     assert r.status_code == 403
 
 
-def test_user_generate_free_regenerating_own_search_is_allowed(client):
-    """Free user may re-generate their only existing search."""
-    c, mock_fc = client
-    # "wool_coat" is already owned; body also requests "wool_coat" — allowed.
-    mock_fc.list_user_searches.return_value = [{"search_name": "wool_coat"}]
-    c.cookies.set("sa_session", _tok(_FREE_USER))
-    with patch("web.main.generate_search_config", return_value=dict(_FAKE_CONFIG)):
-        r = c.post("/api/user/search/generate", json=_GENERATE_BODY)
-    assert r.status_code == 200
-
-
 def test_user_generate_premium_always_allowed(client):
     """Premium users bypass the one-search limit entirely."""
     c, mock_fc = client
@@ -270,6 +325,32 @@ def test_user_generate_response_sets_owner_and_visibility(client):
     assert data["visibility"] == "private"
 
 
+def test_user_generate_rejects_missing_title(client):
+    c, _ = client
+    c.cookies.set("sa_session", _tok(_FREE_USER))
+    r = c.post("/api/user/search/generate", json={"description": "a warm wool coat for winter"})
+    assert r.status_code == 422
+
+
+def test_user_generate_derives_search_name_from_title(client):
+    """search_name comes from fc.generate_unique_search_name(title), not from client input."""
+    c, mock_fc = client
+    mock_fc.list_user_searches.return_value = []
+    mock_fc.generate_unique_search_name.return_value = "bathroom_cabinet_2"
+    c.cookies.set("sa_session", _tok(_FREE_USER))
+    with patch("web.main.generate_search_config", return_value=dict(_FAKE_CONFIG)) as gen:
+        r = c.post(
+            "/api/user/search/generate",
+            json={"title": "Bathroom Cabinet", "description": "stand-alone bathroom cabinet, wood or metal"},
+        )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["search_name"] == "bathroom_cabinet_2"
+    assert data["title"] == "Bathroom Cabinet"
+    mock_fc.generate_unique_search_name.assert_called_once_with("Bathroom Cabinet")
+    gen.assert_called_once_with("stand-alone bathroom cabinet, wood or metal", "bathroom_cabinet_2", "fake-project")
+
+
 # ── PUT /api/user/search/{name} ───────────────────────────────────────────────
 
 
@@ -286,6 +367,13 @@ def test_user_save_search_invalid_name_returns_422(client):
     assert r.status_code == 422
 
 
+def test_user_save_search_rejects_missing_title(client):
+    c, _ = client
+    c.cookies.set("sa_session", _tok(_FREE_USER))
+    r = c.put("/api/user/search/wool_coat", json={"criteria": {}})
+    assert r.status_code == 422
+
+
 def test_user_save_search_forbidden_when_not_owner(client):
     c, mock_fc = client
     mock_fc.load_search_config.return_value = {
@@ -293,7 +381,7 @@ def test_user_save_search_forbidden_when_not_owner(client):
         "owner_id": "other@x.com",
     }
     c.cookies.set("sa_session", _tok(_FREE_USER))
-    r = c.put("/api/user/search/wool_coat", json={"criteria": {}})
+    r = c.put("/api/user/search/wool_coat", json={"title": "Wool Coat", "criteria": {}})
     assert r.status_code == 403
 
 
@@ -302,7 +390,7 @@ def test_user_save_search_success_creates_new_search(client):
     mock_fc.load_search_config.return_value = None  # New search
     mock_fc.list_user_searches.return_value = []  # Free user has none yet
     c.cookies.set("sa_session", _tok(_FREE_USER))
-    r = c.put("/api/user/search/wool_coat", json={"criteria": {"category": ["coat"]}})
+    r = c.put("/api/user/search/wool_coat", json={"title": "Wool Coat", "criteria": {"category": ["coat"]}})
     assert r.status_code == 200
     assert r.json() == {"ok": True}
     mock_fc.save_search_config.assert_called_once()
@@ -313,7 +401,7 @@ def test_user_save_search_free_cannot_create_second_search(client):
     mock_fc.load_search_config.return_value = None  # No search with this name
     mock_fc.list_user_searches.return_value = [{"search_name": "existing"}]  # Already has one
     c.cookies.set("sa_session", _tok(_FREE_USER))
-    r = c.put("/api/user/search/wool_coat", json={"criteria": {}})
+    r = c.put("/api/user/search/wool_coat", json={"title": "Wool Coat", "criteria": {}})
     assert r.status_code == 403
 
 

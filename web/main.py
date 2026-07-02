@@ -237,6 +237,7 @@ def get_searches(
     return [
         {
             "name": c["search_name"],
+            "title": c.get("title", ""),
             "active": c.get("active", True),
             "visibility": c.get("visibility", "public"),
             "owned": c.get("owner_id") == user_email if user_email else False,
@@ -331,7 +332,8 @@ def admin_get_search(name: str):
 
 @app.put("/api/admin/search/{name}", dependencies=[Depends(_require_admin)])
 async def admin_save_search(name: str, request: Request):
-    config = await request.json()
+    existing = fc.load_search_config(name) or {}
+    config = {**existing, **(await request.json())}
     config["search_name"] = name
     fc.save_search_config(config)
     return {"ok": True}
@@ -349,6 +351,7 @@ def admin_generate_search(body: GenerateBody):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     config["description"] = body.description
+    config["title"] = body.search_name.replace("_", " ").title()
     return config
 
 
@@ -415,19 +418,26 @@ def _session_user(sa_session: str | None) -> dict | None:
     return user
 
 
+class GenerateByTitleBody(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(min_length=10, max_length=2000)
+
+
 @app.post("/api/user/search/generate")
-def user_generate_search(body: GenerateBody, sa_session: str | None = Cookie(default=None)):
+def user_generate_search(body: GenerateByTitleBody, sa_session: str | None = Cookie(default=None)):
     user = _session_user(sa_session)
     if not user:
         raise HTTPException(status_code=401, detail="Sign in required")
-    if user.get("role") == "free":
-        owned = {s["search_name"] for s in fc.list_user_searches(user["sub"])}
-        if owned and body.search_name not in owned:
-            raise HTTPException(status_code=403, detail="Free plan allows one search. Contact us to upgrade.")
+    if user.get("role") == "free" and fc.list_user_searches(user["sub"]):
+        raise HTTPException(status_code=403, detail="Free plan allows one search. Contact us to upgrade.")
+    title = body.title.strip()
+    search_name = fc.generate_unique_search_name(title)
     try:
-        config = generate_search_config(body.description, body.search_name, _settings.google_cloud_project)
+        config = generate_search_config(body.description, search_name, _settings.google_cloud_project)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    config["search_name"] = search_name
+    config["title"] = title
     config["description"] = body.description
     config["visibility"] = "private"
     config["owner_id"] = user["sub"]
@@ -444,6 +454,11 @@ async def user_save_search(name: str, request: Request, sa_session: str | None =
     if not user:
         raise HTTPException(status_code=401, detail="Sign in required")
     config = await request.json()
+    title = (config.get("title") or "").strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="Title is required")
+    if len(title) > 200:
+        raise HTTPException(status_code=422, detail="Title must be 200 characters or fewer")
     existing = fc.load_search_config(name)
     if existing and existing.get("owner_id") != user["sub"]:
         raise HTTPException(status_code=403, detail="Not your search")
@@ -451,6 +466,7 @@ async def user_save_search(name: str, request: Request, sa_session: str | None =
         if fc.list_user_searches(user["sub"]):
             raise HTTPException(status_code=403, detail="Free plan allows one search. Contact us to upgrade.")
     config["search_name"] = name
+    config["title"] = title
     config["owner_id"] = user["sub"]
     config["visibility"] = existing.get("visibility", "private") if existing else "private"
     config["created_at"] = (

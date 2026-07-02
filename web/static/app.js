@@ -192,7 +192,7 @@
     const matches   = dedupeByUrl(run.matches || []);
     const matchUrls = new Set(matches.map(m => m.url));
     const partials  = dedupeByUrl((run.partial_matches || []).filter(m => !matchUrls.has(m.url)));
-    const label = (run.search_name || "").replace(/_/g, " ");
+    const label = run.config_snapshot?.title || (run.search_name || "").replace(/_/g, " ");
     let html = `<p class="run-meta"><span class="run-search-label">${esc(label)}</span><span class="run-date-label">${esc(run.run_date || "")}</span><span class="run-candidates">${run.total_candidates ?? "?"} candidates</span></p>`;
     if (matches.length) html += `<div class="results-section">
       <p class="section-heading">Matches (${matches.length})</p>
@@ -227,7 +227,8 @@
     activeSearch = name;
     if (replace) history.replaceState({}, "", "/" + encodeURIComponent(name));
     else         history.pushState({}, "", "/" + encodeURIComponent(name));
-    document.title = `${name.replace(/_/g, " ")} — TailoredLoop`;
+    const title = _searches.find(s => s.name === name)?.title || name.replace(/_/g, " ");
+    document.title = `${title} — TailoredLoop`;
 
     document.querySelectorAll(".search-list li").forEach(el =>
       el.classList.toggle("active", el.dataset.name === name));
@@ -302,8 +303,8 @@
     return `<div class="generate-panel">
       <h2 class="generate-title">New search</h2>
       <div class="field-row">
-        <label class="field-label" for="cs-name">Name</label>
-        <input type="text" id="cs-name" class="field-input" placeholder="e.g. wool_coat" autocomplete="off">
+        <label class="field-label" for="cs-title">Title</label>
+        <input type="text" id="cs-title" class="field-input" placeholder="e.g. Bathroom Cabinet" autocomplete="off">
       </div>
       <div class="field-row">
         <label class="field-label" for="cs-desc">Description</label>
@@ -335,19 +336,16 @@
     document.getElementById("cs-cancel-btn").addEventListener("click", closeCreatePanel);
 
     document.getElementById("cs-generate-btn").addEventListener("click", async () => {
-      const nameVal = document.getElementById("cs-name").value.trim().toLowerCase();
-      const desc    = document.getElementById("cs-desc").value.trim();
-      if (!nameVal || !/^[a-z0-9_]+$/.test(nameVal)) {
-        setMsg("Name must be lowercase letters, numbers, and underscores only.", "err");
-        return;
-      }
+      const titleVal = document.getElementById("cs-title").value.trim();
+      const desc     = document.getElementById("cs-desc").value.trim();
+      if (!titleVal) { setMsg("Title is required.", "err"); return; }
       if (desc.length < 10) { setMsg("Description must be at least 10 characters.", "err"); return; }
 
       const genBtn = document.getElementById("cs-generate-btn");
       genBtn.disabled = true;
       setMsg("Generating…", "");
       try {
-        generatedConfig = await api("/api/user/search/generate", { method: "POST", body: { search_name: nameVal, description: desc } });
+        generatedConfig = await api("/api/user/search/generate", { method: "POST", body: { title: titleVal, description: desc } });
         document.getElementById("cs-config-pre").textContent = JSON.stringify(generatedConfig, null, 2);
         document.getElementById("cs-preview").hidden = false;
         setMsg("", "");
@@ -408,7 +406,7 @@
 
     function itemHTML(s) {
       return `<li role="option" tabindex="0" data-name="${esc(s.name)}" class="${s.active ? "" : "inactive-search"}">
-        <span>${esc(s.name.replace(/_/g, " "))}</span>
+        <span>${esc(s.title || s.name.replace(/_/g, " "))}</span>
         <button class="copy-link-btn" title="Copy link" aria-label="Copy link to ${esc(s.name)}">⎘</button>
       </li>`;
     }

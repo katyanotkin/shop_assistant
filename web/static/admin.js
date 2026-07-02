@@ -501,7 +501,7 @@
   function renderConfigHeader(cfg) {
     const vis = cfg.visibility || "public";
     return `<div class="config-header-row">
-      <span class="config-search-name">${esc(cfg.search_name.replace(/_/g, " "))}</span>
+      <span class="config-search-name">${esc(cfg.title || cfg.search_name.replace(/_/g, " "))}</span>
       <button type="button" class="btn-visibility btn-run" data-name="${esc(cfg.search_name)}" data-visibility="${esc(vis)}">
         ${vis === "public" ? "Make private" : "Make public"}
       </button>
@@ -582,7 +582,7 @@
     const searches = await api("GET", "/api/admin/searches");
     searchList.innerHTML = searches.map(s =>
       `<li role="option" data-name="${esc(s.search_name)}" class="${s.active ? "" : "inactive-search"}">
-        ${esc(s.search_name.replace(/_/g, " "))}
+        ${esc(s.title || s.search_name.replace(/_/g, " "))}
       </li>`).join("");
     searchList.querySelectorAll("li").forEach(el =>
       el.addEventListener("click", () => selectSearch(el.dataset.name)));
@@ -649,7 +649,7 @@
 
     searchList.innerHTML = searches.map(s =>
       `<li role="option" data-name="${esc(s.search_name)}" class="${s.active ? "" : "inactive-search"}">
-        ${esc(s.search_name.replace(/_/g, " "))}
+        ${esc(s.title || s.search_name.replace(/_/g, " "))}
       </li>`).join("");
 
     searchList.querySelectorAll("li").forEach(el =>

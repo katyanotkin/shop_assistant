@@ -1,10 +1,15 @@
 import hashlib
+import uuid
 from urllib.parse import urlparse
 
 from google.api_core.exceptions import NotFound
 from google.cloud import firestore
 
+from core.slug import slugify
+
 _db: firestore.Client | None = None
+_MAX_SLUG_ATTEMPTS = 50
+_RESERVED_SEARCH_NAMES = {"admin", "privacy", "terms", "manifest.json", "static", "api", "auth"}
 
 
 def get_db() -> firestore.Client:
@@ -22,7 +27,20 @@ def load_search_config(search_name: str) -> dict | None:
 def save_search_config(config: dict) -> None:
     config.setdefault("owner_id", "admin")
     config.setdefault("visibility", "public")
+    if not config.get("title"):
+        config["title"] = config["search_name"].replace("_", " ").title()
     get_db().collection("shop_searches").document(config["search_name"]).set(config)
+
+
+def generate_unique_search_name(title: str, max_length: int = 64) -> str:
+    base = slugify(title, max_length)
+    candidate = base
+    for n in range(2, _MAX_SLUG_ATTEMPTS + 2):
+        if candidate not in _RESERVED_SEARCH_NAMES and load_search_config(candidate) is None:
+            return candidate
+        suffix = f"_{n}"
+        candidate = f"{base[: max_length - len(suffix)]}{suffix}"
+    return f"{base[:57]}_{uuid.uuid4().hex[:6]}"
 
 
 def list_searches(active_only: bool = True) -> list[dict]:

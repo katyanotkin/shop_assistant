@@ -27,6 +27,7 @@ class SearchCriteria(BaseModel):
 
 class SearchConfig(BaseModel):
     search_name: str
+    title: str
     active: bool = True
     owner_id: str = "admin"
     visibility: str = "public"  # "public" | "private"
