@@ -174,3 +174,17 @@ Admin is a full superuser:
 - Promotes and demotes any search between private and public.
 - Views the user list and changes any user's role.
 - Cannot accidentally remove the last admin account (the action is blocked).
+
+### Future: subscription model (self-serve premium)
+
+Today premium is granted manually by an admin, with no payment flow. As a subscription model, the plan is:
+
+**Promotion (free → premium).** A payment provider webhook flips the role the same way the admin dropdown does today — both paths call the same role-update path, so admin-manual grants (comps, support cases) keep working alongside self-serve checkout. The existing free-tier gate copy ("You're on the Free plan. Contact us to get full access.") becomes the upgrade entry point once checkout exists.
+
+**Demotion (premium → free, e.g. subscription lapses).** Decided policy: a demoted user keeps read access to every search they created while premium — nothing is deleted, hidden, or forcibly consolidated down to the free 1-search limit. Whether a given search can still be *run* is governed by the same 1-month-from-creation window that already applies to every free-role search today — no special-casing for "was this user ever premium." A search created recently (even while still premium) still gets its full month like any free user's search would; older searches simply age out of the window the same way they always do.
+
+**Refinement — early upgraders keep their unused free days.** If a user upgrades to premium *before* their one existing search's 30-day free window has elapsed, that unused time isn't forfeited: on a later demotion, the search's remaining run-eligibility is the leftover balance from the original window (e.g. upgraded on day 5 of 30 → 25 days still owed), counted from the demotion date, not from the original `created_at` as if the premium period had counted against it. This only applies to the one search that falls within the free allowance — it's a fairness fix for the boundary case, not a general "premium time doesn't count" rule. Implementing this needs the backend to know when the user upgraded (and, if it happens more than once, when each premium period started/ended) to compute the unused balance — a small addition beyond the plain per-search `created_at` check described above, deferred alongside the rest of this section until a payment provider is chosen.
+
+**Differentiating premium beyond "unlimited + no expiry" (open, not committed).** Candidates that map to real cost/quality levers in the pipeline rather than generic tier features: more frequent scheduled runs per search, a higher candidate-fetch limit per run, a longer feedback history window for learn mode. None of these are committed — v1 of paid premium may stay exactly "unlimited searches, no run-window expiry," matching today's behavior.
+
+**Data model note for whoever picks this up.** When a payment provider is chosen, prefer adding a `subscription_status` field on the user doc (e.g. `active` / `past_due` / `canceled`) separate from `role`, so a failed-payment retry doesn't have to instantly demote — `role` stays the single coarse permission check the backend already gates on, `subscription_status` becomes the input that decides when to flip it.
