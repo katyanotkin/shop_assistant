@@ -215,7 +215,7 @@
     const label = run.config_snapshot?.title || (run.search_name || "").replace(/_/g, " ");
     const feedbackMap = run.feedback || {};
     let html = `<p class="run-meta"><span class="run-search-label">${esc(label)}</span><span class="run-date-label">${esc(run.run_date || "")}</span><span class="run-candidates">${run.total_candidates ?? "?"} candidates</span></p>`;
-    if (showFeedback) html += Feedback.renderSaveAllRow();
+    if (showFeedback) html += Feedback.renderSaveAllRow(feedbackMap);
     if (matches.length) html += `<div class="results-section">
       <p class="section-heading">Matches (${matches.length})</p>
       <div class="cards">${matches.map(m => renderCard(m, showFeedback, feedbackMap)).join("")}</div>

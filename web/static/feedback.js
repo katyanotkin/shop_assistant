@@ -27,8 +27,12 @@
       </div>`;
   }
 
-  function renderSaveAllRow() {
+  const _OVERALL_KEY = "_overall_";
+
+  function renderSaveAllRow(feedbackMap) {
+    const existing = (feedbackMap && feedbackMap[_OVERALL_KEY]) || "";
     return `<div class="save-all-row">
+      <textarea class="overall-feedback-text" rows="2" maxlength="512" placeholder="Overall run notes…">${esc(existing)}</textarea>
       <div class="save-all-controls">
         <button type="button" class="save-all-btn">Save all feedback</button>
         <span class="feedback-msg"></span>
@@ -60,12 +64,16 @@
     const msgEl = container.querySelector(".save-all-row .feedback-msg");
     const setMsg = text => { if (msgEl) msgEl.textContent = text; };
 
+    const overallTextarea = container.querySelector(".overall-feedback-text");
+
     saveBtn.addEventListener("click", async () => {
       const items = [];
       container.querySelectorAll(".feedback-row").forEach(row => {
         const text = row.querySelector(".feedback-text")?.value.trim();
         if (text) items.push({ url: row.dataset.url, text });
       });
+      const overallText = overallTextarea?.value.trim();
+      if (overallText) items.push({ url: _OVERALL_KEY, text: overallText });
       if (!items.length) {
         setMsg("Nothing to save");
         setTimeout(() => setMsg(""), 2000);

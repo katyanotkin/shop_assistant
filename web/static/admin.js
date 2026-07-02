@@ -239,7 +239,7 @@
       }
       const feedbackMap = run.feedback || {};
       let html = `<p class="run-meta">${runDate} · ${run.total_candidates ?? "?"} candidates</p>`;
-      html += Feedback.renderSaveAllRow();
+      html += Feedback.renderSaveAllRow(feedbackMap);
       if (run.matches?.length)
         html += `<div class="results-section"><p class="section-heading">Matches (${run.matches.length})</p>
           <div class="cards">${run.matches.map(m => renderResultCard(m, feedbackMap)).join("")}</div></div>`;
