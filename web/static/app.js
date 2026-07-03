@@ -476,12 +476,14 @@
         <input type="text" id="edit-title" class="field-input" value="${esc(cfg.title || "")}" maxlength="200" autocomplete="off">
       </div>
       ${CriteriaForm.renderEdit(cfg, actions)}
+      ${References.renderReferences({ withSaveButton: false })}
     </div>`;
   }
 
   function bindEditPanel(cfg) {
     const form = createPanel.querySelector(".edit-form");
     CriteriaForm.bindFieldControls(form);
+    References.bindReferences(createPanel.querySelector(".references-card"), form.querySelector('[name="example_urls"]'), { siteName });
 
     const titleInput = document.getElementById("edit-title");
     const saveMsg    = document.getElementById("edit-save-msg");

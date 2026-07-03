@@ -137,91 +137,18 @@
   // ── Reference products card ──────────────────────────────────────────────
 
   function renderReferences() {
-    return `<div class="references-card">
-      <div class="references-header">
-        <span class="references-title">Reference products</span>
-        <span class="ref-count"></span>
-      </div>
-      <p class="references-desc">Add up to 3 products you already love — the AI uses these to calibrate what a great match looks like for you.</p>
-      <div class="ref-chips"></div>
-      <div class="ref-input-row">
-        <input type="url" class="field-input ref-url-input" placeholder="Paste a product URL…">
-        <button class="btn-ref-add">Add</button>
-      </div>
-      <div class="ref-action-row">
-        <button class="btn-ref-save btn-primary">Save references</button>
-        <span class="ref-save-msg save-msg"></span>
-      </div>
-    </div>`;
+    return References.renderReferences();
   }
 
   function bindReferences(card, editForm, name) {
     const hidden = editForm.querySelector('[name="example_urls"]');
-    let urls = hidden ? hidden.value.split("\n").filter(Boolean) : [];
-
-    function chipLabel(u) {
-      try { return siteName(u) || new URL(u).hostname; } catch { return u.slice(0, 40); }
-    }
-
-    function syncHidden() {
-      if (hidden) hidden.value = urls.join("\n");
-    }
-
-    function renderChips() {
-      const chipsEl = card.querySelector(".ref-chips");
-      const countEl = card.querySelector(".ref-count");
-      const inputRow = card.querySelector(".ref-input-row");
-      chipsEl.innerHTML = urls.map(u => `
-        <div class="ref-chip" data-url="${esc(u)}">
-          <span class="ref-chip-label">${esc(chipLabel(u))}</span>
-          <button class="ref-chip-remove" aria-label="Remove">×</button>
-        </div>`).join("");
-      countEl.textContent = `${urls.length} / 3`;
-      if (inputRow) inputRow.hidden = urls.length >= 3;
-      card.querySelectorAll(".ref-chip-remove").forEach(btn => {
-        btn.addEventListener("click", () => {
-          urls = urls.filter(u => u !== btn.closest(".ref-chip").dataset.url);
-          renderChips();
-          syncHidden();
-        });
-      });
-    }
-
-    renderChips();
-
-    const urlInput = card.querySelector(".ref-url-input");
-    const addBtn = card.querySelector(".btn-ref-add");
-
-    function addUrl() {
-      const val = urlInput.value.trim();
-      if (!val || urls.length >= 3) return;
-      try { new URL(val); } catch {
-        urlInput.style.outline = "2px solid var(--score-red)";
-        return;
-      }
-      urlInput.style.outline = "";
-      if (!urls.includes(val)) { urls.push(val); renderChips(); syncHidden(); }
-      urlInput.value = "";
-    }
-
-    addBtn.addEventListener("click", addUrl);
-    urlInput.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addUrl(); } });
-
-    const saveBtn = card.querySelector(".btn-ref-save");
-    const saveMsg = card.querySelector(".ref-save-msg");
-    const setMsg = (t, cls) => { saveMsg.textContent = t; saveMsg.className = `ref-save-msg save-msg ${cls}`; };
-
-    saveBtn.addEventListener("click", async () => {
-      saveBtn.disabled = true;
-      setMsg("Saving…", "");
-      try {
+    References.bindReferences(card, hidden, {
+      siteName,
+      onSave: async urls => {
         const cfg = await api("GET", `/api/admin/search/${name}`);
         cfg.example_urls = urls;
         await api("PUT", `/api/admin/search/${name}`, cfg);
-        setMsg("Saved.", "ok");
-        setTimeout(() => setMsg("", ""), 2500);
-      } catch (e) { setMsg(e.message, "err"); }
-      saveBtn.disabled = false;
+      },
     });
   }
 
