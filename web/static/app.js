@@ -81,6 +81,7 @@
 
   const DAY_MS = 24 * 60 * 60 * 1000;
   const FREE_PLAN_MSG = "You're on the Free plan. Contact us to get full access.";
+  const NEW_SEARCH_GATE_MSG = "Consider premium tier for another search.";
 
   // Mirrors the backend's `(now - created_at).days > 30` (Python timedelta.days floors to
   // whole elapsed days), so the button disables exactly when the server would 403.
@@ -142,6 +143,13 @@
       newSearchContainer.innerHTML = `<button id="new-search-btn" class="btn-new-search">+ New search</button>`;
       newSearchContainer.hidden = false;
       document.getElementById("new-search-btn").addEventListener("click", openCreatePanel);
+      return;
+    }
+    if (me.role === "free" && mine.length > 0) {
+      newSearchContainer.innerHTML = `
+        <button id="new-search-btn" class="btn-new-search" disabled title="${esc(NEW_SEARCH_GATE_MSG)}">+ New search</button>
+        <span class="new-search-gate-msg">${esc(NEW_SEARCH_GATE_MSG)}</span>`;
+      newSearchContainer.hidden = false;
       return;
     }
     newSearchContainer.hidden = true;
