@@ -1,6 +1,26 @@
 from typing import Optional
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, field_validator
+
+_MAX_EXAMPLE_URL_LENGTH = 2000
+
+
+def validate_example_urls(urls: list[str]) -> list[str]:
+    """Keep only well-formed http(s) URLs, capped at 3.
+
+    Reference URLs are interpolated as raw text into the Gemini scoring prompt
+    (see core/ranker.py `_example_section`), so anything that isn't actually a
+    URL is a prompt-injection vector rather than a benchmark product.
+    """
+    out = []
+    for u in urls:
+        if not isinstance(u, str) or len(u) > _MAX_EXAMPLE_URL_LENGTH:
+            continue
+        parsed = urlparse(u)
+        if parsed.scheme in ("http", "https") and parsed.netloc:
+            out.append(u)
+    return out[:3]
 
 
 class SearchCriteria(BaseModel):
@@ -41,7 +61,7 @@ class SearchConfig(BaseModel):
     @field_validator("example_urls")
     @classmethod
     def cap_example_urls(cls, v: list[str]) -> list[str]:
-        return v[:3]
+        return validate_example_urls(v)
 
 
 class ProductMatch(BaseModel):

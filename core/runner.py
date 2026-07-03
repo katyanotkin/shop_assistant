@@ -81,7 +81,7 @@ def run_search(search_name: str, settings: Settings, dry_run: bool = False, lear
 
     feedback_notes: str = config.get("feedback_notes") or ""
     avoid_shops: set[str] = set(config.get("avoid_shops") or [])
-    example_urls: list[str] = (config.get("example_urls") or [])[:3]
+    example_urls: list[str] = models.validate_example_urls(config.get("example_urls") or [])
 
     if learn and not dry_run:
         learned = learn_from_feedback(search_name, settings.google_cloud_project)

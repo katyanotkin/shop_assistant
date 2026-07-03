@@ -19,6 +19,7 @@ from core.auth import (
 )
 from core.brand import APP_MOTTO, APP_NAME
 from core.generator import generate_search_config
+from core.models import validate_example_urls
 from core.runner import run_search
 from core.settings import Settings
 
@@ -400,6 +401,7 @@ async def admin_save_search(name: str, request: Request):
     existing = fc.load_search_config(name) or {}
     config = {**existing, **(await request.json())}
     config["search_name"] = name
+    config["example_urls"] = validate_example_urls(config.get("example_urls") or [])
     fc.save_search_config(config)
     return {"ok": True}
 
@@ -554,6 +556,7 @@ async def user_save_search(name: str, request: Request, sa_session: str | None =
     config["created_at"] = (
         existing["created_at"] if existing and "created_at" in existing else datetime.now(timezone.utc)
     )
+    config["example_urls"] = validate_example_urls(config.get("example_urls") or [])
     fc.save_search_config(config)
     return {"ok": True}
 

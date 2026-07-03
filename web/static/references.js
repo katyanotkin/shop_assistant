@@ -7,6 +7,23 @@
     try { return new URL(url).hostname; } catch { return url.slice(0, 40); }
   }
 
+  function safeHref(url) {
+    try { const u = new URL(url); return (u.protocol === "https:" || u.protocol === "http:") ? url : "#"; }
+    catch { return "#"; }
+  }
+
+  // Echoes back the reference products a run was scored against — read-only,
+  // sourced from the run's config_snapshot (already persisted, no extra fetch).
+  function renderNote(run, opts = {}) {
+    const siteName = opts.siteName || defaultSiteName;
+    const urls = run.config_snapshot?.example_urls || [];
+    if (!urls.length) return "";
+    const links = urls
+      .map(u => `<a href="${esc(safeHref(u))}" target="_blank" rel="noopener" class="ref-note-link">${esc(siteName(u) || u)}</a>`)
+      .join(", ");
+    return `<p class="run-reference-note">Compared against: ${links}</p>`;
+  }
+
   // withSaveButton: admin saves references independently of the rest of the
   // config; app.js folds example_urls into the single edit-form Save button
   // instead, so it omits the button and passes withSaveButton: false.
@@ -99,5 +116,5 @@
     }
   }
 
-  window.References = { renderReferences, bindReferences };
+  window.References = { renderReferences, bindReferences, renderNote };
 })();

@@ -161,11 +161,12 @@
       const runDate = dates[0];
       const run = await api("GET", `/api/results/${encodeURIComponent(name)}/${runDate}`);
       if (run.no_match || (!run.matches?.length && !run.partial_matches?.length)) {
-        resultsPanel.innerHTML = `<p class="empty-state">No matches in latest run.</p>`;
+        resultsPanel.innerHTML = `<p class="empty-state">No matches in latest run.</p>` + References.renderNote(run, { siteName });
         return;
       }
       const feedbackMap = run.feedback || {};
       let html = `<p class="run-meta">${runDate} · ${run.total_candidates ?? "?"} candidates</p>`;
+      html += References.renderNote(run, { siteName });
       html += Feedback.renderSaveAllRow(feedbackMap);
       if (run.matches?.length)
         html += `<div class="results-section"><p class="section-heading">Matches (${run.matches.length})</p>
