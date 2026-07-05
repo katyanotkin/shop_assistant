@@ -1,4 +1,5 @@
 import hashlib
+import os
 import uuid
 from urllib.parse import urlparse
 
@@ -11,11 +12,16 @@ _db: firestore.Client | None = None
 _MAX_SLUG_ATTEMPTS = 50
 _RESERVED_SEARCH_NAMES = {"admin", "privacy", "terms", "feedback", "manifest.json", "static", "api", "auth"}
 
+# TailoredLoop has its own named Firestore database, separate from the
+# project's (default) database (which other apps in this GCP project use) —
+# see FIRESTORE_DATABASE in .env.sample.
+_DEFAULT_DATABASE = "tailoredloop"
+
 
 def get_db() -> firestore.Client:
     global _db
     if _db is None:
-        _db = firestore.Client()
+        _db = firestore.Client(database=os.environ.get("FIRESTORE_DATABASE", _DEFAULT_DATABASE))
     return _db
 
 
