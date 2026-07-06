@@ -1,4 +1,26 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(gcloud builds describe *)",
+      "Bash(gcloud builds list *)",
+      "Bash(gcloud builds log *)",
+      "Bash(python3 -m json.tool)",
+      "Bash(make validate-prod)",
+      "Bash(source /home/enot/workspace/shop_assistant/.venv/bin/activate*)",
+      "Bash(git -C * diff *)",
+      "Bash(source .venv/bin/activate*)",
+      "Bash(node --check *)",
+      "Bash(gcloud builds triggers list *)",
+      "Bash(git -C * status*)",
+      "Bash(git -C * log *)",
+      "Bash(gcloud logging read *)",
+      "Bash(gcloud run services describe *)",
+      "Bash(gcloud config get-value *)",
+      "Bash(disown*)",
+      "Bash(cd *)",
+      "Bash(source *)"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {
