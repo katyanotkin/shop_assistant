@@ -133,3 +133,26 @@ def test_furniture_criteria_gender_absent_from_prompt():
     # Static prompt text uses `gender` in backticks, not "gender" as a JSON key,
     # so checking for the JSON-key form '"gender"' is unambiguous.
     assert '"gender"' not in prompt
+
+
+# --- deal_breakers ---
+
+
+def test_deal_breakers_rule_present_in_static_prompt():
+    from core.ranker import _PROMPT
+
+    assert "deal_breakers" in _PROMPT
+    assert "cap score at 3" in _PROMPT
+
+
+def test_deal_breakers_appear_in_prompt_when_set():
+    criteria = SearchCriteria(category=["bathroom cabinet"], dimensions="max 60cm", deal_breakers=["dimensions"])
+    prompt = _get_ranker_prompt(criteria, _FURNITURE_RESPONSE)
+    assert '"deal_breakers"' in prompt
+    assert '"dimensions"' in prompt
+
+
+def test_deal_breakers_absent_from_prompt_when_unset():
+    prompt = _get_ranker_prompt(_FURNITURE_CRITERIA, _FURNITURE_RESPONSE)
+    # _FURNITURE_CRITERIA has no deal_breakers set, so exclude_defaults=True must drop it
+    assert '"deal_breakers"' not in prompt

@@ -7,7 +7,7 @@ Web app that monitors online shops for products matching saved search criteria. 
 1. **Plan** — Gemini generates 3 optimised search queries from your criteria
 2. **Search** — Gemini with Google Search grounding returns product URLs (no API key needed)
 3. **Fetch** — each URL is fetched and stripped to plain text
-4. **Rank** — Gemini scores each page 0–10 against your criteria
+4. **Rank** — Gemini scores each page 0–10 against your criteria; any field listed as a deal-breaker caps the score at 3 if not satisfied
 5. **Save** — results saved to Firestore; the web UI updates automatically
 
 A lightweight web UI reads results from Firestore and displays them by search and date. An admin panel (password-protected) lets you create and edit searches, trigger runs, and leave feedback on results.
@@ -53,7 +53,7 @@ MAX_CANDIDATES=20             # max URLs to evaluate per run
 
 ### Add a search
 
-Go to `/admin`, log in, and click **+ New search** in the sidebar. Enter a short search name (lowercase, underscores) and describe what you want in plain text — material, style, size, price ceiling, preferred shops. Click **Generate config**: Gemini produces a structured config populated only with fields mentioned or implied by the description — `category` is always present, everything else is conditional. The config appears in an editable form. Optional fields can be added using the chip buttons in the **Add:** row, or removed with the × button on each field. Review the populated fields, then click **Save** or **Save & Run**.
+Go to `/admin`, log in, and click **+ New search** in the sidebar. Enter a short search name (lowercase, underscores) and describe what you want in plain text — material, style, size, price ceiling, preferred shops. Click **Generate config**: Gemini produces a structured config populated only with fields mentioned or implied by the description — `category` is always present, everything else is conditional. The config appears in an editable form. Optional fields can be added using the chip buttons in the **Add:** row, or removed with the × button on each field. Material, lining, length, sizes, max price, and custom fields each have a **Deal-breaker** checkbox to mark them non-negotiable. Review the populated fields, then click **Save** or **Save & Run**.
 
 ### Create a search (signed-in users)
 
@@ -86,6 +86,7 @@ make add FILE=searches/wax_coat.json
     "lining": ["none", "cotton", "viscose"],
     "length": ["thigh", "midi", "long"],
     "exclude": ["polyester", "nylon", "synthetic"],
+    "deal_breakers": ["lining", "max_price"],
     "sizes": ["M", "L"],
     "max_price": 500,
     "extra_notes": "natural fabric lining preferred, or unlined"
@@ -106,6 +107,7 @@ make add FILE=searches/wax_coat.json
 | `lining` | no | Accepted lining materials |
 | `length` | no | Accepted lengths — any match satisfies (e.g. `"thigh"`, `"midi"`, `"long"`, `"maxi"`) |
 | `exclude` | no | Materials that cap score at 3 if detected |
+| `deal_breakers` | no | Field names (`material`, `lining`, `length`, `sizes`, `max_price`, or a custom field) marked non-negotiable — an unsatisfied field caps score at 3, same as `exclude` |
 | `sizes` | no | Accepted sizes |
 | `max_price` | no | Upper price limit |
 | `extra_notes` | no | Free-text hints passed to the Gemini ranker |

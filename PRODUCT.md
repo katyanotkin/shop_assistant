@@ -37,6 +37,12 @@ In the Edit config tab, the **Reference products** card lets you add up to 3 URL
 
 Today this only sharpens *scoring*: it does not change what search queries get generated or which candidate URLs get fetched. Pasting a reference product does not make the search go find "more like this" — it only changes how already-found candidates get judged against it.
 
+### Deal-breaker criteria
+
+Every criteria field normally reduces a result's score proportionally when it doesn't match — a partial mismatch on one field doesn't sink an otherwise great result. Some criteria aren't like that: "flex on price, but not on cabinet dimensions."
+
+In the Edit config tab, each optional field (Material, Lining, Length, Sizes, Max price, and any custom field you've added) has a **Deal-breaker** checkbox next to it. Ticking it makes that field non-negotiable: a result that fails to satisfy it is capped at a score of 3, the same way an excluded material already caps a result today — low enough that it falls below the Partial match threshold and doesn't appear in results at all, rather than surfacing as a lower-scored match. Category and Gender aren't offered the checkbox because they're already non-negotiable everywhere (a category or gender mismatch already zeroes the score); Exclude isn't offered it either since an excluded value already caps the score the same way a deal-breaker would.
+
 ### Step 2 — What happens during a run
 
 When a search runs, the system:
@@ -94,21 +100,11 @@ Learn mode is on by default. You can turn it off per-run with the **Learn from f
 
 ---
 
-## Planned: refine-to-find enhancements
+## Planned: pinned finds
 
-Two features extend the feedback loop and criteria model beyond what's built today. Neither is implemented yet.
-
-### Pinned finds
-
-Today, "Perfect match" is just one of the quick-phrase feedback buttons — it's stored as plain text and folded into the aggregate `feedback_notes` distillation like any other feedback, with no special handling. The result is that a find the user explicitly loved can silently drop out of a later run's results if it goes out of stock or simply isn't rediscovered by that run's search queries.
+Today, "Perfect match" is just one of the quick-phrase feedback buttons — it's stored as plain text and folded into the aggregate `feedback_notes` distillation like any other feedback, with no special handling. The result is that a find the user explicitly loved can silently drop out of a later run's results if it goes out of stock or simply isn't rediscovered by that run's search queries. Not implemented yet.
 
 Planned behavior: leaving the exact "Perfect match" feedback on a result pins it. Pinned finds are stored on the search doc (capped like reference products) and are re-displayed every run — in a "Your picks" section above Matches — regardless of whether that run's queries rediscover the URL. Pinned finds also feed the ranker the same way reference products do today (a calibration benchmark for what a great match looks like), effectively becoming user-validated reference products rather than a separate mechanism.
-
-### Deal-breaker criteria
-
-Every criteria field is currently a "soft" rule — the AI reduces the score proportionally when a field doesn't match, the same way regardless of which field it is. There's no way to say "flexible on price, but not on cabinet dimensions."
-
-Planned behavior: any criteria field can be marked a deal-breaker. A deal-breaker field that fails to match hard-caps the result's score below the Partial match threshold — the same way an `exclude`d material already forces a low score today — rather than being just one more red tag that a strong overall fit could still outweigh.
 
 Both features follow the same free/premium gating as search creation itself (available on your one search if you're Free, unlimited if Premium/Admin) — they refine a search's own criteria and results rather than adding scale, so gating them more strictly than search creation would be inconsistent.
 

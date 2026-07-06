@@ -54,6 +54,8 @@ unmatched alternatives from that same field (e.g. do not add "cloth" or "metal" 
 Only add the field to `unmatched` if NONE of its listed values match.
 - Fields ending in `_exclude` or named `exclude`: if ANY excluded value is present in the \
 product, cap score at 3.
+- Fields listed in `deal_breakers`: if that field is not satisfied (per the same \
+one-requirement-per-field rule above), cap score at 3 — same as an `exclude` violation.
 - `max_price`: up to 50% over limit → score ≤ 6, note "price over budget"; \
 more than 50% over → score ≤ 3.
 - For non-standard fields (dimensions, features, capacity, color_exclude, etc.): apply \

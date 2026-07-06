@@ -223,7 +223,12 @@
 }
 .field-row:not([hidden]) {
   display: grid;
-  grid-template-columns: 120px 1fr auto;
+  grid-template-columns: 120px 1fr auto auto;
+}
+.field-dealbreaker-label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text-muted); cursor: pointer;
+  white-space: nowrap; padding-top: 8px;
 }
 .field-label {
   font-size: 12px; font-weight: 600;
@@ -646,6 +651,6 @@
     margin: 0;
   }
   .field-row:not([hidden]) {
-    grid-template-columns: 100px 1fr auto;
+    grid-template-columns: 100px 1fr auto auto;
   }
 }

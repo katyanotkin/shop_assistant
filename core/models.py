@@ -1,7 +1,7 @@
 from typing import Optional
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 _MAX_EXAMPLE_URL_LENGTH = 2000
 
@@ -23,6 +23,12 @@ def validate_example_urls(urls: list[str]) -> list[str]:
     return out[:3]
 
 
+# gender/exclude are already enforced elsewhere in the ranker prompt as hard
+# (gender) or near-hard (exclude) rules, so allowing them as deal_breakers too
+# would just be a confusing no-op instruction alongside the existing one.
+_DEAL_BREAKER_INELIGIBLE = frozenset({"category", "gender", "exclude"})
+
+
 class SearchCriteria(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -40,9 +46,21 @@ class SearchCriteria(BaseModel):
     length: list[str] = []
     lining: list[str] = []
     exclude: list[str] = []
+    deal_breakers: list[str] = []
     sizes: list[str] = []
     max_price: Optional[float] = None
     extra_notes: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _drop_stale_deal_breakers(self) -> "SearchCriteria":
+        dumped = self.model_dump(exclude_defaults=True, exclude={"deal_breakers"})
+        present = set()
+        for key, value in dumped.items():
+            if isinstance(value, (list, str)) and len(value) == 0:
+                continue
+            present.add(key)
+        self.deal_breakers = [d for d in self.deal_breakers if d in present and d not in _DEAL_BREAKER_INELIGIBLE]
+        return self
 
 
 class SearchConfig(BaseModel):

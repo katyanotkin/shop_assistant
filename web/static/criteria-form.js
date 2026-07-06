@@ -27,10 +27,23 @@
     { name: "preferred_shops", label: "Preferred shops", type: "textarea", immutable: false },
   ];
 
-  function fieldRow(label, name, value, type, immutable) {
+  // Fields already enforced elsewhere in the ranker prompt as hard (gender) or
+  // near-hard (exclude) rules — marking them a deal-breaker would be a no-op
+  // that just confuses the prompt, so they don't get the toggle at all.
+  const DEAL_BREAKER_INELIGIBLE = new Set(["category", "gender", "exclude"]);
+
+  function dealBreakerToggle(name, type, immutable, dealBreaker) {
+    if (immutable || type === "textarea" || DEAL_BREAKER_INELIGIBLE.has(name)) return "";
+    const safeName = esc(name);
+    return `<label class="field-dealbreaker-label">
+      <input type="checkbox" class="field-dealbreaker" data-field="${safeName}" ${dealBreaker ? "checked" : ""}> Deal-breaker</label>`;
+  }
+
+  function fieldRow(label, name, value, type, immutable, dealBreaker = false) {
     const present = value !== null && value !== undefined && value !== "";
     const hidden  = !immutable && !present;
     const removeBtn = immutable ? "" : `<button type="button" class="btn-field-remove" aria-label="Remove ${label}">×</button>`;
+    const dbToggle = dealBreakerToggle(name, type, immutable, dealBreaker);
     const attrs = [
       `class="field-row${immutable ? "" : " field-row--opt"}"`,
       `data-field-name="${name}"`,
@@ -42,30 +55,32 @@
       <textarea name="${name}" class="field-input" rows="3">${safeValue}</textarea>${removeBtn}</div>`;
     if (type === "number") return `<div ${attrs}>
       <label class="field-label">${label}</label>
-      <input type="number" name="${name}" class="field-input" value="${safeValue}" step="any">${removeBtn}</div>`;
+      <input type="number" name="${name}" class="field-input" value="${safeValue}" step="any">${dbToggle}${removeBtn}</div>`;
     return `<div ${attrs}>
       <label class="field-label">${label}</label>
-      <input type="text" name="${name}" class="field-input" value="${safeValue}">${removeBtn}</div>`;
+      <input type="text" name="${name}" class="field-input" value="${safeValue}">${dbToggle}${removeBtn}</div>`;
   }
 
   function renderEditFields(cfg) {
     const c = cfg.criteria || {};
+    const dbSet = new Set(c.deal_breakers || []);
 
     const criteriaRows = CRITERIA_FIELDS.map(f => {
       const raw = c[f.name];
       const value = Array.isArray(raw) ? join(raw) : (raw ?? "");
-      return fieldRow(f.label, f.name, value, f.type, f.immutable);
+      return fieldRow(f.label, f.name, value, f.type, f.immutable, dbSet.has(f.name));
     }).join("\n");
 
     const knownNames = new Set(CRITERIA_FIELDS.map(f => f.name));
     const customRows = Object.keys(c)
-      .filter(k => !knownNames.has(k))
+      .filter(k => !knownNames.has(k) && k !== "deal_breakers")
       .map(k => {
         const raw = c[k];
         const value = Array.isArray(raw) ? join(raw) : String(raw ?? "");
         return `<div class="field-row field-row--opt field-row--custom" data-field-name="${esc(k)}">
           <label class="field-label">${esc(toLabel(k))}</label>
           <input type="text" name="${esc(k)}" class="field-input" value="${esc(value)}">
+          ${dealBreakerToggle(k, "text", false, dbSet.has(k))}
           <button type="button" class="btn-field-remove" aria-label="Remove ${esc(toLabel(k))}">×</button>
         </div>`;
       }).join("\n");
@@ -138,6 +153,14 @@
       criteria[name] = parts.length > 1 ? parts : v;
     });
 
+    // Only keep a deal-breaker flag for a field that actually made it into `criteria`
+    // above — a checkbox left checked on a field the user just cleared (without
+    // clicking the row's × remove button) must not produce a dangling deal-breaker.
+    const dealBreakers = Array.from(form.querySelectorAll(".field-dealbreaker"))
+      .filter(cb => !cb.closest(".field-row").hidden && cb.checked && cb.dataset.field in criteria)
+      .map(cb => cb.dataset.field);
+    if (dealBreakers.length) criteria.deal_breakers = dealBreakers;
+
     const preferredShopsRow = form.querySelector('.field-row[data-field-name="preferred_shops"]');
     const preferredShops = (!preferredShopsRow || preferredShopsRow.hidden)
       ? []
@@ -170,6 +193,8 @@
       row.hidden = true;
       const el = row.querySelector("input, textarea");
       if (el) el.value = "";
+      const dbCheckbox = row.querySelector(".field-dealbreaker");
+      if (dbCheckbox) dbCheckbox.checked = false;
       syncChips();
     }
 
@@ -194,14 +219,14 @@
     if (btnAddCustom && customNameInput) {
       function addCustomField() {
         const rawName = customNameInput.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-        if (!rawName) return;
+        if (!rawName || rawName === "deal_breakers") return;
         const existing = form.querySelector(`.field-row[data-field-name="${rawName}"]`);
         if (existing) { existing.hidden = false; existing.querySelector("input, textarea")?.focus(); syncChips(); customNameInput.value = ""; return; }
         const label = toLabel(rawName);
         const row = document.createElement("div");
         row.className = "field-row field-row--opt field-row--custom";
         row.dataset.fieldName = rawName;
-        row.innerHTML = `<label class="field-label">${esc(label)}</label><input type="text" name="${esc(rawName)}" class="field-input" value=""><button type="button" class="btn-field-remove" aria-label="Remove ${esc(label)}">×</button>`;
+        row.innerHTML = `<label class="field-label">${esc(label)}</label><input type="text" name="${esc(rawName)}" class="field-input" value="">${dealBreakerToggle(rawName, "text", false, false)}<button type="button" class="btn-field-remove" aria-label="Remove ${esc(label)}">×</button>`;
         form.querySelector(".add-field-row").before(row);
         row.querySelector(".btn-field-remove").addEventListener("click", () => removeRow(row));
         row.querySelector("input").focus();

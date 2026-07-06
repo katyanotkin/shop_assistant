@@ -176,3 +176,81 @@ def test_exclude_defaults_keeps_set_clothing_fields():
     data = json.loads(sc.model_dump_json(exclude_defaults=True))
     assert "material" in data
     assert data["material"] == ["wool"]
+
+
+# --- deal_breakers ---
+
+
+def test_deal_breakers_default_empty():
+    sc = SearchCriteria(category="jacket")
+    assert sc.deal_breakers == []
+
+
+def test_deal_breakers_kept_when_field_is_set():
+    sc = SearchCriteria(category="jacket", material=["waxed cotton"], deal_breakers=["material"])
+    assert sc.deal_breakers == ["material"]
+
+
+def test_deal_breakers_kept_for_custom_field():
+    sc = SearchCriteria(category=["bathroom cabinet"], dimensions="max 60cm", deal_breakers=["dimensions"])
+    assert sc.deal_breakers == ["dimensions"]
+
+
+def test_deal_breakers_drops_names_for_unset_fields():
+    # "lining" was never set, so listing it as a deal-breaker is stale and must be dropped
+    sc = SearchCriteria(category="jacket", material=["waxed cotton"], deal_breakers=["material", "lining"])
+    assert sc.deal_breakers == ["material"]
+
+
+def test_deal_breakers_drops_unknown_field_name():
+    sc = SearchCriteria(category="jacket", deal_breakers=["not_a_real_field"])
+    assert sc.deal_breakers == []
+
+
+def test_deal_breakers_drops_gender_and_exclude():
+    # gender/exclude are already hard/near-hard rules elsewhere in the ranker prompt;
+    # allowing them as deal_breakers too would be a confusing no-op.
+    sc = SearchCriteria(
+        category="jacket",
+        gender="women",
+        exclude=["polyester"],
+        deal_breakers=["gender", "exclude"],
+    )
+    assert sc.deal_breakers == []
+
+
+def test_deal_breakers_drops_category():
+    sc = SearchCriteria(category="jacket", deal_breakers=["category"])
+    assert sc.deal_breakers == []
+
+
+def test_deal_breakers_drops_custom_field_with_empty_list_value():
+    # An extra/custom field set to an empty list has no pydantic "default" concept
+    # (extra="allow" fields always survive exclude_defaults), so this must be handled
+    # explicitly rather than relying on exclude_defaults alone.
+    sc = SearchCriteria(category=["bathroom cabinet"], color=[], deal_breakers=["color"])
+    assert sc.deal_breakers == []
+
+
+def test_deal_breakers_drops_custom_field_with_empty_string_value():
+    sc = SearchCriteria(category=["bathroom cabinet"], notes="", deal_breakers=["notes"])
+    assert sc.deal_breakers == []
+
+
+def test_deal_breakers_keeps_custom_field_with_falsy_bool_value():
+    # A custom field explicitly set to False is still "set" — only empty
+    # list/string values should be treated as if the field were absent.
+    sc = SearchCriteria(category=["bathroom cabinet"], has_shelves=False, deal_breakers=["has_shelves"])
+    assert sc.deal_breakers == ["has_shelves"]
+
+
+def test_exclude_defaults_omits_empty_deal_breakers():
+    sc = SearchCriteria(category=["jacket"], material=["waxed cotton"])
+    data = json.loads(sc.model_dump_json(exclude_defaults=True))
+    assert "deal_breakers" not in data
+
+
+def test_exclude_defaults_keeps_set_deal_breakers():
+    sc = SearchCriteria(category=["jacket"], material=["waxed cotton"], deal_breakers=["material"])
+    data = json.loads(sc.model_dump_json(exclude_defaults=True))
+    assert data["deal_breakers"] == ["material"]

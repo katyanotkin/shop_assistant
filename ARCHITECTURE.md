@@ -122,7 +122,7 @@ Document ID = `search_name` (e.g. `wax_coat`).
 | `visibility` | string | `"public"` (default) or `"private"` |
 | `owner_id` | string | `"admin"` or a user email; controls who sees private searches |
 | `description` | string | Original free-text description used to generate the config; preserved across edits |
-| `criteria` | map | `SearchCriteria` fields: `category[]` (required) plus any product-appropriate fields (`gender`, `material[]`, `lining[]`, `length[]`, `exclude[]`, `sizes[]`, `max_price`, `extra_notes`, or custom fields for non-clothing categories) |
+| `criteria` | map | `SearchCriteria` fields: `category[]` (required) plus any product-appropriate fields (`gender`, `material[]`, `lining[]`, `length[]`, `exclude[]`, `deal_breakers[]`, `sizes[]`, `max_price`, `extra_notes`, or custom fields for non-clothing categories). `deal_breakers[]` names other fields (standard or custom) that must be satisfied — an unmatched deal-breaker field caps the score at 3, same as an `exclude` violation |
 | `preferred_shops` | string[] | URLs of preferred retailers; searched first each run |
 | `example_urls` | string[] | Up to 3 product URLs the admin marked as ideal matches; fed to the ranker for calibration |
 | `feedback_notes` | string | Distilled product preferences from learn cycle; injected into prompts |
