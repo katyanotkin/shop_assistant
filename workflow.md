@@ -56,6 +56,8 @@ Invoke the `writer` agent to update **README.md** after any user-facing feature 
 
 Do not update README inline — delegate to the writer agent. Brief the agent with: what changed, what sections to update, what not to touch.
 
+Every time a change adds or changes a *term* the user is bound by (e.g. tier limits, what a Free vs Premium account is allowed to do, data/feedback usage, account/role rules) — not just a UI-facing feature — invoke the `writer` agent to update `web/templates/terms.html` to match, the same way README updates are delegated above. This is separate from the README update: README documents capabilities, terms.html documents the legal/contractual terms of using the product. Check whether the change is terms-affecting before closing the PR, not just whether it's user-facing.
+
 ## Phase 8 — Live regression (after Cloud Build completes)
 
 After pushing to `main`, wait for Cloud Build to finish deploying to Cloud Run, then run the live QATP suite:

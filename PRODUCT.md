@@ -31,6 +31,12 @@ Click **Generate config**. The AI reads your description and produces a structur
 
 When you are satisfied, click **Save** to store the config, or **Save & Run** to store it and immediately run the first search.
 
+### Reference products (optional)
+
+In the Edit config tab, the **Reference products** card lets you add up to 3 URLs of products you already love — from any shop, not just past results from this search. The AI uses these to calibrate what a great match looks like when scoring candidates.
+
+Today this only sharpens *scoring*: it does not change what search queries get generated or which candidate URLs get fetched. Pasting a reference product does not make the search go find "more like this" — it only changes how already-found candidates get judged against it.
+
 ### Step 2 — What happens during a run
 
 When a search runs, the system:
@@ -88,6 +94,26 @@ Learn mode is on by default. You can turn it off per-run with the **Learn from f
 
 ---
 
+## Planned: refine-to-find enhancements
+
+Two features extend the feedback loop and criteria model beyond what's built today. Neither is implemented yet.
+
+### Pinned finds
+
+Today, "Perfect match" is just one of the quick-phrase feedback buttons — it's stored as plain text and folded into the aggregate `feedback_notes` distillation like any other feedback, with no special handling. The result is that a find the user explicitly loved can silently drop out of a later run's results if it goes out of stock or simply isn't rediscovered by that run's search queries.
+
+Planned behavior: leaving the exact "Perfect match" feedback on a result pins it. Pinned finds are stored on the search doc (capped like reference products) and are re-displayed every run — in a "Your picks" section above Matches — regardless of whether that run's queries rediscover the URL. Pinned finds also feed the ranker the same way reference products do today (a calibration benchmark for what a great match looks like), effectively becoming user-validated reference products rather than a separate mechanism.
+
+### Deal-breaker criteria
+
+Every criteria field is currently a "soft" rule — the AI reduces the score proportionally when a field doesn't match, the same way regardless of which field it is. There's no way to say "flexible on price, but not on cabinet dimensions."
+
+Planned behavior: any criteria field can be marked a deal-breaker. A deal-breaker field that fails to match hard-caps the result's score below the Partial match threshold — the same way an `exclude`d material already forces a low score today — rather than being just one more red tag that a strong overall fit could still outweigh.
+
+Both features follow the same free/premium gating as search creation itself (available on your one search if you're Free, unlimited if Premium/Admin) — they refine a search's own criteria and results rather than adding scale, so gating them more strictly than search creation would be inconsistent.
+
+---
+
 ## Admin features
 
 | Feature | Who can use it |
@@ -139,6 +165,7 @@ Every account has one of three roles:
 | Run searches after 1 month | — | — | ✓ | ✓ |
 | View own private results & leave feedback | — | ✓ | ✓ | ✓ |
 | Promote any search to public | — | — | — | ✓ |
+| Clone a public search into your own | — | ✓ | ✓ | ✓ |
 | View all searches (any owner) | — | — | — | ✓ |
 | View all users & manage roles | — | — | — | ✓ |
 | Edit any search config | — | — | — | ✓ |
@@ -160,6 +187,12 @@ The admin can promote any search — their own or a user's — to **public**. Pr
 - The search config is visible to everyone but not editable by visitors or other users.
 - Results appear exactly as they do for the owner.
 - Visitors can browse results and click through to product pages but cannot run the search, leave feedback, or modify anything.
+
+### Copying a public search (planned)
+
+Any signed-in user will be able to clone a public search into a private copy of their own — either to run it as-is or to polish the criteria first. The clone copies the criteria config and preferred shops; it does not copy the original owner's feedback, pinned finds, or reference products, since those are personal signal about what worked for *that* user's taste, not the objective spec. The clone's 1-month free-tier run window starts fresh at clone time, same as any newly created search.
+
+For a Free user, cloning fills their existing 1-private-search slot rather than adding a bonus one — it's an alternate way to get to that one search, not an additional search. A Free user whose slot is already filled must delete their existing search before cloning a different one, same as creating a new one from scratch.
 
 ### Granting premium access
 
@@ -188,3 +221,11 @@ Today premium is granted manually by an admin, with no payment flow. As a subscr
 **Differentiating premium beyond "unlimited + no expiry" (open, not committed).** Candidates that map to real cost/quality levers in the pipeline rather than generic tier features: more frequent scheduled runs per search, a higher candidate-fetch limit per run, a longer feedback history window for learn mode. None of these are committed — v1 of paid premium may stay exactly "unlimited searches, no run-window expiry," matching today's behavior.
 
 **Data model note for whoever picks this up.** When a payment provider is chosen, prefer adding a `subscription_status` field on the user doc (e.g. `active` / `past_due` / `canceled`) separate from `role`, so a failed-payment retry doesn't have to instantly demote — `role` stays the single coarse permission check the backend already gates on, `subscription_status` becomes the input that decides when to flip it.
+
+---
+
+## Future: compare up to 3 items
+
+Not scheduled, not designed in detail. The idea: pick up to 3 items (their titles, prices, and scored attributes) and have the AI determine the relevant comparison criteria itself, rather than the user pre-specifying what to compare on.
+
+This pairs naturally with pinned finds (above) — a user's own saved favorites are the most likely source of items they'd want compared — but it isn't blocked by pinned finds or deal-breaker criteria; it only needs 3 chosen product records as input.
