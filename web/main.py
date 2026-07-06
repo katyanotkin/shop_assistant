@@ -65,12 +65,13 @@ def _is_https(request: Request) -> bool:
 
 
 def _is_admin(sa_admin: str | None, sa_session: str | None) -> bool:
+    # Re-reads role from Firestore via _session_user (not just the JWT claim) so an
+    # admin demotion takes effect on the demoted user's very next request, rather than
+    # only once their existing session cookie expires or they explicitly log out.
     if _settings.admin_password and sa_admin == _admin_token():
         return True
-    if sa_session:
-        user = verify_session_token(sa_session, _settings.session_secret)
-        return bool(user and user.get("role") == "admin")
-    return False
+    user = _session_user(sa_session)
+    return bool(user and user.get("role") == "admin")
 
 
 _ADMIN_LOGIN_HTML = _inject_brand((Path(__file__).parent / "templates" / "admin_login.html").read_text())

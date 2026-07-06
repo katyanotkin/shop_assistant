@@ -142,6 +142,30 @@ def test_admin_list_users_rejects_free_session(client):
     assert r.status_code == 401
 
 
+def test_admin_endpoint_accepts_promoted_user_with_stale_jwt(client):
+    """The mirror case: a session JWT claiming role=free must still grant admin
+    access once Firestore says the user has been promoted, without requiring
+    the user to log out and back in."""
+    c, mock_fc = client
+    mock_fc.get_user.return_value = {"role": "admin"}
+    mock_fc.list_users.return_value = []
+    c.cookies.set("sa_session", _tok(_FREE_USER))
+    r = c.get("/api/admin/users")
+    assert r.status_code == 200
+
+
+def test_admin_endpoint_rejects_demoted_admin_with_stale_jwt(client):
+    """A still-valid session JWT claiming role=admin must not grant access once
+    Firestore says the user has been demoted — otherwise a demoted admin keeps
+    full admin access (and could re-promote themselves) until their cookie
+    naturally expires or they explicitly log out."""
+    c, mock_fc = client
+    mock_fc.get_user.return_value = {"role": "free"}
+    c.cookies.set("sa_session", _tok(_ADMIN_USER))
+    r = c.get("/api/admin/users")
+    assert r.status_code == 401
+
+
 # ── PATCH /api/admin/user/{uid}/role ─────────────────────────────────────────
 
 
