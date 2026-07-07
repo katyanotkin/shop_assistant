@@ -232,3 +232,111 @@ def test_save_search_config_preserves_explicit_title():
     with patch("core.firestore_client.get_db", return_value=mock_db):
         fc.save_search_config(config)
     assert config["title"] == "My Cozy Coat"
+
+
+# ── pin_result / unpin_result ────────────────────────────────────────────────
+
+_FIND = {
+    "url": "https://example.com/a",
+    "title": "Waxed Cotton Jacket",
+    "score": 9.0,
+    "matched": [],
+    "unmatched": [],
+    "notes": "",
+    "pinned_at": "2026-07-01",
+}
+
+
+def test_pin_result_appends_to_empty_list():
+    mock_db = MagicMock()
+    with (
+        patch("core.firestore_client.load_search_config", return_value={"search_name": "wax_coat"}),
+        patch("core.firestore_client.get_db", return_value=mock_db),
+    ):
+        fc.pin_result("wax_coat", _FIND)
+    saved = mock_db.collection.return_value.document.return_value.set.call_args[0][0]
+    assert len(saved["pinned_finds"]) == 1
+    assert saved["pinned_finds"][0]["url"] == _FIND["url"]
+    assert saved["pinned_finds"][0]["title"] == _FIND["title"]
+    assert saved["pinned_finds"][0]["pinned_at"] == _FIND["pinned_at"]
+
+
+def test_pin_result_dedupes_existing_url():
+    mock_db = MagicMock()
+    stale = {**_FIND, "score": 3.0}
+    config = {"search_name": "wax_coat", "pinned_finds": [stale]}
+    with (
+        patch("core.firestore_client.load_search_config", return_value=config),
+        patch("core.firestore_client.get_db", return_value=mock_db),
+    ):
+        fc.pin_result("wax_coat", _FIND)
+    saved = mock_db.collection.return_value.document.return_value.set.call_args[0][0]
+    assert len(saved["pinned_finds"]) == 1
+    assert saved["pinned_finds"][0]["score"] == 9.0
+
+
+def test_unpin_result_removes_matching_url():
+    mock_db = MagicMock()
+    other = {**_FIND, "url": "https://example.com/b"}
+    config = {"search_name": "wax_coat", "pinned_finds": [_FIND, other]}
+    with (
+        patch("core.firestore_client.load_search_config", return_value=config),
+        patch("core.firestore_client.get_db", return_value=mock_db),
+    ):
+        fc.unpin_result("wax_coat", "https://example.com/a")
+    saved = mock_db.collection.return_value.document.return_value.set.call_args[0][0]
+    assert saved["pinned_finds"] == [other]
+
+
+def test_unpin_result_noop_when_url_not_pinned():
+    mock_db = MagicMock()
+    config = {"search_name": "wax_coat", "pinned_finds": [_FIND]}
+    with (
+        patch("core.firestore_client.load_search_config", return_value=config),
+        patch("core.firestore_client.get_db", return_value=mock_db),
+    ):
+        fc.unpin_result("wax_coat", "https://not-pinned.example.com")
+
+
+def test_pin_results_noop_on_empty_list():
+    mock_db = MagicMock()
+    with (
+        patch("core.firestore_client.load_search_config") as mock_load,
+        patch("core.firestore_client.get_db", return_value=mock_db),
+    ):
+        fc.pin_results("wax_coat", [])
+    mock_load.assert_not_called()
+    mock_db.collection.return_value.document.return_value.set.assert_not_called()
+
+
+def test_pin_results_single_round_trip_for_multiple_finds():
+    mock_db = MagicMock()
+    other = {**_FIND, "url": "https://example.com/b", "title": "Another Jacket"}
+    with (
+        patch("core.firestore_client.load_search_config", return_value={"search_name": "wax_coat"}),
+        patch("core.firestore_client.get_db", return_value=mock_db),
+    ):
+        fc.pin_results("wax_coat", [_FIND, other])
+    # Exactly one load and one save, regardless of how many finds are pinned
+    mock_db.collection.return_value.document.return_value.set.assert_called_once()
+    saved = mock_db.collection.return_value.document.return_value.set.call_args[0][0]
+    assert {f["url"] for f in saved["pinned_finds"]} == {_FIND["url"], other["url"]}
+
+
+def test_pin_result_skips_malformed_existing_entry():
+    """A legacy/corrupted pinned_finds entry (e.g. missing required fields) must not
+    crash the whole pin — it should be dropped, mirroring _decode_feedback's handling
+    of malformed feedback entries elsewhere in this module."""
+    mock_db = MagicMock()
+    malformed = {"url": "https://bad.example.com"}  # missing required "score"/"title"/"pinned_at"
+    with (
+        patch(
+            "core.firestore_client.load_search_config",
+            return_value={"search_name": "wax_coat", "pinned_finds": [malformed]},
+        ),
+        patch("core.firestore_client.get_db", return_value=mock_db),
+    ):
+        fc.pin_result("wax_coat", _FIND)
+    saved = mock_db.collection.return_value.document.return_value.set.call_args[0][0]
+    assert len(saved["pinned_finds"]) == 1
+    assert saved["pinned_finds"][0]["url"] == _FIND["url"]

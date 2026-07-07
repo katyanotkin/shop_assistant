@@ -63,6 +63,35 @@ class SearchCriteria(BaseModel):
         return self
 
 
+class ProductMatch(BaseModel):
+    url: str
+    title: str
+    price: Optional[float] = None
+    score: float
+    matched: list[str] = []
+    unmatched: list[str] = []
+    notes: str = ""
+    is_new: bool = False
+
+
+_MAX_PINNED_FINDS = 3
+
+
+class PinnedFind(ProductMatch):
+    pinned_at: str  # ISO date, same format as RunResult.run_date
+
+
+def add_pinned_find(existing: list[PinnedFind], new_find: PinnedFind, cap: int = _MAX_PINNED_FINDS) -> list[PinnedFind]:
+    """De-dupe by URL (re-pinning refreshes the snapshot) and FIFO-evict the oldest over cap.
+
+    Unlike validate_example_urls' truncate-on-add, dropping the newest pin here
+    would silently discard the very find the user just said they loved.
+    """
+    kept = [f for f in existing if f.url != new_find.url]
+    kept.append(new_find)
+    return kept[-cap:]
+
+
 class SearchConfig(BaseModel):
     search_name: str
     title: str
@@ -75,22 +104,12 @@ class SearchConfig(BaseModel):
     feedback_notes: Optional[str] = None
     avoid_shops: list[str] = []
     example_urls: list[str] = []
+    pinned_finds: list[PinnedFind] = []
 
     @field_validator("example_urls")
     @classmethod
     def cap_example_urls(cls, v: list[str]) -> list[str]:
         return validate_example_urls(v)
-
-
-class ProductMatch(BaseModel):
-    url: str
-    title: str
-    price: Optional[float] = None
-    score: float
-    matched: list[str] = []
-    unmatched: list[str] = []
-    notes: str = ""
-    is_new: bool = False
 
 
 class RunResult(BaseModel):

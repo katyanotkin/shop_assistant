@@ -43,7 +43,7 @@
     catch { return "#"; }
   }
 
-  function renderResultCard(m, feedbackMap) {
+  function renderResultCard(m, feedbackMap, opts = {}) {
     const sc = scoreClass(m.score);
     const site = siteName(m.url);
     const titleInner = site && m.title
@@ -52,16 +52,19 @@
     const titleText = `<a class="card-title-link" href="${esc(safeHref(m.url))}" target="_blank" rel="noopener">${titleInner}</a>`;
     const price = m.price != null ? `<span class="card-price">${esc(String(m.price))}</span>` : "";
     const newTag = m.is_new ? tag("NEW", "tag-new") : "";
+    const unpinBtn = opts.pinned
+      ? `<button type="button" class="btn-unpin" data-url="${esc(m.url)}" aria-label="Unpin">Unpin</button>`
+      : "";
     const criteria = [
       ...(m.matched || []).map(t => tag(t, "tag tag-match")),
       ...(m.unmatched || []).map(t => tag(t, "tag tag-miss")),
     ].join("");
     const notes = m.notes ? `<p class="card-notes">${esc(m.notes)}</p>` : "";
-    const feedback = Feedback.renderFeedbackBlock(m.url, feedbackMap);
+    const feedback = opts.pinned ? "" : Feedback.renderFeedbackBlock(m.url, feedbackMap);
     return `<div class="card">
       <div class="score-badge ${sc}">${Math.round(m.score)}</div>
       <div class="card-body">
-        <div class="card-title-row">${titleText}${newTag}</div>
+        <div class="card-title-row">${titleText}${newTag}${unpinBtn}</div>
         <div class="card-meta">${price}</div>
         ${criteria ? `<div class="criteria-row">${criteria}</div>` : ""}
         ${notes}
@@ -154,13 +157,30 @@
 
   // ── Results panel ─────────────────────────────────────────────────────────
 
+  function bindUnpin(container, name) {
+    container.querySelectorAll(".btn-unpin").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        try {
+          await api("POST", `/api/feedback/${encodeURIComponent(name)}/pinned/remove`, { url: btn.dataset.url });
+          loadResults(name);
+        } catch (e) {
+          btn.disabled = false;
+          btn.textContent = e.message;
+        }
+      });
+    });
+  }
+
   async function loadResults(name) {
     resultsPanel.innerHTML = `<p class="loading">Loading…</p>`;
     try {
       const dates = await api("GET", `/api/results/${encodeURIComponent(name)}`);
       const runDate = dates[0];
       const run = await api("GET", `/api/results/${encodeURIComponent(name)}/${runDate}`);
-      if (run.no_match || (!run.matches?.length && !run.partial_matches?.length)) {
+      const freshUrls = new Set([...(run.matches || []), ...(run.partial_matches || [])].map(m => m.url));
+      const pinned = (run.pinned_finds || []).filter(m => !freshUrls.has(m.url));
+      if (run.no_match || (!run.matches?.length && !run.partial_matches?.length && !pinned.length)) {
         resultsPanel.innerHTML = `<p class="empty-state">No matches in latest run.</p>` + References.renderNote(run, { siteName });
         return;
       }
@@ -168,6 +188,9 @@
       let html = `<p class="run-meta">${runDate} · ${run.total_candidates ?? "?"} candidates</p>`;
       html += References.renderNote(run, { siteName });
       html += Feedback.renderSaveAllRow(feedbackMap);
+      if (pinned.length)
+        html += `<div class="results-section"><p class="section-heading">Your picks (${pinned.length})</p>
+          <div class="cards">${pinned.map(m => renderResultCard(m, feedbackMap, { pinned: true })).join("")}</div></div>`;
       if (run.matches?.length)
         html += `<div class="results-section"><p class="section-heading">Matches (${run.matches.length})</p>
           <div class="cards">${run.matches.map(m => renderResultCard(m, feedbackMap)).join("")}</div></div>`;
@@ -175,9 +198,14 @@
         html += `<div class="results-section"><p class="section-heading">Partial (${run.partial_matches.length})</p>
           <div class="cards">${run.partial_matches.map(m => renderResultCard(m, feedbackMap)).join("")}</div></div>`;
       resultsPanel.innerHTML = html;
-      Feedback.bindFeedback(resultsPanel, items => api(
-        "PUT", `/api/feedback/${encodeURIComponent(name)}/${encodeURIComponent(runDate)}/batch`, { items },
-      ));
+      Feedback.bindFeedback(resultsPanel, async items => {
+        await api("PUT", `/api/feedback/${encodeURIComponent(name)}/${encodeURIComponent(runDate)}/batch`, { items });
+        // A "Perfect match" item in this batch may have just created a pin —
+        // reload so a new "Your picks" section (or an updated one) shows up
+        // without the user having to navigate away and back.
+        loadResults(name);
+      });
+      bindUnpin(resultsPanel, name);
     } catch {
       resultsPanel.innerHTML = `<p class="empty-state">No results yet.</p>`;
     }

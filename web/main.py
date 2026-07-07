@@ -1,6 +1,6 @@
 import hashlib
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Request
@@ -320,6 +320,12 @@ def get_run(
     run = fc.load_run(search_name, run_date)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
+    # pinned_finds must reflect the LIVE search config, not this run's frozen
+    # config_snapshot — a pin/unpin made after this run was saved (or on an
+    # entirely different run) must show up immediately, regardless of which
+    # run's results the caller happens to be viewing.
+    live_config = fc.load_search_config(search_name)
+    run["pinned_finds"] = (live_config or {}).get("pinned_finds", [])
     if not _is_owner_or_admin(search_name, sa_admin, sa_session):
         run = {**run, "feedback": {}}
     return run
@@ -354,6 +360,35 @@ def _require_feedback_access(
 @app.put("/api/feedback/{search_name}/{run_date}/batch", dependencies=[Depends(_require_feedback_access)])
 def put_feedback_batch(search_name: str, run_date: str, body: FeedbackBatch):
     fc.save_feedback_batch(search_name, run_date, [(i.url, i.text.strip()) for i in body.items])
+
+    run = fc.load_run(search_name, run_date) or {}
+    by_url = {m["url"]: m for m in run.get("matches", []) + run.get("partial_matches", [])}
+    to_pin = []
+    for item in body.items:
+        if item.url.startswith("_"):  # skip the synthetic "_overall_" entry
+            continue
+        segments = [s.strip().lower() for s in item.text.split(";")]
+        if "perfect match" in segments and item.url in by_url:
+            to_pin.append({**by_url[item.url], "pinned_at": str(date.today())})
+    if to_pin:
+        try:
+            fc.pin_results(search_name, to_pin)
+        except Exception:
+            # Feedback itself already saved above — a pinning failure (e.g. a
+            # corrupted existing pinned_finds entry) must not fail the request
+            # the user is waiting on for their feedback save.
+            pass
+
+    return {"ok": True}
+
+
+class UnpinBody(BaseModel):
+    url: str = Field(max_length=2048)
+
+
+@app.post("/api/feedback/{search_name}/pinned/remove", dependencies=[Depends(_require_feedback_access)])
+def remove_pinned_find(search_name: str, body: UnpinBody):
+    fc.unpin_result(search_name, body.url)
     return {"ok": True}
 
 

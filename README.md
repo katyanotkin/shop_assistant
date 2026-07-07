@@ -146,6 +146,8 @@ When logged in as admin, or as the owner of the search being viewed, each result
 
 On the next run, if at least 3 feedback items exist across the last 10 runs, Gemini distils product-attribute preferences and any shop-level complaints into reusable signal. That signal is injected into the planning and scoring prompts for the next run, and shops with a clear pattern of complaints are filtered out automatically. You can disable this per-run with the **Learn from feedback** checkbox in the admin edit view.
 
+Leaving the exact "Perfect match" quick-phrase on a result also pins it (`pinned_finds` on the search config). Up to 3 pins are kept per search; oldest is evicted first past the cap. Pinned finds reappear in a **Your picks** section above Matches on every future run, regardless of whether that run's queries rediscover the URL, and feed the ranker's calibration alongside reference products (`example_urls`). Pinned cards don't show the feedback box. Unpin from the **Your picks** card at any time.
+
 See PRODUCT.md for the full user journey including feedback details.
 
 ## Web UI

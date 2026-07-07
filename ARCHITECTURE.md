@@ -125,6 +125,7 @@ Document ID = `search_name` (e.g. `wax_coat`).
 | `criteria` | map | `SearchCriteria` fields: `category[]` (required) plus any product-appropriate fields (`gender`, `material[]`, `lining[]`, `length[]`, `exclude[]`, `deal_breakers[]`, `sizes[]`, `max_price`, `extra_notes`, or custom fields for non-clothing categories). `deal_breakers[]` names other fields (standard or custom) that must be satisfied — an unmatched deal-breaker field caps the score at 3, same as an `exclude` violation |
 | `preferred_shops` | string[] | URLs of preferred retailers; searched first each run |
 | `example_urls` | string[] | Up to 3 product URLs the admin marked as ideal matches; fed to the ranker for calibration |
+| `pinned_finds` | PinnedFind[] | Up to 3 results the user marked "Perfect match" via feedback. Each is `{url, title, price, score, matched[], unmatched[], notes, is_new, pinned_at}` (a `ProductMatch` snapshot plus `pinned_at`). FIFO-evicted (oldest dropped) past the cap, not truncated-on-add like `example_urls`. Re-displayed every run regardless of rediscovery, and fed to the ranker alongside `example_urls` for calibration |
 | `feedback_notes` | string | Distilled product preferences from learn cycle; injected into prompts |
 | `avoid_shops` | string[] | Domains filtered from candidates; written by learn cycle |
 
@@ -161,7 +162,7 @@ Base URL: `https://shopassistant.verbboard.com`
 | `GET` | `/api/searches` | List searches visible to the caller: `[{name, title, active, visibility, owned}]` |
 | `GET` | `/api/search/{name}` | Public search config (criteria + preferred_shops only) |
 | `GET` | `/api/results/{search_name}` | List run dates for a search (descending), 404 if none |
-| `GET` | `/api/results/{search_name}/{run_date}` | Full run document; `feedback` decoded to `{url: text}`. Redacted to `feedback: {}` unless the caller is the search's owner (`sa_session`) or an admin |
+| `GET` | `/api/results/{search_name}/{run_date}` | Full run document; `feedback` decoded to `{url: text}`. Redacted to `feedback: {}` unless the caller is the search's owner (`sa_session`) or an admin. `pinned_finds` is overridden with the *live* value from `shop_searches` (not the run's frozen `config_snapshot`), so pin/unpin actions show up immediately regardless of which run is being viewed |
 | `GET` | `/api/me` | `{role, anonymous, name?, email?}` — current user identity from session or admin cookie |
 
 ### Auth endpoints
@@ -202,7 +203,8 @@ Base URL: `https://shopassistant.verbboard.com`
 | `PUT` | `/api/user/search/{name}` | Create or update a search config; owner only (or any signed-in user creating a new doc, subject to the free-plan one-search limit) |
 | `DELETE` | `/api/user/search/{name}` | Delete a search config; owner only |
 | `POST` | `/api/user/search/{name}/run` | Trigger a run for an owned search; owner or admin. Free-plan owners are blocked once the search is more than 30 days old |
-| `PUT` | `/api/feedback/{search_name}/{run_date}/batch` | Save feedback; body: `{items: [{url, text}]}`. Allowed for the search's owner (`sa_session`) or an admin — not restricted to `sa_admin` |
+| `PUT` | `/api/feedback/{search_name}/{run_date}/batch` | Save feedback; body: `{items: [{url, text}]}`. Allowed for the search's owner (`sa_session`) or an admin — not restricted to `sa_admin`. Any item whose text contains an exact "Perfect match" segment (case/whitespace-insensitive, `;`-split) also pins that URL — see `pinned_finds` above |
+| `POST` | `/api/feedback/{search_name}/pinned/remove` | Unpin a result; body: `{url}`. Same access as the feedback batch endpoint above (owner or admin) |
 
 **Auth mechanisms:**
 

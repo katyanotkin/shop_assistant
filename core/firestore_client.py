@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 from google.api_core.exceptions import NotFound
 from google.cloud import firestore
 
+from core import models
 from core.slug import slugify
 
 _db: firestore.Client | None = None
@@ -123,6 +124,34 @@ def save_feedback_batch(search_name: str, run_date: str, items: list[tuple[str, 
         doc_ref.update(updates)
     except NotFound:
         doc_ref.set({"feedback": {_url_key(url): {"url": url, "text": text} for url, text in items}}, merge=True)
+
+
+def pin_results(search_name: str, finds: list[dict]) -> None:
+    """Pin one or more finds in a single load/save round trip (avoids N Firestore
+    writes when a feedback batch marks several results "Perfect match" at once)."""
+    if not finds:
+        return
+    config = load_search_config(search_name) or {}
+    existing = []
+    for f in config.get("pinned_finds", []):
+        try:
+            existing.append(models.PinnedFind(**f))
+        except Exception:
+            continue  # skip a malformed/legacy entry rather than fail the whole save
+    for find in finds:
+        existing = models.add_pinned_find(existing, models.PinnedFind(**find))
+    config["pinned_finds"] = [f.model_dump() for f in existing]
+    save_search_config(config)
+
+
+def pin_result(search_name: str, find: dict) -> None:
+    pin_results(search_name, [find])
+
+
+def unpin_result(search_name: str, url: str) -> None:
+    config = load_search_config(search_name) or {}
+    config["pinned_finds"] = [f for f in config.get("pinned_finds", []) if f.get("url") != url]
+    save_search_config(config)
 
 
 def get_user(email: str) -> dict | None:

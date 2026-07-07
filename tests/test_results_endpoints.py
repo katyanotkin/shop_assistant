@@ -164,6 +164,34 @@ def test_get_run_returns_matches_field(client):
     assert len(r.json()["matches"]) == 1
 
 
+def test_get_run_returns_live_pinned_finds_not_frozen_snapshot(client):
+    """A pin/unpin made after this run was saved (or on a different run entirely)
+    must show up immediately — pinned_finds must come from the live search config,
+    not whatever config_snapshot happened to hold when this run executed."""
+    c, fc = client
+    fc.load_run.return_value = {
+        "search_name": "wax_coat",
+        "run_date": "2026-06-21",
+        "matches": [],
+        "partial_matches": [],
+        "config_snapshot": {"pinned_finds": [{"url": "https://stale.example.com"}]},
+    }
+    fc.load_search_config.return_value = {
+        "pinned_finds": [{"url": "https://example.com/pinned-after-run"}],
+    }
+    r = c.get("/api/results/wax_coat/2026-06-21")
+    assert r.status_code == 200
+    assert r.json()["pinned_finds"] == [{"url": "https://example.com/pinned-after-run"}]
+
+
+def test_get_run_pinned_finds_empty_when_no_live_config(client):
+    c, fc = client
+    fc.load_search_config.return_value = None
+    r = c.get("/api/results/wax_coat/2026-06-21")
+    assert r.status_code == 200
+    assert r.json()["pinned_finds"] == []
+
+
 def test_get_run_redacts_feedback_from_anonymous_caller(client):
     c, fc = client
     fc.load_run.return_value = {

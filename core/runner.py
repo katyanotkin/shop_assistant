@@ -82,6 +82,10 @@ def run_search(search_name: str, settings: Settings, dry_run: bool = False, lear
     feedback_notes: str = config.get("feedback_notes") or ""
     avoid_shops: set[str] = set(config.get("avoid_shops") or [])
     example_urls: list[str] = models.validate_example_urls(config.get("example_urls") or [])
+    # Reuse the same sanitizer as example_urls — these are interpolated raw into
+    # the same Gemini prompt section (core/ranker.py _example_section), so a
+    # malformed/legacy pinned_finds.url must not reach it unfiltered either.
+    pinned_urls: list[str] = models.validate_example_urls([f["url"] for f in config.get("pinned_finds", [])])
 
     if learn and not dry_run:
         learned = learn_from_feedback(search_name, settings.google_cloud_project)
@@ -112,7 +116,11 @@ def run_search(search_name: str, settings: Settings, dry_run: bool = False, lear
     print(f"Candidates: {len(candidates)}")
 
     ranked = rank_all(
-        candidates, criteria, settings.google_cloud_project, feedback_notes=feedback_notes, example_urls=example_urls
+        candidates,
+        criteria,
+        settings.google_cloud_project,
+        feedback_notes=feedback_notes,
+        example_urls=example_urls + pinned_urls,
     )
 
     matches: list[models.ProductMatch] = []
@@ -158,6 +166,7 @@ def run_search(search_name: str, settings: Settings, dry_run: bool = False, lear
         feedback_notes=feedback_notes or None,
         avoid_shops=list(avoid_shops),
         example_urls=example_urls,
+        pinned_finds=config.get("pinned_finds", []),
     )
 
     result = models.RunResult(

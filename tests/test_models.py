@@ -3,7 +3,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from core.models import ProductMatch, RunResult, SearchCriteria
+from core.models import PinnedFind, ProductMatch, RunResult, SearchCriteria, add_pinned_find
 
 
 def test_search_criteria_valid():
@@ -254,3 +254,70 @@ def test_exclude_defaults_keeps_set_deal_breakers():
     sc = SearchCriteria(category=["jacket"], material=["waxed cotton"], deal_breakers=["material"])
     data = json.loads(sc.model_dump_json(exclude_defaults=True))
     assert data["deal_breakers"] == ["material"]
+
+
+# --- pinned_finds ---
+
+
+def _find(url: str, pinned_at: str = "2026-07-01", score: float = 9.0) -> PinnedFind:
+    return PinnedFind(url=url, title=f"Item {url}", score=score, pinned_at=pinned_at)
+
+
+def test_pinned_find_inherits_product_match_fields():
+    f = PinnedFind(
+        url="https://example.com/a",
+        title="Waxed Cotton Jacket",
+        price=199.0,
+        score=9.0,
+        matched=["waxed cotton"],
+        unmatched=[],
+        notes="Great fit.",
+        pinned_at="2026-07-01",
+    )
+    assert f.price == 199.0
+    assert f.matched == ["waxed cotton"]
+    assert f.is_new is False  # inherited default, unused for pinned display
+
+
+def test_add_pinned_find_appends_new():
+    result = add_pinned_find([], _find("https://example.com/a"))
+    assert [f.url for f in result] == ["https://example.com/a"]
+
+
+def test_add_pinned_find_dedupes_by_url_refreshing_snapshot():
+    existing = [_find("https://example.com/a", score=5.0)]
+    refreshed = _find("https://example.com/a", score=9.0)
+    result = add_pinned_find(existing, refreshed)
+    assert len(result) == 1
+    assert result[0].score == 9.0
+
+
+def test_add_pinned_find_fifo_evicts_oldest_over_cap():
+    existing = [_find("https://a"), _find("https://b"), _find("https://c")]
+    result = add_pinned_find(existing, _find("https://d"), cap=3)
+    assert [f.url for f in result] == ["https://b", "https://c", "https://d"]
+
+
+def test_add_pinned_find_preserves_order_under_cap():
+    existing = [_find("https://a"), _find("https://b")]
+    result = add_pinned_find(existing, _find("https://c"), cap=3)
+    assert [f.url for f in result] == ["https://a", "https://b", "https://c"]
+
+
+def test_search_config_pinned_finds_default_empty():
+    from core.models import SearchConfig
+
+    cfg = SearchConfig(search_name="x", title="X", criteria=SearchCriteria(category="jacket"))
+    assert cfg.pinned_finds == []
+
+
+def test_search_config_accepts_pinned_finds():
+    from core.models import SearchConfig
+
+    cfg = SearchConfig(
+        search_name="x",
+        title="X",
+        criteria=SearchCriteria(category="jacket"),
+        pinned_finds=[{"url": "https://example.com/a", "title": "A", "score": 9.0, "pinned_at": "2026-07-01"}],
+    )
+    assert cfg.pinned_finds[0].url == "https://example.com/a"
