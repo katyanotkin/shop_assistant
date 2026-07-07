@@ -87,13 +87,24 @@ def index():
     return _HTML
 
 
+def _has_valid_user_session(sa_session: str | None) -> bool:
+    return bool(sa_session and verify_session_token(sa_session, _settings.session_secret))
+
+
 @app.get("/admin/login", response_class=HTMLResponse)
-def admin_login_page():
+def admin_login_page(sa_session: str | None = Cookie(default=None)):
+    # Mirrors the /auth/login block in the other direction: signing in as admin on top
+    # of an active Google user session would leave sa_session and sa_admin both set,
+    # the same confusing split _is_admin()'s Firestore-first check was fixed to avoid.
+    if _has_valid_user_session(sa_session):
+        return RedirectResponse(url="/?blocked=user_active", status_code=302)
     return HTMLResponse(_ADMIN_LOGIN_HTML)
 
 
 @app.post("/admin/login")
-async def admin_login_form(request: Request):
+async def admin_login_form(request: Request, sa_session: str | None = Cookie(default=None)):
+    if _has_valid_user_session(sa_session):
+        return RedirectResponse(url="/?blocked=user_active", status_code=303)
     form = await request.form()
     password = form.get("password", "")
     if not _settings.admin_password or password != _settings.admin_password:

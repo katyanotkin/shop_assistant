@@ -308,6 +308,46 @@ def test_admin_login_form_wrong_password_redirects_to_login_error(noredirect_cli
     assert r.headers["location"] == "/admin/login?error=1"
 
 
+# ── Reverse block: admin login while a Google user session is active ─────────
+# Mirrors the /auth/login block (which stops signing in as a Google user on top
+# of an active admin-password session): signing in as admin on top of an active
+# Google session would leave sa_session and sa_admin both set, the same
+# confusing identity/access split _is_admin()'s Firestore-first check exists to
+# avoid — so both directions are closed the same way.
+
+
+def test_admin_login_page_blocked_when_user_session_active(noredirect_client):
+    token = create_session_token(_FREE_USER, SECRET)
+    noredirect_client.cookies.set("sa_session", token)
+    r = noredirect_client.get("/admin/login")
+    assert r.status_code == 302
+    assert r.headers["location"] == "/?blocked=user_active"
+
+
+def test_admin_login_page_proceeds_without_user_session(noredirect_client):
+    r = noredirect_client.get("/admin/login")
+    assert r.status_code == 200
+
+
+def test_admin_login_form_blocked_when_user_session_active(noredirect_client):
+    token = create_session_token(_FREE_USER, SECRET)
+    noredirect_client.cookies.set("sa_session", token)
+    r = noredirect_client.post("/admin/login", data={"password": PASSWORD})
+    assert r.status_code == 303
+    assert r.headers["location"] == "/?blocked=user_active"
+    assert "sa_admin" not in r.cookies
+
+
+def test_admin_login_form_blocked_even_with_garbage_session_cookie_ignored(noredirect_client):
+    """An invalid/expired sa_session must not block admin login — only a session
+    that actually decodes should trigger the reverse block."""
+    noredirect_client.cookies.set("sa_session", "not-a-real-jwt")
+    r = noredirect_client.post("/admin/login", data={"password": PASSWORD})
+    assert r.status_code == 303
+    assert r.headers["location"] == "/admin"
+    assert "sa_admin" in r.cookies
+
+
 # ── _require_admin accepts OAuth session ──────────────────────────────────────
 
 

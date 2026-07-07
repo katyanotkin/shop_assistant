@@ -632,10 +632,16 @@
   }
 
   // ── Init ─────────────────────────────────────────────────────────────────
+  const BLOCKED_LOGIN_MESSAGES = {
+    admin_active: "You're signed in as admin. Log out of admin first, then sign in as a user.",
+    user_active: "You're signed in as a user. Sign out first, then sign in as admin.",
+  };
+
   function checkBlockedLoginMessage() {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("blocked") !== "admin_active") return;
-    alert("You're signed in as admin. Log out of admin first, then sign in as a user.");
+    const message = BLOCKED_LOGIN_MESSAGES[params.get("blocked")];
+    if (!message) return;
+    alert(message);
     params.delete("blocked");
     const qs = params.toString();
     history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
