@@ -89,6 +89,12 @@ When you are done, click **Save all feedback** at the top of the results panel. 
 
 Feedback is stored per product URL per run date. If you load an older run, any feedback you previously left for that run will appear pre-filled in the text areas.
 
+### Pinned finds
+
+Leaving the exact "Perfect match" quick-phrase on a result pins it — up to 3 per search, oldest dropped first if you pin a 4th. A pinned find reappears in a **Your picks** section above Matches on every future run, even if that run's search queries don't rediscover the URL (out of stock, delisted, or just not surfaced this time) — so a product you've already confirmed you love never silently disappears. Pinned finds also feed the ranker as calibration benchmarks, the same way reference products do — they become style/quality examples for scoring future candidates, not just a static list.
+
+Unpin from the **Your picks** card at any time. Pinned cards don't show the feedback box — a pin can come from a different, older run than the one you're currently viewing, so leaving new feedback there could get misattributed to today's run.
+
 ### Step 5 — Feedback improves future runs (learn mode)
 
 The next time a search runs, the system looks at feedback you have left across the last 10 runs. If there are at least 3 items with feedback, it calls the AI to distill:
@@ -97,16 +103,6 @@ The next time a search runs, the system looks at feedback you have left across t
 - **Shops to avoid** — if you have left feedback on multiple products from the same shop indicating a recurring problem (doesn't ship, poor quality control, repeatedly out of stock), that shop's results will be filtered out automatically.
 
 Learn mode is on by default. You can turn it off per-run with the **Learn from feedback** checkbox next to the run button in the admin edit view.
-
----
-
-## Planned: pinned finds
-
-Today, "Perfect match" is just one of the quick-phrase feedback buttons — it's stored as plain text and folded into the aggregate `feedback_notes` distillation like any other feedback, with no special handling. The result is that a find the user explicitly loved can silently drop out of a later run's results if it goes out of stock or simply isn't rediscovered by that run's search queries. Not implemented yet.
-
-Planned behavior: leaving the exact "Perfect match" feedback on a result pins it. Pinned finds are stored on the search doc (capped like reference products) and are re-displayed every run — in a "Your picks" section above Matches — regardless of whether that run's queries rediscover the URL. Pinned finds also feed the ranker the same way reference products do today (a calibration benchmark for what a great match looks like), effectively becoming user-validated reference products rather than a separate mechanism.
-
-Both features follow the same free/premium gating as search creation itself (available on your one search if you're Free, unlimited if Premium/Admin) — they refine a search's own criteria and results rather than adding scale, so gating them more strictly than search creation would be inconsistent.
 
 ---
 
