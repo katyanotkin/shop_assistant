@@ -150,7 +150,13 @@ def submit_product_feedback(
 
 
 @app.get("/auth/login")
-def auth_login(request: Request, next: str = "/"):
+def auth_login(request: Request, next: str = "/", sa_admin: str | None = Cookie(default=None)):
+    if _settings.admin_password and sa_admin == _admin_token():
+        # Signing in as a Google user on top of an active admin-password session produces
+        # a confusing split: /api/me reports the Google identity, but _is_admin() still
+        # grants full admin access underneath because it checks sa_admin first. Block it
+        # here instead — log out of admin (clears sa_admin) before signing in as a user.
+        return RedirectResponse(url="/?blocked=admin_active", status_code=302)
     if not _settings.google_client_id:
         raise HTTPException(status_code=503, detail="Google OAuth not configured")
     # Validate next is a safe relative path (no protocol, no open redirect).

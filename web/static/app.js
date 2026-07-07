@@ -632,7 +632,17 @@
   }
 
   // ── Init ─────────────────────────────────────────────────────────────────
+  function checkBlockedLoginMessage() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("blocked") !== "admin_active") return;
+    alert("You're signed in as admin. Log out of admin first, then sign in as a user.");
+    params.delete("blocked");
+    const qs = params.toString();
+    history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
+  }
+
   async function init() {
+    checkBlockedLoginMessage();
     try {
       const [searches, meResult] = await Promise.all([
         api("/api/searches"),

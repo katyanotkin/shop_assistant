@@ -122,6 +122,25 @@ def test_auth_login_includes_client_id_in_redirect(client):
     assert "fake-client-id" in r.headers["location"]
 
 
+def test_auth_login_blocked_when_admin_session_active(client):
+    """Signing in as a Google user on top of an active admin-password session would
+    otherwise produce a confusing split: /api/me shows the Google identity, but
+    _is_admin() still grants full admin access underneath. Block it instead."""
+    import hashlib
+
+    admin_token = hashlib.sha256(b"sa:hunter2").hexdigest()
+    client.cookies.set("sa_admin", admin_token)
+    r = client.get("/auth/login")
+    assert r.status_code == 302
+    assert r.headers["location"] == "/?blocked=admin_active"
+
+
+def test_auth_login_proceeds_with_wrong_admin_cookie(client):
+    client.cookies.set("sa_admin", "not-the-real-token")
+    r = client.get("/auth/login")
+    assert "accounts.google.com" in r.headers["location"]
+
+
 # ── POST /auth/logout ─────────────────────────────────────────────────────────
 
 
