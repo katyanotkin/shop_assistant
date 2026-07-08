@@ -1,15 +1,15 @@
 """Tests for new admin user/visibility endpoints and user search endpoints.
 
 Admin endpoints (require _require_admin — sa_admin cookie or sa_session with role=admin):
-  GET  /api/admin/users
-  PATCH /api/admin/user/{uid}/role
-  PATCH /api/admin/search/{name}/visibility
+  GET    /api/admin/users
+  PATCH  /api/admin/user/{uid}/role
+  PATCH  /api/admin/search/{name}/visibility
+  DELETE /api/admin/search/{name}
 
 User endpoints (require valid sa_session cookie):
-  POST   /api/user/search/generate
-  PUT    /api/user/search/{name}
-  DELETE /api/user/search/{name}
-  POST   /api/user/search/{name}/run
+  POST /api/user/search/generate
+  PUT  /api/user/search/{name}
+  POST /api/user/search/{name}/run
 """
 
 import hashlib
@@ -512,42 +512,35 @@ def test_user_save_search_free_cannot_create_second_search(client):
     assert r.status_code == 403
 
 
-# ── DELETE /api/user/search/{name} ───────────────────────────────────────────
+# ── DELETE /api/admin/search/{name} ──────────────────────────────────────────
+# Deleting an individual search is admin-only — neither Free nor Premium users
+# can delete their own search (they can only edit it, or delete their whole
+# account, which reassigns ownership of all their searches to admin instead).
 
 
-def test_user_delete_search_requires_session(client):
+def test_admin_delete_search_requires_auth(client):
     c, _ = client
-    r = c.delete("/api/user/search/wool_coat")
+    r = c.delete("/api/admin/search/wool_coat")
     assert r.status_code == 401
 
 
-def test_user_delete_search_404_when_not_found(client):
+def test_admin_delete_search_404_when_not_found(client):
     c, mock_fc = client
     mock_fc.load_search_config.return_value = None
-    c.cookies.set("sa_session", _tok(_FREE_USER))
-    r = c.delete("/api/user/search/wool_coat")
+    c.cookies.set("sa_admin", TOKEN)
+    r = c.delete("/api/admin/search/wool_coat")
     assert r.status_code == 404
+    mock_fc.delete_search_config.assert_not_called()
 
 
-def test_user_delete_search_403_when_not_owner(client):
+def test_admin_delete_search_success_regardless_of_owner(client):
     c, mock_fc = client
     mock_fc.load_search_config.return_value = {
         "search_name": "wool_coat",
-        "owner_id": "other@x.com",
+        "owner_id": _PREMIUM_USER["email"],
     }
-    c.cookies.set("sa_session", _tok(_FREE_USER))
-    r = c.delete("/api/user/search/wool_coat")
-    assert r.status_code == 403
-
-
-def test_user_delete_search_success(client):
-    c, mock_fc = client
-    mock_fc.load_search_config.return_value = {
-        "search_name": "wool_coat",
-        "owner_id": _FREE_USER["email"],
-    }
-    c.cookies.set("sa_session", _tok(_FREE_USER))
-    r = c.delete("/api/user/search/wool_coat")
+    c.cookies.set("sa_admin", TOKEN)
+    r = c.delete("/api/admin/search/wool_coat")
     assert r.status_code == 200
     assert r.json() == {"ok": True}
     mock_fc.delete_search_config.assert_called_once_with("wool_coat")

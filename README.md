@@ -16,6 +16,7 @@ A lightweight web UI reads results from Firestore and displays them by search an
 
 - Python 3.12+
 - GCP project with **Vertex AI API** and **Firestore (Native mode)** enabled
+- A Firestore database named `tailoredloop` in that project (Native mode) — TailoredLoop reads and writes this dedicated database by default, not the project's default database; override with `FIRESTORE_DATABASE` if you want to use a different one
 - `gcloud` CLI installed and authenticated
 
 ```bash
@@ -40,13 +41,16 @@ cp .env.sample .env
 # Required
 GOOGLE_CLOUD_PROJECT=your-gcp-project-id
 
+# Firestore database name (optional — defaults to "tailoredloop" even if unset)
+# FIRESTORE_DATABASE=tailoredloop
+
 # Admin UI (optional — omit to disable the /admin panel)
 ADMIN_PASSWORD=choose-a-strong-password
 
 # Scoring thresholds (optional, shown with defaults)
 MATCH_SCORE_THRESHOLD=7.0     # score >= this → full match
 PARTIAL_SCORE_THRESHOLD=4.0   # score >= this → partial match
-MAX_CANDIDATES=20             # max URLs to evaluate per run
+MAX_CANDIDATES=40             # max URLs to evaluate per run
 ```
 
 ## Daily operation
@@ -59,7 +63,7 @@ Go to `/admin`, log in, and click **+ New search** in the sidebar. Enter a short
 
 Signed-in users on the main page (`/`) can create one private search without admin access.
 
-After signing in, a **+ New search** button appears in the sidebar. Free-plan users with one search already saved see no button. Admin-role users see an **Admin panel** link instead and use `/admin`.
+After signing in, a **+ New search** button appears in the sidebar. Free-plan users with one search already saved see the same button disabled, with a tooltip suggesting premium for another search. Admin-role users see an **Admin panel** link instead and use `/admin`.
 
 Click **+ New search**: enter a title (free text) and describe what you want. Click **Generate**: Gemini produces a structured config identical to the admin flow; the search's Firestore ID is derived from the title. A JSON preview appears. Click **Save** to store it; a **Run** button then appears. Click **Run** to execute the search immediately.
 
@@ -232,6 +236,8 @@ For serverless: deploy `run.py run` to Cloud Run Jobs and trigger via Cloud Sche
 | Firestore | `roles/datastore.user` |
 
 No Google Custom Search API key is required — search uses Gemini's built-in Google Search grounding.
+
+TailoredLoop reads and writes a dedicated Firestore database (`tailoredloop` by default, see `FIRESTORE_DATABASE`), not the project's default database.
 
 ## Project structure
 

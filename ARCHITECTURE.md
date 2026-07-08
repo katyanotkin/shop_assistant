@@ -164,6 +164,9 @@ Base URL: `https://shopassistant.verbboard.com`
 | `GET` | `/api/results/{search_name}` | List run dates for a search (descending), 404 if none |
 | `GET` | `/api/results/{search_name}/{run_date}` | Full run document; `feedback` decoded to `{url: text}`. Redacted to `feedback: {}` unless the caller is the search's owner (`sa_session`) or an admin. `pinned_finds` is overridden with the *live* value from `shop_searches` (not the run's frozen `config_snapshot`), so pin/unpin actions show up immediately regardless of which run is being viewed |
 | `GET` | `/api/me` | `{role, anonymous, name?, email?}` — current user identity from session or admin cookie |
+| `DELETE` | `/api/me` | Delete the caller's own account (requires `sa_session`). Removes the `users` doc (email, display name, photo URL); does not delete their searches or results — `owner_id` on any search they owned is reassigned to `"admin"` instead, and results are unaffected. Clears the `sa_session` cookie |
+| `GET` | `/feedback` | General product-feedback page (HTML) — open to anonymous and signed-in visitors |
+| `POST` | `/api/product-feedback` | Submit general product feedback: `{text}`. Anonymous submissions capped at 500 chars; signed-in submissions up to 2000. Stored in the `product_feedback` collection with `owner_id`/`owner_name` if signed in — there is no admin UI to read these back yet, only direct Firestore access |
 
 ### Auth endpoints
 
@@ -191,6 +194,7 @@ Base URL: `https://shopassistant.verbboard.com`
 | `GET` | `/api/admin/searches` | Full search configs including `feedback_notes`, `avoid_shops` |
 | `GET` | `/api/admin/search/{name}` | Single search config |
 | `PUT` | `/api/admin/search/{name}` | Upsert search config — loads the existing doc and merges the request body on top (`{**existing, **body}`), so fields the admin form doesn't send (`description`, `feedback_notes`, `owner_id`, `visibility`, `title`) are preserved rather than wiped |
+| `DELETE` | `/api/admin/search/{name}` | Delete a search config regardless of owner. Deleting a search is admin-only — no user-facing route exists for owners to delete their own search |
 | `POST` | `/api/admin/search/generate` | `{search_name, description}` → Gemini config JSON; `description` preserved and `title` set to `search_name` title-cased |
 | `POST` | `/api/admin/run/{name}` | Trigger a search run synchronously; returns `{ok, matches, partial}` |
 
@@ -201,7 +205,6 @@ Base URL: `https://shopassistant.verbboard.com`
 | `POST` | `/api/user/search/generate` | `{title, description}` → Gemini config JSON. `search_name` is server-derived from `title` via `generate_unique_search_name`. Response is the generated config plus `search_name`, `title`, `description`, `visibility: "private"`, `owner_id`. Free-plan users limited to one search |
 | `GET` | `/api/user/search/{name}` | Full search config; owner or admin only |
 | `PUT` | `/api/user/search/{name}` | Create or update a search config; owner only (or any signed-in user creating a new doc, subject to the free-plan one-search limit) |
-| `DELETE` | `/api/user/search/{name}` | Delete a search config; owner only |
 | `POST` | `/api/user/search/{name}/run` | Trigger a run for an owned search; owner or admin. Free-plan owners are blocked once the search is more than 30 days old |
 | `PUT` | `/api/feedback/{search_name}/{run_date}/batch` | Save feedback; body: `{items: [{url, text}]}`. Allowed for the search's owner (`sa_session`) or an admin — not restricted to `sa_admin`. Any item whose text contains an exact "Perfect match" segment (case/whitespace-insensitive, `;`-split) also pins that URL — see `pinned_finds` above |
 | `POST` | `/api/feedback/{search_name}/pinned/remove` | Unpin a result; body: `{url}`. Same access as the feedback batch endpoint above (owner or admin) |
@@ -224,6 +227,7 @@ Base URL: `https://shopassistant.verbboard.com`
 | Image registry | Artifact Registry: `us-east1-docker.pkg.dev/$PROJECT_ID/shop-assistant/web` |
 | Build trigger | Cloud Build trigger `main-deploy` — fires on push to `main` branch of `katyanotkin/shop_assistant` (ignores `*.md`, `.gitignore`, `searches/**`) |
 | Build steps | `docker build -f Dockerfile.web` → `docker push` → `gcloud run deploy` |
+| Firestore database | Named database `tailoredloop` in the same project (not the project's default database, which other apps in the project share) — set via `--set-env-vars=...,FIRESTORE_DATABASE=tailoredloop` in `cloudbuild.yaml`; `core/firestore_client.py` defaults to `tailoredloop` even if the env var is unset |
 | Secrets | Injected from Secret Manager via `--set-secrets` in `cloudbuild.yaml`: `ADMIN_PASSWORD`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, `BOOTSTRAP_ADMIN_EMAIL` |
 | Service account | `cloudbuild-deployer@knotmem26.iam.gserviceaccount.com` |
 | Vertex AI | `us-central1` (separate from Cloud Run region) |

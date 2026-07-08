@@ -266,6 +266,7 @@
       <button type="button" class="btn-visibility btn-run" data-name="${esc(cfg.search_name)}" data-visibility="${esc(vis)}">
         ${vis === "public" ? "Make private" : "Make public"}
       </button>
+      <button type="button" class="btn-run edit-delete-btn" data-name="${esc(cfg.search_name)}">Delete</button>
       <span class="visibility-msg save-msg"></span>
     </div>`;
   }
@@ -288,6 +289,27 @@
         if (msgEl) { msgEl.textContent = e.message; msgEl.className = "visibility-msg save-msg err"; }
       }
       btn.disabled = false;
+    });
+  }
+
+  function bindDeleteButton(headerRow) {
+    const btn   = headerRow?.querySelector(".edit-delete-btn");
+    const msgEl = headerRow?.querySelector(".visibility-msg");
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+      const name = btn.dataset.name;
+      if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+      btn.disabled = true;
+      try {
+        await api("DELETE", `/api/admin/search/${encodeURIComponent(name)}`);
+        activeName = null;
+        configContent.innerHTML = `<p class="empty-state">Select a search from the left.</p>`;
+        resultsPanel.innerHTML = "";
+        await refreshSidebar();
+      } catch (e) {
+        btn.disabled = false;
+        if (msgEl) { msgEl.textContent = e.message; msgEl.className = "visibility-msg save-msg err"; }
+      }
     });
   }
 
@@ -371,6 +393,7 @@
       const cfg = await api("GET", `/api/admin/search/${name}`);
       configContent.innerHTML = renderConfigHeader(cfg) + renderEdit(cfg) + renderReferences();
       bindVisibilityToggle(configContent.querySelector(".config-header-row"));
+      bindDeleteButton(configContent.querySelector(".config-header-row"));
       const form = configPanel.querySelector(".edit-form");
       bindEdit(form);
       bindReferences(configPanel.querySelector(".references-card"), form, name);

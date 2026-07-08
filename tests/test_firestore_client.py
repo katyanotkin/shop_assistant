@@ -340,3 +340,32 @@ def test_pin_result_skips_malformed_existing_entry():
     saved = mock_db.collection.return_value.document.return_value.set.call_args[0][0]
     assert len(saved["pinned_finds"]) == 1
     assert saved["pinned_finds"][0]["url"] == _FIND["url"]
+
+
+# ── delete_user ───────────────────────────────────────────────────────────────
+
+
+def test_delete_user_reassigns_owned_searches_to_admin():
+    """Account deletion only erases identity data; the user's searches and results
+    are retained (see privacy.html) by reassigning owner_id to the "admin" sentinel
+    rather than being deleted or left pointing at a nonexistent user."""
+    mock_db = MagicMock()
+    doc1, doc2 = MagicMock(), MagicMock()
+    mock_db.collection.return_value.where.return_value.stream.return_value = [doc1, doc2]
+    mock_batch = MagicMock()
+    mock_db.batch.return_value = mock_batch
+    with patch("core.firestore_client.get_db", return_value=mock_db):
+        fc.delete_user("user@example.com")
+    mock_batch.update.assert_any_call(doc1.reference, {"owner_id": "admin"})
+    mock_batch.update.assert_any_call(doc2.reference, {"owner_id": "admin"})
+    mock_batch.commit.assert_called_once()
+    mock_db.collection.return_value.document.return_value.delete.assert_called_once()
+
+
+def test_delete_user_skips_batch_when_no_owned_searches():
+    mock_db = MagicMock()
+    mock_db.collection.return_value.where.return_value.stream.return_value = []
+    with patch("core.firestore_client.get_db", return_value=mock_db):
+        fc.delete_user("user@example.com")
+    mock_db.batch.assert_not_called()
+    mock_db.collection.return_value.document.return_value.delete.assert_called_once()

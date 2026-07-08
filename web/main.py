@@ -459,6 +459,14 @@ async def admin_save_search(name: str, request: Request):
     return {"ok": True}
 
 
+@app.delete("/api/admin/search/{name}", dependencies=[Depends(_require_admin)])
+def admin_delete_search(name: str):
+    if not fc.load_search_config(name):
+        raise HTTPException(status_code=404, detail="Not found")
+    fc.delete_search_config(name)
+    return {"ok": True}
+
+
 class GenerateBody(BaseModel):
     search_name: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9_]+$")
     description: str = Field(min_length=10, max_length=2000)
@@ -611,20 +619,6 @@ async def user_save_search(name: str, request: Request, sa_session: str | None =
     )
     config["example_urls"] = validate_example_urls(config.get("example_urls") or [])
     fc.save_search_config(config)
-    return {"ok": True}
-
-
-@app.delete("/api/user/search/{name}")
-def user_delete_search(name: str, sa_session: str | None = Cookie(default=None)):
-    user = _session_user(sa_session)
-    if not user:
-        raise HTTPException(status_code=401, detail="Sign in required")
-    config = fc.load_search_config(name)
-    if not config:
-        raise HTTPException(status_code=404, detail="Search not found")
-    if config.get("owner_id") != user["sub"]:
-        raise HTTPException(status_code=403, detail="Not your search")
-    fc.delete_search_config(name)
     return {"ok": True}
 
 

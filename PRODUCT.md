@@ -12,7 +12,7 @@ It is designed for searches that are hard to express in a single Google query an
 
 The web interface is at **shopassistant.verbboard.com**.
 
-The results page (`/`) is public — anyone with the URL can read results. Admin features (creating searches for anyone, triggering runs, editing any config, viewing all users) require a password. Signed-in users can create, edit, delete, run, and leave feedback on their own search without a password — see "Planned: multi-user model" below.
+The results page (`/`) is public — anyone with the URL can read results. Admin features (creating searches for anyone, triggering runs, editing any config, viewing all users) require a password. Signed-in users can create, edit, delete, run, and leave feedback on their own search without a password — see "Accounts and roles" below.
 
 ---
 
@@ -130,9 +130,9 @@ Searches can be triggered automatically via Cloud Build on a schedule (configure
 
 ---
 
-## Planned: multi-user model
+## Accounts and roles
 
-The planned evolution moves from a single-admin tool to a service with multiple users, while keeping a curated public layer open to anyone.
+TailoredLoop is a multi-user service with a curated public layer open to anyone. Signed-in users get their own private search(es); the admin can promote any search to a public showcase. (A few pieces of this model — cloning a public search, self-serve subscriptions — are still planned and marked as such below.)
 
 ### Roles
 
@@ -150,23 +150,27 @@ Every account has one of three roles:
 |---|---|---|---|---|
 | Browse public results | ✓ | ✓ | ✓ | ✓ |
 | Sign in | — | ✓ | ✓ | ✓ |
-| Create 1 private search | — | ✓ | ✓ | ✓ |
-| Edit or delete own search | — | ✓ | ✓ | ✓ |
+| Create 1 private search, or clone a public one into it | — | ✓ | ✓ | ✓ |
+| Edit own search | — | ✓ | ✓ | ✓ |
+| Delete any search | — | — | — | ✓ |
 | Run own search (within 1 month of creation) | — | ✓ | ✓ | ✓ |
 | Create unlimited searches | — | — | ✓ | ✓ |
 | Run searches after 1 month | — | — | ✓ | ✓ |
 | View own private results & leave feedback | — | ✓ | ✓ | ✓ |
 | Promote any search to public | — | — | — | ✓ |
-| Clone a public search into your own | — | ✓ | ✓ | ✓ |
 | View all searches (any owner) | — | — | — | ✓ |
 | View all users & manage roles | — | — | — | ✓ |
 | Edit any search config | — | — | — | ✓ |
+
+Deleting is admin-only across the board — Free and Premium users can edit their search but cannot delete it themselves. There is no self-serve way to remove a single search; the only user-initiated removal is deleting the whole account (see below), which reassigns ownership to admin rather than deleting the data.
 
 ### User accounts and private searches
 
 Users sign in with Google. Each user's searches and results are private — only visible to that user and to the admin.
 
-**Free tier** gives users 1 private search. They can create it, configure it, edit or delete it, and run it for up to one month from the date the search was created. After one month, runs are disabled; the search and its results remain readable, and it can still be edited or deleted. Promotion to public does not change or reset the run window — the same 1-month clock applies regardless.
+**Free tier** gives users 1 private search. They can create it, configure it, edit it, and run it for up to one month from the date the search was created. After one month, runs are disabled; the search and its results remain readable, and it can still be edited. Promotion to public does not change or reset the run window — the same 1-month clock applies regardless.
+
+No user can delete their own search — see "Admin capabilities" below. A free user who wants a different search than the one they have can still edit its criteria freely, or replace it via cloning a public search into their slot (see "Copying a public search" below) — but only *before* their current search has ever been run. Once it's been run at least once, that slot is locked to edit-in-place only; they can no longer swap it for a different search. This closes off run-then-swap as a way to get repeated fresh 30-day windows out of one free account: editing an existing search keeps its original `created_at` and run window unchanged, and once used, the slot can't be traded in for a different search at all.
 
 When a free user tries a gated action the UI shows: *"You're on the Free plan. Contact us to get full access."*
 
@@ -182,9 +186,9 @@ The admin can promote any search — their own or a user's — to **public**. Pr
 
 ### Copying a public search (planned)
 
-Any signed-in user will be able to clone a public search into a private copy of their own — either to run it as-is or to polish the criteria first. The clone copies the criteria config and preferred shops; it does not copy the original owner's feedback, pinned finds, or reference products, since those are personal signal about what worked for *that* user's taste, not the objective spec. The clone's 1-month free-tier run window starts fresh at clone time, same as any newly created search.
+Any signed-in user — Free or Premium — will be able to clone a public search into a private copy of their own — either to run it as-is or to polish the criteria first. The clone copies the criteria config and preferred shops; it does not copy the original owner's feedback, pinned finds, or reference products, since those are personal signal about what worked for *that* user's taste, not the objective spec. The clone's 1-month free-tier run window starts fresh at clone time, same as any newly created search.
 
-For a Free user, cloning fills their existing 1-private-search slot rather than adding a bonus one — it's an alternate way to get to that one search, not an additional search. A Free user whose slot is already filled must delete their existing search before cloning a different one, same as creating a new one from scratch.
+For a Free user, cloning fills their existing 1-private-search slot rather than adding a bonus one — it's an alternate way to get to that one search, not an additional search. Since Free users can't delete their own search (see "Admin capabilities" below), cloning into an already-filled slot works by overwriting that search in place, the same way editing does — not by deleting and recreating. That overwrite is only available while the existing search has never been run; once it has been run, the slot is locked to edit-in-place and can no longer be swapped for a clone of something else.
 
 ### Granting premium access
 
@@ -195,10 +199,13 @@ The admin manages roles from a **Users** tab in the admin panel. Each user appea
 Admin is a full superuser:
 
 - Sees all searches from all users, not just their own.
-- Can edit, run, or delete any search regardless of owner.
+- Can edit, run, or delete any search regardless of owner. Deleting is admin-only — no other role can delete a search, their own or anyone else's.
 - Promotes and demotes any search between private and public.
 - Views the user list and changes any user's role.
-- Cannot accidentally remove the last admin account (the action is blocked).
+
+### Account deletion
+
+Any signed-in user can delete their own account (self-serve, from the top bar). This removes their identity data (email, display name, profile picture) immediately. It does not delete their searches or results — those aren't personal data (see the Privacy Policy) and are retained by reassigning `owner_id` to admin, the same way as any other admin-owned search. This applies uniformly regardless of role: Free, Premium, and Admin accounts are all handled the same way on deletion, so there's no special-casing based on tier.
 
 ### Future: subscription model (self-serve premium)
 

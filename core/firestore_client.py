@@ -225,7 +225,14 @@ def upsert_user(email: str, display_name: str, photo_url: str, bootstrap_admin_e
 def delete_user(email: str) -> None:
     from core.auth import user_doc_id
 
-    get_db().collection("users").document(user_doc_id(email)).delete()
+    db = get_db()
+    docs = list(db.collection("shop_searches").where(filter=firestore.FieldFilter("owner_id", "==", email)).stream())
+    if docs:
+        batch = db.batch()
+        for doc in docs:
+            batch.update(doc.reference, {"owner_id": "admin"})
+        batch.commit()
+    db.collection("users").document(user_doc_id(email)).delete()
 
 
 def save_learned_feedback(search_name: str, feedback_notes: str, avoid_shops: list[str]) -> None:

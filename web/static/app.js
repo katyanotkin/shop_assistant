@@ -508,7 +508,6 @@
     const actions = `<div class="action-row">
       <button type="button" class="btn-primary" id="edit-save-btn">Save</button>
       <button type="button" class="btn-run" id="edit-cancel-btn">Cancel</button>
-      <button type="button" class="btn-run edit-delete-btn" id="edit-delete-btn">Delete search</button>
       <span class="save-msg" id="edit-save-msg"></span>
     </div>`;
     return `<div class="generate-panel">
@@ -557,35 +556,6 @@
       }
     });
 
-    document.getElementById("edit-delete-btn").addEventListener("click", async () => {
-      if (!confirm(`Delete "${cfg.title || cfg.search_name}"? This cannot be undone.`)) return;
-      const delBtn = document.getElementById("edit-delete-btn");
-      delBtn.disabled = true;
-      setMsg("Deleting…", "");
-      try {
-        await api(`/api/user/search/${encodeURIComponent(cfg.search_name)}`, { method: "DELETE" });
-        activeSearch = null;
-        const searches = await api("/api/searches");
-        _searches = searches;
-        buildSearchList(searches);
-        updateNewSearchBtn(searches);
-        createPanel.hidden = true;
-        createPanel.innerHTML = "";
-        history.replaceState({}, "", "/");
-        document.title = _defaultTitle;
-        toolbar.hidden = true;
-        runSearchBtn.hidden = true;
-        editSearchBtn.hidden = true;
-        runGateMsg.hidden = true;
-        const criteriaBar = document.getElementById("criteria-bar");
-        if (criteriaBar) criteriaBar.hidden = true;
-        resultsPanel.hidden = false;
-        resultsPanel.innerHTML = `<p class="empty-state">Select a search from the left to view results.</p>`;
-      } catch (e) {
-        setMsg(e.message, "err");
-        delBtn.disabled = false;
-      }
-    });
   }
 
   // ── Sidebar ───────────────────────────────────────────────────────────────
