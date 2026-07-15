@@ -369,3 +369,95 @@ def test_delete_user_skips_batch_when_no_owned_searches():
         fc.delete_user("user@example.com")
     mock_db.batch.assert_not_called()
     mock_db.collection.return_value.document.return_value.delete.assert_called_once()
+
+
+# ── load_feedback_entries ────────────────────────────────────────────────────
+
+
+def _mock_db_returning_runs(docs: list[MagicMock]) -> MagicMock:
+    mock_db = MagicMock()
+    (
+        mock_db.collection.return_value.document.return_value.collection.return_value.order_by.return_value.limit.return_value.stream.return_value
+    ) = docs
+    return mock_db
+
+
+def test_load_feedback_entries_overall_note_shape():
+    raw_data = {
+        "run_date": "2026-07-10",
+        "feedback": {_url_key("_overall_"): {"url": "_overall_", "text": "loved the wool picks this week"}},
+        "matches": [],
+        "partial_matches": [],
+    }
+    doc = _make_doc(raw_data)
+    mock_db = _mock_db_returning_runs([doc])
+
+    with patch("core.firestore_client.get_db", return_value=mock_db):
+        entries = fc.load_feedback_entries("wax_coat")
+
+    assert entries == [{"type": "overall_note", "run_date": "2026-07-10", "feedback": "loved the wool picks this week"}]
+
+
+def test_load_feedback_entries_skips_other_underscore_prefixed_keys():
+    raw_data = {
+        "run_date": "2026-07-10",
+        "feedback": {_url_key("_internal_"): {"url": "_internal_", "text": "should not surface"}},
+        "matches": [],
+        "partial_matches": [],
+    }
+    doc = _make_doc(raw_data)
+    mock_db = _mock_db_returning_runs([doc])
+
+    with patch("core.firestore_client.get_db", return_value=mock_db):
+        entries = fc.load_feedback_entries("wax_coat")
+
+    assert entries == []
+
+
+def test_load_feedback_entries_per_product_entry_shape_unchanged():
+    url = "https://shop.example.com/items/coat/42"
+    raw_data = {
+        "run_date": "2026-07-10",
+        "feedback": {_url_key(url): {"url": url, "text": "great fit"}},
+        "matches": [{"url": url, "title": "Waxed Coat", "score": 9, "matched": ["material"], "unmatched": []}],
+        "partial_matches": [],
+    }
+    doc = _make_doc(raw_data)
+    mock_db = _mock_db_returning_runs([doc])
+
+    with patch("core.firestore_client.get_db", return_value=mock_db):
+        entries = fc.load_feedback_entries("wax_coat")
+
+    assert entries == [
+        {
+            "url": url,
+            "domain": "shop.example.com",
+            "title": "Waxed Coat",
+            "score": 9,
+            "matched": ["material"],
+            "unmatched": [],
+            "feedback": "great fit",
+        }
+    ]
+
+
+def test_load_feedback_entries_mixes_overall_note_and_per_product():
+    url = "https://shop.example.com/items/coat/42"
+    raw_data = {
+        "run_date": "2026-07-10",
+        "feedback": {
+            _url_key(url): {"url": url, "text": "great fit"},
+            _url_key("_overall_"): {"url": "_overall_", "text": "run-level note"},
+        },
+        "matches": [{"url": url, "title": "Waxed Coat", "score": 9, "matched": [], "unmatched": []}],
+        "partial_matches": [],
+    }
+    doc = _make_doc(raw_data)
+    mock_db = _mock_db_returning_runs([doc])
+
+    with patch("core.firestore_client.get_db", return_value=mock_db):
+        entries = fc.load_feedback_entries("wax_coat")
+
+    types_seen = {e.get("type") for e in entries}
+    assert "overall_note" in types_seen
+    assert len(entries) == 2

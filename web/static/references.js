@@ -12,16 +12,22 @@
     catch { return "#"; }
   }
 
-  // Echoes back the reference products a run was scored against — read-only,
-  // sourced from the run's config_snapshot (already persisted, no extra fetch).
-  function renderNote(run, opts = {}) {
-    const siteName = opts.siteName || defaultSiteName;
-    const urls = run.config_snapshot?.example_urls || [];
+  function shortUrl(url, max = 60) {
+    const stripped = url.replace(/^https?:\/\/(www\.)?/, "");
+    return stripped.length > max ? stripped.slice(0, max - 1) + "…" : stripped;
+  }
+
+  // Shows the user's reference products ("products like this" URLs) in the
+  // results view. Prefers run.example_urls — the LIVE config, merged in by the
+  // results endpoint — over the run's frozen config_snapshot, so a reference
+  // added after the run still shows up.
+  function renderNote(run) {
+    const urls = run.example_urls ?? run.config_snapshot?.example_urls ?? [];
     if (!urls.length) return "";
     const links = urls
-      .map(u => `<a href="${esc(safeHref(u))}" target="_blank" rel="noopener" class="ref-note-link">${esc(siteName(u) || u)}</a>`)
+      .map(u => `<a href="${esc(safeHref(u))}" target="_blank" rel="noopener" class="ref-note-link" title="${esc(u)}">${esc(shortUrl(u))}</a>`)
       .join(", ");
-    return `<p class="run-reference-note">Compared against: ${links}</p>`;
+    return `<p class="run-reference-note"><span class="ref-note-label">Products like this (your references):</span> ${links}</p>`;
   }
 
   // withSaveButton: admin saves references independently of the rest of the
@@ -33,6 +39,7 @@
       <div class="references-header">
         <span class="references-title">Reference products</span>
         <span class="ref-count"></span>
+        <span class="ref-autosave-msg save-msg"></span>
       </div>
       <p class="references-desc">Add up to 3 products you already love — the AI uses these to calibrate what a great match looks like for you.</p>
       <div class="ref-chips"></div>
@@ -51,12 +58,44 @@
   // this card keeps in sync as chips are added/removed.
   // opts.siteName: url -> display label
   // opts.onSave: async (urls) => void — only wired up if a .btn-ref-save exists in the card
+  // opts.onChange: async (urls) => void — persists immediately on every add/remove,
+  //   so a reference is never lost because the user forgot a separate Save click
   function bindReferences(card, hiddenInput, opts = {}) {
     const siteName = opts.siteName || defaultSiteName;
     let urls = hiddenInput ? hiddenInput.value.split("\n").filter(Boolean) : [];
 
     function syncHidden() {
       if (hiddenInput) hiddenInput.value = urls.join("\n");
+    }
+
+    const autosaveMsg = card.querySelector(".ref-autosave-msg");
+    const setAutoMsg = (text, cls) => {
+      if (autosaveMsg) { autosaveMsg.textContent = text; autosaveMsg.className = `ref-autosave-msg save-msg ${cls}`; }
+    };
+    // One in-flight save at a time, always re-sending the LATEST state after —
+    // parallel PUTs could arrive out of order and persist a stale snapshot.
+    let saving = false, dirty = false, clearSeq = 0;
+    async function persist() {
+      if (!opts.onChange) return;
+      dirty = true;
+      if (saving) return;
+      saving = true;
+      while (dirty) {
+        dirty = false;
+        clearSeq++;
+        setAutoMsg("Saving…", "");
+        try {
+          await opts.onChange(urls.slice());
+          if (!dirty) {
+            setAutoMsg("Saved.", "ok");
+            const seq = clearSeq;
+            setTimeout(() => { if (seq === clearSeq) setAutoMsg("", ""); }, 2000);
+          }
+        } catch (e) {
+          if (!dirty) setAutoMsg(`Not saved: ${e.message} — will retry on next change`, "err");
+        }
+      }
+      saving = false;
     }
 
     function renderChips() {
@@ -75,6 +114,7 @@
           urls = urls.filter(u => u !== btn.closest(".ref-chip").dataset.url);
           renderChips();
           syncHidden();
+          persist();
         });
       });
     }
@@ -92,7 +132,7 @@
         return;
       }
       urlInput.style.outline = "";
-      if (!urls.includes(val)) { urls.push(val); renderChips(); syncHidden(); }
+      if (!urls.includes(val)) { urls.push(val); renderChips(); syncHidden(); persist(); }
       urlInput.value = "";
     }
 

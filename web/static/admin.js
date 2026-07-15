@@ -140,17 +140,18 @@
   // ── Reference products card ──────────────────────────────────────────────
 
   function renderReferences() {
-    return References.renderReferences();
+    // No manual Save button: references persist automatically on add/remove.
+    return References.renderReferences({ withSaveButton: false });
   }
 
   function bindReferences(card, editForm, name) {
     const hidden = editForm.querySelector('[name="example_urls"]');
     References.bindReferences(card, hidden, {
       siteName,
-      onSave: async urls => {
-        const cfg = await api("GET", `/api/admin/search/${name}`);
-        cfg.example_urls = urls;
-        await api("PUT", `/api/admin/search/${name}`, cfg);
+      onChange: async urls => {
+        // The admin PUT merges into the stored config, so sending just the
+        // references never clobbers unsaved edits elsewhere in the form.
+        await api("PUT", `/api/admin/search/${name}`, { example_urls: urls });
       },
     });
   }

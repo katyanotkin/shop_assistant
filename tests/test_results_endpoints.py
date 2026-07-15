@@ -256,3 +256,31 @@ def test_get_run_redacts_feedback_from_non_owner_session(client):
         token = create_session_token({"email": "other@x.com", "role": "free"}, "test-secret")
         r = c.get("/api/results/wax_coat/2026-06-21", cookies={"sa_session": token})
     assert r.json()["feedback"] == {}
+
+
+def test_get_run_returns_live_example_urls_sanitized(client):
+    """example_urls must be live-merged from the search config (like pinned_finds),
+    sanitized via validate_example_urls, and independent of the run's frozen
+    config_snapshot."""
+    c, fc = client
+    fc.load_run.return_value = {
+        "search_name": "wax_coat",
+        "run_date": "2026-06-21",
+        "matches": [],
+        "partial_matches": [],
+        "config_snapshot": {"example_urls": ["https://stale.example.com/snapshot-only"]},
+    }
+    fc.load_search_config.return_value = {
+        "example_urls": ["not a url", "https://ok.example/x"],
+    }
+    r = c.get("/api/results/wax_coat/2026-06-21")
+    assert r.status_code == 200
+    assert r.json()["example_urls"] == ["https://ok.example/x"]
+
+
+def test_get_run_example_urls_empty_when_no_live_config(client):
+    c, fc = client
+    fc.load_search_config.return_value = None
+    r = c.get("/api/results/wax_coat/2026-06-21")
+    assert r.status_code == 200
+    assert r.json()["example_urls"] == []

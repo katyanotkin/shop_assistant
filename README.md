@@ -5,9 +5,9 @@ Web app that monitors online shops for products matching saved search criteria. 
 ## How it works
 
 1. **Plan** — Gemini generates 3 optimised search queries from your criteria
-2. **Search** — Gemini with Google Search grounding returns product URLs (no API key needed)
-3. **Fetch** — each URL is fetched and stripped to plain text
-4. **Rank** — Gemini scores each page 0–10 against your criteria; any field listed as a deal-breaker caps the score at 3 if not satisfied
+2. **Search** — Gemini with Google Search grounding returns product URLs (no API key needed); URLs that are recognizably category/collection/search pages are dropped, and duplicate URLs that resolve to the same page are deduped
+3. **Fetch** — each remaining URL is fetched and stripped to plain text
+4. **Rank** — Gemini scores each page 0–10 against your criteria; a multi-product listing page scores 0; any field listed as a deal-breaker caps the score at 3 if not satisfied
 5. **Save** — results saved to Firestore; the web UI updates automatically
 
 A lightweight web UI reads results from Firestore and displays them by search and date. An admin panel (password-protected) lets you create and edit searches, trigger runs, and leave feedback on results.
@@ -148,9 +148,11 @@ In `/admin`, click **Users** in the sidebar to see a table of all registered use
 
 When logged in as admin, or as the owner of the search being viewed, each result card on the results page shows a feedback textarea with quick-phrase buttons ("Wrong material", "Doesn't ship to me", etc.). Click **Save all feedback** to write all non-empty fields in one batch.
 
-On the next run, if at least 3 feedback items exist across the last 10 runs, Gemini distils product-attribute preferences and any shop-level complaints into reusable signal. That signal is injected into the planning and scoring prompts for the next run, and shops with a clear pattern of complaints are filtered out automatically. You can disable this per-run with the **Learn from feedback** checkbox in the admin edit view.
+On the next run, if at least 1 feedback item exists across the last 10 runs, Gemini distils product-attribute preferences and any shop-level complaints into reusable signal. Overall run notes (the run-level feedback textarea, not tied to one product) are included too, and treated as explicit high-signal statements rather than being ignored. That signal is injected into the planning and scoring prompts for the next run, and shops with a clear pattern of complaints are filtered out automatically. You can disable this per-run with the **Learn from feedback** checkbox in the admin edit view.
 
 Leaving the exact "Perfect match" quick-phrase on a result also pins it (`pinned_finds` on the search config). Up to 3 pins are kept per search; oldest is evicted first past the cap. Pinned finds reappear in a **Your picks** section above Matches on every future run, regardless of whether that run's queries rediscover the URL, and feed the ranker's calibration alongside reference products (`example_urls`). Pinned cards don't show the feedback box. Unpin from the **Your picks** card at any time.
+
+Reference products (`example_urls`, up to 3 per search) save immediately on add/remove — no separate Save step. Each run, the ranker fetches each reference page's text once and feeds an excerpt to the scoring model. The results view shows the current saved references as links, live-merged so a reference added after the run still shows.
 
 See PRODUCT.md for the full user journey including feedback details.
 
@@ -232,7 +234,7 @@ For serverless: deploy `run.py run` to Cloud Run Jobs and trigger via Cloud Sche
 
 | Service | IAM role |
 |---|---|
-| Vertex AI (Gemini 2.5 Flash Lite) | `roles/aiplatform.user` |
+| Vertex AI (Gemini 2.5 Flash) | `roles/aiplatform.user` |
 | Firestore | `roles/datastore.user` |
 
 No Google Custom Search API key is required — search uses Gemini's built-in Google Search grounding.

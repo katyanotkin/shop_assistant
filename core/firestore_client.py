@@ -261,6 +261,11 @@ def load_feedback_entries(search_name: str, limit: int = 10) -> list[dict]:
         feedback = _decode_feedback(raw_feedback)
         items_by_url = {m["url"]: m for m in data.get("matches", []) + data.get("partial_matches", [])}
         for url, text in feedback.items():
+            if url == "_overall_":
+                # Run-level notes are feedback too — surface them to learning as
+                # their own entry kind instead of silently dropping them.
+                entries.append({"type": "overall_note", "run_date": data.get("run_date", ""), "feedback": text})
+                continue
             if url.startswith("_"):
                 continue
             item = items_by_url.get(url, {})

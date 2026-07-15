@@ -524,7 +524,19 @@
   function bindEditPanel(cfg) {
     const form = createPanel.querySelector(".edit-form");
     CriteriaForm.bindFieldControls(form);
-    References.bindReferences(createPanel.querySelector(".references-card"), form.querySelector('[name="example_urls"]'), { siteName });
+    References.bindReferences(createPanel.querySelector(".references-card"), form.querySelector('[name="example_urls"]'), {
+      siteName,
+      // The user PUT replaces the whole config, so persist the STORED config
+      // plus the new references — in-progress criteria edits stay unsaved
+      // until the user presses Save.
+      onChange: async urls => {
+        await api(`/api/user/search/${encodeURIComponent(cfg.search_name)}`, {
+          method: "PUT",
+          body: { ...cfg, example_urls: urls },
+        });
+        cfg.example_urls = urls;
+      },
+    });
 
     const titleInput = document.getElementById("edit-title");
     const saveMsg    = document.getElementById("edit-save-msg");

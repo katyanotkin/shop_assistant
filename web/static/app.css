@@ -587,12 +587,14 @@ body {
 }
 
 .run-reference-note {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
   margin: -12px 0 16px;
 }
+.ref-note-label { font-weight: 600; }
 .ref-note-link { color: inherit; text-decoration: underline; }
 .ref-note-link:hover { color: var(--button-primary-bg); }
+.ref-autosave-msg { font-size: 12px; }
 
 .run-search-label {
   font-weight: 600;

@@ -38,14 +38,14 @@ SearchCriteria (Firestore)
 ### Stage 1 — Planner (`core/searcher.py: _plan_queries`)
 
 - **Input:** `SearchCriteria` serialized as JSON, plus optional `feedback_notes` string from prior learn cycle.
-- **Model:** `gemini-2.5-flash-lite`, `us-central1`, temperature 0, no grounding.
+- **Model:** `gemini-2.5-flash`, `us-central1`, temperature 0, no grounding.
 - **Output:** JSON array of exactly 3 query strings. Queries follow a fixed format: discovery ("who sells…?"), material+category buying intent, material+category+sizes.
 - The feedback section is injected into the prompt only when `feedback_notes` is non-empty.
 
 ### Stage 2 — Searcher (`core/searcher.py: _grounded_search`, `_search_shop`)
 
 - **Input:** one query string.
-- **Model:** `gemini-2.5-flash-lite`, `us-central1`, `GoogleSearch` tool (Gemini native grounding — no Custom Search API key needed).
+- **Model:** `gemini-2.5-flash`, `us-central1`, `GoogleSearch` tool (Gemini native grounding — no Custom Search API key needed).
 - **Output:** list of `{link, title}` dicts, extracted from two sources:
   1. `response.candidates[0].grounding_metadata.grounding_chunks[*].web` — URLs Gemini explicitly cited.
   2. `grounding_metadata.search_entry_point.rendered_content` — all `<a href>` links in the rendered Google SERP HTML (secondary fallback, parsed with BeautifulSoup).
@@ -59,14 +59,16 @@ SearchCriteria (Firestore)
 - Uses `httpx` with a Chrome-like `User-Agent` and `Accept-Language: en-US` header.
 - Timeout configurable via `FETCH_TIMEOUT` env var (default 12 s). On any error, returns `(url, "")`.
 - The fetcher is called inside `rank_all` rather than as a separate batch step, so fetch and rank are interleaved with a 1 s delay between candidates to avoid hammering shops.
+- Before fetching, `core/ranker.py: is_listing_url` drops candidate URLs that are recognizably category/collection/search pages by path segment (e.g. `/collections/`, `/search/`, `/c/<slug>`), conservatively — unknown structures pass through to the ranker's listing-page rule instead. After fetching, candidates whose `final_url` has already been seen (grounding can hand out several redirect URLs for the same page) are deduped, and the resolved `final_url` is re-checked against `is_listing_url` in case the redirect landed on a listing page.
 
 ### Stage 4 — Ranker (`core/ranker.py`)
 
-- **Input:** page text + `SearchCriteria` + optional `feedback_notes`.
-- **Model:** `gemini-2.5-flash-lite`, `us-central1`, temperature 0, no grounding.
+- **Input:** page text + `SearchCriteria` + optional `feedback_notes` + optional reference product excerpts.
+- **Model:** `gemini-2.5-flash`, `us-central1`, temperature 0, no grounding.
 - **Output:** JSON object `{title, price, score, matched[], unmatched[], notes}`.
+- `fetch_example_refs` fetches each `example_urls` page once per run (not once per candidate) and passes an excerpt (first 1200 chars) of each into the scoring prompt, wrapped as untrusted page text, so calibration is based on real product content rather than just the URL.
 - Scoring rules injected in the system prompt:
-  - **Hard rules (score → 0):** not a product page; wrong category; wrong gender.
+  - **Hard rules (score → 0):** not a product page; wrong category; wrong gender; page is a category/collection/search-results/multi-product listing page rather than a single product.
   - **Soft rules:** `exclude` match → cap at 3; price >50% over `max_price` → cap at 3; price ≤50% over → cap at 6; material/lining/sizes/length satisfied if any value matches.
   - `matched[]` / `unmatched[]` are concise 2–5-word labels, not raw field names.
 
@@ -85,9 +87,9 @@ SearchCriteria (Firestore)
 
 Runs at the start of each `run_search` call (unless `learn=False` or `dry_run`):
 
-1. `load_feedback_entries(search_name, limit=10)` collects all feedback-tagged items from the last 10 runs.
-2. If ≥ 3 feedback items exist, `learn_from_feedback` calls Gemini with the items and extracts:
-   - `feedback_notes` — up to 2 sentences of product-attribute preferences.
+1. `load_feedback_entries(search_name, limit=10)` collects all feedback-tagged items from the last 10 runs, including the synthetic `_overall_` entry (run-level notes, not tied to a product) as a separate `type: "overall_note"` entry.
+2. If ≥ 1 feedback item exists, `learn_from_feedback` calls Gemini with the items and extracts:
+   - `feedback_notes` — up to 2 sentences of product-attribute preferences. `overall_note` entries are treated as explicit, high-signal instructions rather than one signal among many.
    - `avoid_shops` — list of domains with shop-level complaints.
 3. `save_learned_feedback` writes both back to the `shop_searches` document.
 4. On the next run, `feedback_notes` is injected into Planner and Ranker prompts; candidate URLs from `avoid_shops` domains are filtered out before ranking.
@@ -101,10 +103,10 @@ Runs at the start of each `run_search` call (unless `learn=False` or `dry_run`):
 | Planner | `_plan_queries` | None | 0 | Injects `feedback_notes` if present |
 | Searcher | `_grounded_search` | `GoogleSearch` | (default) | Called once per query + once per preferred shop |
 | Ranker | `rank_candidate` | None | 0 | Injects `feedback_notes` if present |
-| Learn | `learn_from_feedback` | None | 0 | Only when ≥ 3 feedback items exist |
+| Learn | `learn_from_feedback` | None | 0 | Only when ≥ 1 feedback item exists |
 | Generate config | `generate_search_config` | None | 0 | Admin and user "generate" flows; converts free text → `SearchConfig` JSON |
 
-All calls use `gemini-2.5-flash-lite` on Vertex AI in `us-central1`. Auth is Application Default Credentials.
+All calls use `gemini-2.5-flash` on Vertex AI in `us-central1`. Auth is Application Default Credentials.
 
 ---
 
@@ -124,7 +126,7 @@ Document ID = `search_name` (e.g. `wax_coat`).
 | `description` | string | Original free-text description used to generate the config; preserved across edits |
 | `criteria` | map | `SearchCriteria` fields: `category[]` (required) plus any product-appropriate fields (`gender`, `material[]`, `lining[]`, `length[]`, `exclude[]`, `deal_breakers[]`, `sizes[]`, `max_price`, `extra_notes`, or custom fields for non-clothing categories). `deal_breakers[]` names other fields (standard or custom) that must be satisfied — an unmatched deal-breaker field caps the score at 3, same as an `exclude` violation |
 | `preferred_shops` | string[] | URLs of preferred retailers; searched first each run |
-| `example_urls` | string[] | Up to 3 product URLs the admin marked as ideal matches; fed to the ranker for calibration |
+| `example_urls` | string[] | Up to 3 product URLs the owner marked as ideal matches; saved immediately on add/remove (no separate save step). Each run, the ranker fetches the text of each once and feeds an excerpt to the scoring model for calibration |
 | `pinned_finds` | PinnedFind[] | Up to 3 results the user marked "Perfect match" via feedback. Each is `{url, title, price, score, matched[], unmatched[], notes, is_new, pinned_at}` (a `ProductMatch` snapshot plus `pinned_at`). FIFO-evicted (oldest dropped) past the cap, not truncated-on-add like `example_urls`. Re-displayed every run regardless of rediscovery, and fed to the ranker alongside `example_urls` for calibration |
 | `feedback_notes` | string | Distilled product preferences from learn cycle; injected into prompts |
 | `avoid_shops` | string[] | Domains filtered from candidates; written by learn cycle |
@@ -162,7 +164,7 @@ Base URL: `https://shopassistant.verbboard.com`
 | `GET` | `/api/searches` | List searches visible to the caller: `[{name, title, active, visibility, owned}]` |
 | `GET` | `/api/search/{name}` | Public search config (criteria + preferred_shops only) |
 | `GET` | `/api/results/{search_name}` | List run dates for a search (descending), 404 if none |
-| `GET` | `/api/results/{search_name}/{run_date}` | Full run document; `feedback` decoded to `{url: text}`. Redacted to `feedback: {}` unless the caller is the search's owner (`sa_session`) or an admin. `pinned_finds` is overridden with the *live* value from `shop_searches` (not the run's frozen `config_snapshot`), so pin/unpin actions show up immediately regardless of which run is being viewed |
+| `GET` | `/api/results/{search_name}/{run_date}` | Full run document; `feedback` decoded to `{url: text}`. Redacted to `feedback: {}` unless the caller is the search's owner (`sa_session`) or an admin. `pinned_finds` and `example_urls` are both overridden with the *live* value from `shop_searches` (not the run's frozen `config_snapshot`), so pin/unpin actions and reference-product edits show up immediately regardless of which run is being viewed |
 | `GET` | `/api/me` | `{role, anonymous, name?, email?}` — current user identity from session or admin cookie |
 | `DELETE` | `/api/me` | Delete the caller's own account (requires `sa_session`). Removes the `users` doc (email, display name, photo URL); does not delete their searches or results — `owner_id` on any search they owned is reassigned to `"admin"` instead, and results are unaffected. Clears the `sa_session` cookie |
 | `GET` | `/feedback` | General product-feedback page (HTML) — open to anonymous and signed-in visitors |

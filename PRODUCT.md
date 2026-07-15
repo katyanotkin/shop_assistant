@@ -33,9 +33,11 @@ When you are satisfied, click **Save** to store the config, or **Save & Run** to
 
 ### Reference products (optional)
 
-In the Edit config tab, the **Reference products** card lets you add up to 3 URLs of products you already love — from any shop, not just past results from this search. The AI uses these to calibrate what a great match looks like when scoring candidates.
+In the Edit config tab, the **Reference products** card lets you add up to 3 URLs of products you already love — from any shop, not just past results from this search. Adding or removing a URL saves immediately — the card shows a Saving…/Saved status, there is no separate Save step. The AI uses these to calibrate what a great match looks like when scoring candidates.
 
-Today this only sharpens *scoring*: it does not change what search queries get generated or which candidate URLs get fetched. Pasting a reference product does not make the search go find "more like this" — it only changes how already-found candidates get judged against it.
+Each run, the ranker fetches the actual text of every reference page once and feeds an excerpt of it to the scoring model, so calibration is based on real product content, not just the URL. Today this only sharpens *scoring*: it does not change what search queries get generated or which candidate URLs get fetched. Pasting a reference product does not make the search go find "more like this" — it only changes how already-found candidates get judged against it.
+
+Your current reference products are shown in the results view as links ("Products like this (your references): …") above the results list. This reflects the references saved right now, not necessarily what was saved when that run happened — if you add or remove a reference after a run, the results view for that run updates to match.
 
 ### Deal-breaker criteria
 
@@ -49,10 +51,11 @@ When a search runs, the system:
 
 1. Generates three targeted Google search queries from your criteria.
 2. Uses Google Search grounding to find candidate product URLs — preferred shops are searched first.
-3. Fetches each product page and strips away navigation, footers, and scripts.
-4. Scores each page 0–10 against your criteria and extracts the product title, price, and a list of what matched and what did not.
-5. Saves everything to the database and writes a local CSV file.
-6. Sends an email notification if any results are new since the last run (requires email configuration).
+3. Drops candidate URLs that are recognizably category, collection, or search-results pages, and dedupes URLs that resolve to the same page, before fetching them.
+4. Fetches each remaining product page and strips away navigation, footers, and scripts.
+5. Scores each page 0–10 against your criteria and extracts the product title, price, and a list of what matched and what did not. A page that turns out to be a multi-product listing rather than a single product is scored 0.
+6. Saves everything to the database and writes a local CSV file.
+7. Sends an email notification if any results are new since the last run (requires email configuration).
 
 A run typically takes a few minutes depending on how many candidate URLs are found (up to 40 by default).
 
@@ -97,10 +100,12 @@ Unpin from the **Your picks** card at any time. Pinned cards don't show the feed
 
 ### Step 5 — Feedback improves future runs (learn mode)
 
-The next time a search runs, the system looks at feedback you have left across the last 10 runs. If there are at least 3 items with feedback, it calls the AI to distill:
+The next time a search runs, the system looks at feedback you have left across the last 10 runs. If there is at least 1 item with feedback, it calls the AI to distill:
 
 - **Product preferences** — patterns about what you actually want (e.g. "user prefers unlined or cotton lining; dislikes synthetic blends even when unlabeled"). This is injected into the search query planning and scoring prompts for the next run.
 - **Shops to avoid** — if you have left feedback on multiple products from the same shop indicating a recurring problem (doesn't ship, poor quality control, repeatedly out of stock), that shop's results will be filtered out automatically.
+
+Overall run notes — the free-text box for feedback on the run as a whole, not tied to one product — are included too, and treated as explicit, high-signal statements about what future runs should look for or avoid, rather than being silently ignored.
 
 Learn mode is on by default. You can turn it off per-run with the **Learn from feedback** checkbox next to the run button in the admin edit view.
 

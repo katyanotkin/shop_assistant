@@ -7,7 +7,7 @@ from google.genai import types
 from . import models
 from .feedback import format_feedback_section
 
-GEMINI_MODEL = "gemini-2.5-flash-lite"
+GEMINI_MODEL = "gemini-2.5-flash"
 GEMINI_LOCATION = "us-central1"
 
 _PLAN_PROMPT = """\
@@ -85,7 +85,11 @@ def _grounded_search(query: str, client: genai.Client) -> list[dict]:
 
     response = client.models.generate_content(
         model=GEMINI_MODEL,
-        contents=f"Find product pages for sale matching: {query}",
+        contents=(
+            f"Find direct product detail pages (each showing a single specific product for sale) "
+            f"matching: {query}. Prefer individual product pages over category, collection, "
+            f"or search-results pages."
+        ),
         config=types.GenerateContentConfig(tools=[types.Tool(google_search=types.GoogleSearch())]),
     )
     seen: set[str] = set()

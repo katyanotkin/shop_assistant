@@ -343,6 +343,10 @@ def get_run(
     # run's results the caller happens to be viewing.
     live_config = fc.load_search_config(search_name)
     run["pinned_finds"] = (live_config or {}).get("pinned_finds", [])
+    # Same live-merge for reference products ("products like this" URLs): a
+    # reference added after this run was saved must still show in the results
+    # view. Sanitized so legacy pre-validation records can't reach the UI raw.
+    run["example_urls"] = validate_example_urls((live_config or {}).get("example_urls") or [])
     if not _is_owner_or_admin(search_name, sa_admin, sa_session):
         run = {**run, "feedback": {}}
     return run
