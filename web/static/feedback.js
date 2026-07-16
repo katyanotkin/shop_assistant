@@ -12,16 +12,19 @@
     return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
-  function renderFeedbackBlock(url, feedbackMap) {
+  function renderFeedbackBlock(url, feedbackMap, title) {
     const existing = (feedbackMap && feedbackMap[url]) || "";
     const phrases = _PHRASES
       .map(p => `<button type="button" class="phrase-btn" data-phrase="${esc(p)}">${esc(p)}</button>`)
       .join("");
+    const escTitle = esc(title || "");
+    const label = escTitle ? `Feedback on ${escTitle}` : "Feedback on this result";
     return `
       <div class="feedback-row" data-url="${esc(url)}">
+        <span class="feedback-label" title="${label}">${label}</span>
         <div class="feedback-phrases">${phrases}</div>
         <div class="feedback-input-row">
-          <textarea class="feedback-text" rows="2" maxlength="256" placeholder="Add feedback…">${esc(existing)}</textarea>
+          <textarea class="feedback-text" rows="2" maxlength="256" placeholder="Notes on this result…" aria-label="Notes on this result, used to teach this search">${esc(existing)}</textarea>
         </div>
         <span class="feedback-charcount"></span>
       </div>`;
@@ -32,7 +35,8 @@
   function renderSaveAllRow(feedbackMap) {
     const existing = (feedbackMap && feedbackMap[_OVERALL_KEY]) || "";
     return `<div class="save-all-row">
-      <textarea class="overall-feedback-text" rows="2" maxlength="512" placeholder="Overall run notes…">${esc(existing)}</textarea>
+      <span class="feedback-label">Teach this search</span>
+      <textarea class="overall-feedback-text" rows="2" maxlength="512" placeholder="Notes for the next run…" aria-label="Overall notes for the next run of this search">${esc(existing)}</textarea>
       <div class="save-all-controls">
         <button type="button" class="save-all-btn">Save all feedback</button>
         <span class="feedback-msg"></span>

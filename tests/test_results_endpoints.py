@@ -17,6 +17,9 @@ def client():
                 {"search_name": "wool_jacket", "active": False},
             ]
             fc.list_runs.return_value = ["2026-06-20", "2026-06-21"]
+            # Results endpoints 404 unless the search's live config is public
+            # (or the caller is owner/admin) — default to a public config.
+            fc.load_search_config.return_value = {"search_name": "wax_coat", "visibility": "public"}
             fc.load_run.return_value = {
                 "search_name": "wax_coat",
                 "run_date": "2026-06-21",
@@ -185,9 +188,14 @@ def test_get_run_returns_live_pinned_finds_not_frozen_snapshot(client):
 
 
 def test_get_run_pinned_finds_empty_when_no_live_config(client):
+    # A run whose search config is gone is orphaned data: admin-only now,
+    # and the live merge must degrade to an empty list.
+    import hashlib
+
     c, fc = client
     fc.load_search_config.return_value = None
-    r = c.get("/api/results/wax_coat/2026-06-21")
+    token = hashlib.sha256(b"sa:hunter2").hexdigest()
+    r = c.get("/api/results/wax_coat/2026-06-21", cookies={"sa_admin": token})
     assert r.status_code == 200
     assert r.json()["pinned_finds"] == []
 
@@ -279,8 +287,226 @@ def test_get_run_returns_live_example_urls_sanitized(client):
 
 
 def test_get_run_example_urls_empty_when_no_live_config(client):
+    # Orphaned run (no config): admin-only, live example_urls merge degrades to [].
+    import hashlib
+
+    c, fc = client
+    fc.load_search_config.return_value = None
+    token = hashlib.sha256(b"sa:hunter2").hexdigest()
+    r = c.get("/api/results/wax_coat/2026-06-21", cookies={"sa_admin": token})
+    assert r.status_code == 200
+    assert r.json()["example_urls"] == []
+
+
+# ── Private search visibility gate ────────────────────────────────────────────
+#
+# A search config with visibility "private" (or a missing/orphaned config) must
+# 404 for anonymous callers and non-owner sessions, and stay indistinguishable
+# from a truly nonexistent search — while remaining visible to its owner and to
+# admins. Legacy configs saved before visibility existed default to "public".
+
+_PRIVATE_CONFIG = {"search_name": "secret_search", "owner_id": "owner@x.com", "visibility": "private"}
+
+
+def _admin_cookie() -> dict:
+    import hashlib
+
+    return {"sa_admin": hashlib.sha256(b"sa:hunter2").hexdigest()}
+
+
+def _session_cookie(email: str) -> dict:
+    from core.auth import create_session_token
+
+    with patch.object(main_module._settings, "session_secret", "test-secret"):
+        token = create_session_token({"email": email, "role": "free"}, "test-secret")
+    return {"sa_session": token}
+
+
+# GET /api/search/{name} ------------------------------------------------------
+
+
+def test_get_search_private_404_anonymous(client):
+    c, fc = client
+    fc.load_search_config.return_value = _PRIVATE_CONFIG
+    r = c.get("/api/search/secret_search")
+    assert r.status_code == 404
+
+
+def test_get_search_private_404_non_owner_session(client):
+    c, fc = client
+    fc.load_search_config.return_value = _PRIVATE_CONFIG
+    with patch.object(main_module._settings, "session_secret", "test-secret"):
+        r = c.get("/api/search/secret_search", cookies=_session_cookie("other@x.com"))
+    assert r.status_code == 404
+
+
+def test_get_search_private_200_owner(client):
+    c, fc = client
+    fc.load_search_config.return_value = _PRIVATE_CONFIG
+    with patch.object(main_module._settings, "session_secret", "test-secret"):
+        r = c.get("/api/search/secret_search", cookies=_session_cookie("owner@x.com"))
+    assert r.status_code == 200
+
+
+def test_get_search_private_200_admin(client):
+    c, fc = client
+    fc.load_search_config.return_value = _PRIVATE_CONFIG
+    r = c.get("/api/search/secret_search", cookies=_admin_cookie())
+    assert r.status_code == 200
+
+
+# GET /api/results/{search_name} ----------------------------------------------
+
+
+def test_get_run_dates_private_404_anonymous(client):
+    c, fc = client
+    fc.load_search_config.return_value = _PRIVATE_CONFIG
+    fc.list_runs.return_value = ["2026-06-21"]
+    r = c.get("/api/results/secret_search")
+    assert r.status_code == 404
+
+
+def test_get_run_dates_private_200_owner(client):
+    c, fc = client
+    fc.load_search_config.return_value = _PRIVATE_CONFIG
+    fc.list_runs.return_value = ["2026-06-21"]
+    with patch.object(main_module._settings, "session_secret", "test-secret"):
+        r = c.get("/api/results/secret_search", cookies=_session_cookie("owner@x.com"))
+    assert r.status_code == 200
+
+
+def test_get_run_dates_private_200_admin(client):
+    c, fc = client
+    fc.load_search_config.return_value = _PRIVATE_CONFIG
+    fc.list_runs.return_value = ["2026-06-21"]
+    r = c.get("/api/results/secret_search", cookies=_admin_cookie())
+    assert r.status_code == 200
+
+
+def test_get_run_dates_private_404_matches_nonexistent_search_detail(client):
+    """A private search must be indistinguishable from one that doesn't exist at all."""
+    c, fc = client
+    fc.load_search_config.return_value = _PRIVATE_CONFIG
+    fc.list_runs.return_value = ["2026-06-21"]
+    r_private = c.get("/api/results/secret_search")
+    assert r_private.status_code == 404
+
+    fc.load_search_config.return_value = None
+    fc.list_runs.return_value = []
+    r_missing = c.get("/api/results/does_not_exist")
+    assert r_missing.status_code == 404
+
+    assert r_private.json()["detail"] == r_missing.json()["detail"] == "No runs found"
+
+
+# GET /api/results/{search_name}/{run_date} ------------------------------------
+
+_PRIVATE_RUN = {
+    "search_name": "secret_search",
+    "run_date": "2026-06-21",
+    "matches": [],
+    "partial_matches": [],
+    "feedback": {"https://example.com/a": "great fit"},
+}
+
+
+def test_get_run_private_404_anonymous(client):
+    c, fc = client
+    fc.load_search_config.return_value = _PRIVATE_CONFIG
+    fc.load_run.return_value = _PRIVATE_RUN
+    r = c.get("/api/results/secret_search/2026-06-21")
+    assert r.status_code == 404
+
+
+def test_get_run_private_404_non_owner_session(client):
+    c, fc = client
+    fc.load_search_config.return_value = _PRIVATE_CONFIG
+    fc.load_run.return_value = _PRIVATE_RUN
+    with patch.object(main_module._settings, "session_secret", "test-secret"):
+        r = c.get("/api/results/secret_search/2026-06-21", cookies=_session_cookie("other@x.com"))
+    assert r.status_code == 404
+
+
+def test_get_run_private_200_owner_sees_feedback(client):
+    c, fc = client
+    fc.load_search_config.return_value = _PRIVATE_CONFIG
+    fc.load_run.return_value = _PRIVATE_RUN
+    with patch.object(main_module._settings, "session_secret", "test-secret"):
+        r = c.get("/api/results/secret_search/2026-06-21", cookies=_session_cookie("owner@x.com"))
+    assert r.status_code == 200
+    assert r.json()["feedback"] == {"https://example.com/a": "great fit"}
+
+
+def test_get_run_private_200_admin(client):
+    c, fc = client
+    fc.load_search_config.return_value = _PRIVATE_CONFIG
+    fc.load_run.return_value = _PRIVATE_RUN
+    r = c.get("/api/results/secret_search/2026-06-21", cookies=_admin_cookie())
+    assert r.status_code == 200
+
+
+def test_get_run_private_404_matches_nonexistent_run_detail(client):
+    """A private search's run must be indistinguishable from a nonexistent run."""
+    c, fc = client
+    fc.load_search_config.return_value = _PRIVATE_CONFIG
+    fc.load_run.return_value = _PRIVATE_RUN
+    r_private = c.get("/api/results/secret_search/2026-06-21")
+    assert r_private.status_code == 404
+
+    fc.load_search_config.return_value = None
+    fc.load_run.return_value = None
+    r_missing = c.get("/api/results/wax_coat/1999-01-01")
+    assert r_missing.status_code == 404
+
+    assert r_private.json()["detail"] == r_missing.json()["detail"] == "Run not found"
+
+
+def test_get_run_orphaned_config_404_anonymous(client):
+    # A run whose search config is gone (orphaned data) must 404 for anonymous
+    # callers, not just fall through to a 200 (it's admin-only, see
+    # test_get_run_pinned_finds_empty_when_no_live_config above).
     c, fc = client
     fc.load_search_config.return_value = None
     r = c.get("/api/results/wax_coat/2026-06-21")
+    assert r.status_code == 404
+
+
+def test_get_run_orphaned_config_404_non_admin_session(client):
+    c, fc = client
+    fc.load_search_config.return_value = None
+    with patch.object(main_module._settings, "session_secret", "test-secret"):
+        r = c.get("/api/results/wax_coat/2026-06-21", cookies=_session_cookie("someone@x.com"))
+    assert r.status_code == 404
+
+
+# Legacy configs (no "visibility" key) default to public -----------------------
+
+_LEGACY_CONFIG = {"search_name": "wax_coat", "owner_id": "owner@x.com"}
+
+
+def test_get_search_legacy_config_public_by_default(client):
+    c, fc = client
+    fc.load_search_config.return_value = _LEGACY_CONFIG
+    r = c.get("/api/search/wax_coat")
     assert r.status_code == 200
-    assert r.json()["example_urls"] == []
+
+
+def test_get_run_dates_legacy_config_public_by_default(client):
+    c, fc = client
+    fc.load_search_config.return_value = _LEGACY_CONFIG
+    fc.list_runs.return_value = ["2026-06-21"]
+    r = c.get("/api/results/wax_coat")
+    assert r.status_code == 200
+
+
+def test_get_run_legacy_config_public_by_default(client):
+    c, fc = client
+    fc.load_search_config.return_value = _LEGACY_CONFIG
+    fc.load_run.return_value = {
+        "search_name": "wax_coat",
+        "run_date": "2026-06-21",
+        "matches": [],
+        "partial_matches": [],
+    }
+    r = c.get("/api/results/wax_coat/2026-06-21")
+    assert r.status_code == 200

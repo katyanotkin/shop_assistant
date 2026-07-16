@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Feedback — __APP_NAME__</title>
+  <title>Site Feedback — __APP_NAME__</title>
   <link rel="stylesheet" href="/static/app.css">
   <link rel="stylesheet" href="/static/admin.css">
   <link rel="stylesheet" href="/static/privacy.css">
@@ -23,17 +23,17 @@
   </header>
 
   <div class="privacy-container">
-    <h1>Feedback</h1>
+    <h1>Site feedback</h1>
 
     <div class="privacy-content">
-      <p>Tell us what's working, what's broken, or what you'd like to see. If you're signed in, we'll link your feedback to your account so we can follow up; if not, it's submitted anonymously.</p>
+      <p>Tell us about TailoredLoop — what's working, what's broken, or what you'd like to see. This is separate from the feedback you leave on individual search results, which trains that search instead. If you're signed in, we'll link your feedback to your account so we can follow up; if not, it's submitted anonymously.</p>
 
       <form id="feedback-form">
         <div class="field-row">
-          <textarea id="feedback-text" class="field-input" rows="6" maxlength="2000" placeholder="What's on your mind?"></textarea>
+          <textarea id="feedback-text" class="field-input" rows="6" maxlength="2000" placeholder="What's on your mind about TailoredLoop?" aria-label="Site feedback"></textarea>
         </div>
         <div class="action-row">
-          <button type="submit" id="feedback-submit-btn" class="btn-primary">Send feedback</button>
+          <button type="submit" id="feedback-submit-btn" class="btn-primary">Send site feedback</button>
           <span id="feedback-msg" class="save-msg"></span>
         </div>
       </form>

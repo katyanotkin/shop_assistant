@@ -293,10 +293,30 @@ def get_searches(
     ]
 
 
+def _can_view_search(
+    config: dict | None,
+    sa_admin: str | None,
+    sa_session: str | None,
+) -> bool:
+    """Visibility gate for read endpoints. Callers must respond 404 (not 403)
+    when this returns False, so a private search is indistinguishable from a
+    nonexistent one. Orphaned data (config is None) is admin-only."""
+    if config and config.get("visibility", "public") == "public":
+        return True
+    if _is_admin(sa_admin, sa_session):
+        return True
+    user = _session_user(sa_session)
+    return bool(config and user and config.get("owner_id") == user["sub"])
+
+
 @app.get("/api/search/{name}")
-def get_search_public(name: str):
+def get_search_public(
+    name: str,
+    sa_admin: str | None = Cookie(default=None),
+    sa_session: str | None = Cookie(default=None),
+):
     config = fc.load_search_config(name)
-    if not config:
+    if not config or not _can_view_search(config, sa_admin, sa_session):
         raise HTTPException(status_code=404, detail="Not found")
     return {
         "search_name": config["search_name"],
@@ -306,7 +326,13 @@ def get_search_public(name: str):
 
 
 @app.get("/api/results/{search_name}")
-def get_run_dates(search_name: str):
+def get_run_dates(
+    search_name: str,
+    sa_admin: str | None = Cookie(default=None),
+    sa_session: str | None = Cookie(default=None),
+):
+    if not _can_view_search(fc.load_search_config(search_name), sa_admin, sa_session):
+        raise HTTPException(status_code=404, detail="No runs found")
     dates = fc.list_runs(search_name)
     if not dates:
         raise HTTPException(status_code=404, detail="No runs found")
@@ -334,6 +360,9 @@ def get_run(
     sa_admin: str | None = Cookie(default=None),
     sa_session: str | None = Cookie(default=None),
 ):
+    live_config = fc.load_search_config(search_name)
+    if not _can_view_search(live_config, sa_admin, sa_session):
+        raise HTTPException(status_code=404, detail="Run not found")
     run = fc.load_run(search_name, run_date)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
@@ -341,7 +370,6 @@ def get_run(
     # config_snapshot — a pin/unpin made after this run was saved (or on an
     # entirely different run) must show up immediately, regardless of which
     # run's results the caller happens to be viewing.
-    live_config = fc.load_search_config(search_name)
     run["pinned_finds"] = (live_config or {}).get("pinned_finds", [])
     # Same live-merge for reference products ("products like this" URLs): a
     # reference added after this run was saved must still show in the results

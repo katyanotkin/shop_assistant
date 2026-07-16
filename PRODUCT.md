@@ -12,7 +12,7 @@ It is designed for searches that are hard to express in a single Google query an
 
 The web interface is at **shopassistant.verbboard.com**.
 
-The results page (`/`) is public — anyone with the URL can read results. Admin features (creating searches for anyone, triggering runs, editing any config, viewing all users) require a password. Signed-in users can create, edit, delete, run, and leave feedback on their own search without a password — see "Accounts and roles" below.
+The results page (`/`) is public for public searches — anyone with the URL can read their results. Private searches 404 for anyone who isn't the owner or an admin, indistinguishable from a search that doesn't exist. Admin features (creating searches for anyone, triggering runs, editing any config, viewing all users) require a password. Signed-in users can create, edit, delete, run, and leave feedback on their own search without a password — see "Accounts and roles" below.
 
 ---
 
@@ -105,7 +105,7 @@ The next time a search runs, the system looks at feedback you have left across t
 - **Product preferences** — patterns about what you actually want (e.g. "user prefers unlined or cotton lining; dislikes synthetic blends even when unlabeled"). This is injected into the search query planning and scoring prompts for the next run.
 - **Shops to avoid** — if you have left feedback on multiple products from the same shop indicating a recurring problem (doesn't ship, poor quality control, repeatedly out of stock), that shop's results will be filtered out automatically.
 
-Overall run notes — the free-text box for feedback on the run as a whole, not tied to one product — are included too, and treated as explicit, high-signal statements about what future runs should look for or avoid, rather than being silently ignored.
+**Teach this search** — the free-text box for feedback on the run as a whole, not tied to one product — is included too, and treated as an explicit, high-signal statement about what future runs should look for or avoid, rather than being silently ignored.
 
 Learn mode is on by default. You can turn it off per-run with the **Learn from feedback** checkbox next to the run button in the admin edit view.
 
@@ -115,7 +115,7 @@ Learn mode is on by default. You can turn it off per-run with the **Learn from f
 
 | Feature | Who can use it |
 |---------|---------------|
-| View results | Anyone (public) |
+| View results | Anyone, for public searches; owner or admin only for private searches |
 | Create / edit searches (any user's) | Admin (password required) |
 | Run a search manually (any user's) | Admin |
 | Leave feedback on results | Admin, or the search's owner |
@@ -171,7 +171,7 @@ Deleting is admin-only across the board — Free and Premium users can edit thei
 
 ### User accounts and private searches
 
-Users sign in with Google. Each user's searches and results are private — only visible to that user and to the admin.
+Users sign in with Google. Each user's searches and results are private — only visible to that user and to the admin. This is enforced at the API level: a private search's config, run list, and run data all 404 for anyone else, indistinguishable from a search that doesn't exist.
 
 **Free tier** gives users 1 private search. They can create it, configure it, edit it, and run it for up to one month from the date the search was created. After one month, runs are disabled; the search and its results remain readable, and it can still be edited. Promotion to public does not change or reset the run window — the same 1-month clock applies regardless.
 

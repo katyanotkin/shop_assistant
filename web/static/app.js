@@ -192,7 +192,7 @@
       ? `<span class="card-site">${esc(site)}</span><span class="card-sep"> | </span>${esc(m.title)}`
       : esc(m.title || "(no title)");
     const titleText  = `<a class="card-title-link" href="${esc(safeHref(m.url))}" target="_blank" rel="noopener">${titleInner}</a>`;
-    const feedback   = showFeedback && !opts.pinned ? Feedback.renderFeedbackBlock(m.url, feedbackMap) : "";
+    const feedback   = showFeedback && !opts.pinned ? Feedback.renderFeedbackBlock(m.url, feedbackMap, m.title) : "";
     return `
       <div class="card">
         <div class="score-badge ${sc}">${Math.round(m.score)}</div>

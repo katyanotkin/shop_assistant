@@ -60,7 +60,7 @@
       ...(m.unmatched || []).map(t => tag(t, "tag tag-miss")),
     ].join("");
     const notes = m.notes ? `<p class="card-notes">${esc(m.notes)}</p>` : "";
-    const feedback = opts.pinned ? "" : Feedback.renderFeedbackBlock(m.url, feedbackMap);
+    const feedback = opts.pinned ? "" : Feedback.renderFeedbackBlock(m.url, feedbackMap, m.title);
     return `<div class="card">
       <div class="score-badge ${sc}">${Math.round(m.score)}</div>
       <div class="card-body">

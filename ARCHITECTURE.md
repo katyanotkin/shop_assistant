@@ -162,9 +162,9 @@ Base URL: `https://shopassistant.verbboard.com`
 |--------|------|-------------|
 | `GET` | `/` | Main results page (HTML) — read-only, no admin UI |
 | `GET` | `/api/searches` | List searches visible to the caller: `[{name, title, active, visibility, owned}]` |
-| `GET` | `/api/search/{name}` | Public search config (criteria + preferred_shops only) |
-| `GET` | `/api/results/{search_name}` | List run dates for a search (descending), 404 if none |
-| `GET` | `/api/results/{search_name}/{run_date}` | Full run document; `feedback` decoded to `{url: text}`. Redacted to `feedback: {}` unless the caller is the search's owner (`sa_session`) or an admin. `pinned_finds` and `example_urls` are both overridden with the *live* value from `shop_searches` (not the run's frozen `config_snapshot`), so pin/unpin actions and reference-product edits show up immediately regardless of which run is being viewed |
+| `GET` | `/api/search/{name}` | Search config (criteria + preferred_shops only). 404 unless the search is public, or the caller is its owner (`sa_session`) or an admin — a private search 404s identically to a nonexistent one |
+| `GET` | `/api/results/{search_name}` | List run dates for a search (descending). Same visibility gate as above (404), then 404 if there are no runs |
+| `GET` | `/api/results/{search_name}/{run_date}` | Full run document; `feedback` decoded to `{url: text}`. Same visibility gate as above (404) — a run whose search config has been deleted (orphaned) is admin-only. Within that gate, `feedback` is further redacted to `{}` unless the caller is the search's owner (`sa_session`) or an admin. `pinned_finds` and `example_urls` are both overridden with the *live* value from `shop_searches` (not the run's frozen `config_snapshot`), so pin/unpin actions and reference-product edits show up immediately regardless of which run is being viewed |
 | `GET` | `/api/me` | `{role, anonymous, name?, email?}` — current user identity from session or admin cookie |
 | `DELETE` | `/api/me` | Delete the caller's own account (requires `sa_session`). Removes the `users` doc (email, display name, photo URL); does not delete their searches or results — `owner_id` on any search they owned is reassigned to `"admin"` instead, and results are unaffected. Clears the `sa_session` cookie |
 | `GET` | `/feedback` | General product-feedback page (HTML) — open to anonymous and signed-in visitors |
