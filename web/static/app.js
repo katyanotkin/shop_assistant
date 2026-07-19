@@ -49,7 +49,13 @@
     }
     const r = await fetch(path, opts);
     if (r.status === 401) { const e = new Error("Unauthorized"); e.status = 401; throw e; }
-    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    if (!r.ok) {
+      let detail = null;
+      try { detail = (await r.clone().json())?.detail; } catch {}
+      const e = new Error(typeof detail === "string" && detail ? detail : `${r.status} ${r.statusText}`);
+      e.status = r.status;
+      throw e;
+    }
     return r.json();
   }
 
@@ -82,6 +88,16 @@
   const DAY_MS = 24 * 60 * 60 * 1000;
   const FREE_PLAN_MSG = "You're on the Free plan. Contact us to get full access.";
   const NEW_SEARCH_GATE_MSG = "Consider premium tier for another search.";
+  const PREMIUM_DAILY_CREATES = 2;
+  const PREMIUM_DAILY_LIMIT_MSG = "You've reached today's limit of 2 new searches. Try again tomorrow.";
+
+  // Mirrors the backend's `count_searches_created_since(user, utc_midnight)` —
+  // counts the caller's own searches created since UTC midnight today.
+  function premiumTodayCount(searches) {
+    const now = new Date();
+    const todayUtcMidnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    return searches.filter(s => s.owned && s.created_at && new Date(s.created_at) >= todayUtcMidnight).length;
+  }
 
   // Mirrors the backend's `(now - created_at).days > 30` (Python timedelta.days floors to
   // whole elapsed days), so the button disables exactly when the server would 403.
@@ -136,6 +152,13 @@
     }
     if (me.role === "admin") {
       newSearchContainer.innerHTML = `<a href="/admin" class="btn-new-search">Admin panel</a>`;
+      newSearchContainer.hidden = false;
+      return;
+    }
+    if (me.role === "premium" && premiumTodayCount(searches) >= PREMIUM_DAILY_CREATES) {
+      newSearchContainer.innerHTML = `
+        <button id="new-search-btn" class="btn-new-search" disabled title="${esc(PREMIUM_DAILY_LIMIT_MSG)}">+ New search</button>
+        <span class="new-search-gate-msg">${esc(PREMIUM_DAILY_LIMIT_MSG)}</span>`;
       newSearchContainer.hidden = false;
       return;
     }
@@ -575,10 +598,18 @@
     const mine       = searches.filter(s => s.owned);
     const common     = searches.filter(s => !s.owned);
     const showLabels = mine.length > 0;
+    const atQuota    = me.role === "premium" && premiumTodayCount(searches) >= PREMIUM_DAILY_CREATES;
 
     function itemHTML(s) {
+      const title = s.title || s.name.replace(/_/g, " ");
+      let cloneBtn = "";
+      if (me.role === "premium" && !s.owned) {
+        const cloneTitle = atQuota ? PREMIUM_DAILY_LIMIT_MSG : `Copy '${title}' as your own private search`;
+        cloneBtn = `<button type="button" class="btn-clone" data-name="${esc(s.name)}"${atQuota ? " disabled" : ""} title="${esc(cloneTitle)}">Copy</button>`;
+      }
       return `<li role="option" tabindex="0" data-name="${esc(s.name)}" class="${s.active ? "" : "inactive-search"}">
-        <span>${esc(s.title || s.name.replace(/_/g, " "))}</span>
+        <span>${esc(title)}</span>
+        ${cloneBtn}
         <button class="copy-link-btn" title="Copy link" aria-label="Copy link to ${esc(s.name)}">⎘</button>
       </li>`;
     }
@@ -604,6 +635,27 @@
         navigator.clipboard.writeText(`${location.origin}/${name}`)
           .then(() => { btn.textContent = "✓"; setTimeout(() => { btn.textContent = "⎘"; }, 1500); })
           .catch(() => { btn.textContent = "✗"; setTimeout(() => { btn.textContent = "⎘"; }, 1500); });
+      });
+    });
+
+    searchList.querySelectorAll(".btn-clone").forEach(btn => {
+      btn.addEventListener("click", async e => {
+        e.stopPropagation();
+        if (btn.disabled) return;
+        btn.disabled = true;
+        btn.textContent = "Copying…";
+        try {
+          const created = await api(`/api/user/search/${encodeURIComponent(btn.dataset.name)}/clone`, { method: "POST" });
+          const refreshed = await api("/api/searches");
+          _searches = refreshed;
+          buildSearchList(refreshed);
+          updateNewSearchBtn(refreshed);
+          openEditPanel(created.search_name);
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = err.message;
+          btn.title = err.message;
+        }
       });
     });
 

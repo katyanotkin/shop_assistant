@@ -1,6 +1,7 @@
 import hashlib
 import os
 import uuid
+from datetime import datetime
 from urllib.parse import urlparse
 
 from google.api_core.exceptions import NotFound
@@ -184,6 +185,22 @@ def list_user_searches(owner_id: str) -> list[dict]:
     ]
 
 
+def count_searches_created_since(owner_id: str, since: datetime) -> int:
+    """Count of searches this owner created at/after `since` (edits preserve
+    created_at, so only genuine creations — new saves and clones — count).
+    Backs the premium 2-creations-per-day gate; needs the owner_id+created_at
+    composite index in firestore.indexes.json."""
+    agg = (
+        get_db()
+        .collection("shop_searches")
+        .where(filter=firestore.FieldFilter("owner_id", "==", owner_id))
+        .where(filter=firestore.FieldFilter("created_at", ">=", since))
+        .count()
+        .get()
+    )
+    return int(agg[0][0].value)
+
+
 def update_search_visibility(search_name: str, visibility: str) -> None:
     get_db().collection("shop_searches").document(search_name).update({"visibility": visibility})
 
@@ -233,6 +250,26 @@ def delete_user(email: str) -> None:
             batch.update(doc.reference, {"owner_id": "admin"})
         batch.commit()
     db.collection("users").document(user_doc_id(email)).delete()
+
+
+def get_user_run_count(email: str, month_key: str) -> int:
+    """Runs this user has started in the given UTC month ("YYYY-MM"). Stored on
+    the user doc (run_counts.{month}) because run documents are keyed by date —
+    a same-day re-run overwrites its doc and would undercount."""
+    from core.auth import user_doc_id
+
+    doc = get_db().collection("users").document(user_doc_id(email)).get()
+    if not doc.exists:
+        return 0
+    return int((doc.to_dict().get("run_counts") or {}).get(month_key, 0))
+
+
+def increment_user_run_count(email: str, month_key: str) -> None:
+    from core.auth import user_doc_id
+
+    get_db().collection("users").document(user_doc_id(email)).update(
+        {f"run_counts.{month_key}": firestore.Increment(1)}
+    )
 
 
 def save_learned_feedback(search_name: str, feedback_notes: str, avoid_shops: list[str]) -> None:

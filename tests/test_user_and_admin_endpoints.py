@@ -99,6 +99,11 @@ def client():
             mock_fc.save_search_config.return_value = None
             mock_fc.list_users.return_value = []
             mock_fc.list_user_searches.return_value = []
+            # Quota counters default to zero so gates stay open unless a test
+            # overrides them.
+            mock_fc.count_searches_created_since.return_value = 0
+            mock_fc.get_user_run_count.return_value = 0
+            mock_fc.increment_user_run_count.return_value = None
             mock_fc.generate_unique_search_name.return_value = "wool_coat"
             mock_fc.update_user_role.return_value = None
             mock_fc.update_search_visibility.return_value = None

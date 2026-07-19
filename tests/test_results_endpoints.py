@@ -46,8 +46,9 @@ def test_get_searches_contains_name_and_active(client):
     r = c.get("/api/searches")
     data = r.json()
     assert len(data) == 2
-    assert data[0] == {"name": "wax_coat", "title": "", "active": True, "visibility": "public", "owned": False}
-    assert data[1] == {"name": "wool_jacket", "title": "", "active": False, "visibility": "public", "owned": False}
+    base = {"title": "", "visibility": "public", "owned": False, "created_at": None}
+    assert data[0] == {"name": "wax_coat", "active": True, **base}
+    assert data[1] == {"name": "wool_jacket", "active": False, **base}
 
 
 def test_get_searches_returns_empty_list_when_no_searches(client):
@@ -170,7 +171,10 @@ def test_get_run_returns_matches_field(client):
 def test_get_run_returns_live_pinned_finds_not_frozen_snapshot(client):
     """A pin/unpin made after this run was saved (or on a different run entirely)
     must show up immediately — pinned_finds must come from the live search config,
-    not whatever config_snapshot happened to hold when this run executed."""
+    not whatever config_snapshot happened to hold when this run executed.
+    Pinned finds are personal signal, so this is asserted as the OWNER."""
+    from core.auth import create_session_token
+
     c, fc = client
     fc.load_run.return_value = {
         "search_name": "wax_coat",
@@ -180,9 +184,12 @@ def test_get_run_returns_live_pinned_finds_not_frozen_snapshot(client):
         "config_snapshot": {"pinned_finds": [{"url": "https://stale.example.com"}]},
     }
     fc.load_search_config.return_value = {
+        "owner_id": "owner@x.com",
         "pinned_finds": [{"url": "https://example.com/pinned-after-run"}],
     }
-    r = c.get("/api/results/wax_coat/2026-06-21")
+    with patch.object(main_module._settings, "session_secret", "test-secret"):
+        token = create_session_token({"email": "owner@x.com", "role": "free"}, "test-secret")
+        r = c.get("/api/results/wax_coat/2026-06-21", cookies={"sa_session": token})
     assert r.status_code == 200
     assert r.json()["pinned_finds"] == [{"url": "https://example.com/pinned-after-run"}]
 
@@ -269,7 +276,9 @@ def test_get_run_redacts_feedback_from_non_owner_session(client):
 def test_get_run_returns_live_example_urls_sanitized(client):
     """example_urls must be live-merged from the search config (like pinned_finds),
     sanitized via validate_example_urls, and independent of the run's frozen
-    config_snapshot."""
+    config_snapshot. Reference products are personal signal, so asserted as OWNER."""
+    from core.auth import create_session_token
+
     c, fc = client
     fc.load_run.return_value = {
         "search_name": "wax_coat",
@@ -279,11 +288,52 @@ def test_get_run_returns_live_example_urls_sanitized(client):
         "config_snapshot": {"example_urls": ["https://stale.example.com/snapshot-only"]},
     }
     fc.load_search_config.return_value = {
+        "owner_id": "owner@x.com",
         "example_urls": ["not a url", "https://ok.example/x"],
+    }
+    with patch.object(main_module._settings, "session_secret", "test-secret"):
+        token = create_session_token({"email": "owner@x.com", "role": "free"}, "test-secret")
+        r = c.get("/api/results/wax_coat/2026-06-21", cookies={"sa_session": token})
+    assert r.status_code == 200
+    assert r.json()["example_urls"] == ["https://ok.example/x"]
+
+
+def test_get_run_redacts_personal_layers_from_non_owner_on_public_search(client):
+    """Public showcase keeps scores/criteria visible, but personal signal —
+    pinned finds, reference products, learn-mode notes (incl. the frozen
+    config_snapshot copies) — is owner/admin-only."""
+    c, fc = client
+    fc.load_run.return_value = {
+        "search_name": "wax_coat",
+        "run_date": "2026-06-21",
+        "matches": [{"url": "https://example.com/coat", "score": 9}],
+        "partial_matches": [],
+        "config_snapshot": {
+            "criteria": {"category": ["coat"]},
+            "feedback_notes": "prefers unlined",
+            "avoid_shops": ["bad.example"],
+            "example_urls": ["https://ref.example/coat"],
+            "pinned_finds": [{"url": "https://pin.example/coat"}],
+        },
+    }
+    fc.load_search_config.return_value = {
+        "search_name": "wax_coat",
+        "visibility": "public",
+        "owner_id": "owner@x.com",
+        "pinned_finds": [{"url": "https://pin.example/coat"}],
+        "example_urls": ["https://ref.example/coat"],
     }
     r = c.get("/api/results/wax_coat/2026-06-21")
     assert r.status_code == 200
-    assert r.json()["example_urls"] == ["https://ok.example/x"]
+    data = r.json()
+    assert data["pinned_finds"] == []
+    assert data["example_urls"] == []
+    snap = data["config_snapshot"]
+    assert snap["criteria"] == {"category": ["coat"]}  # objective spec stays public
+    assert snap["feedback_notes"] is None
+    assert snap["avoid_shops"] == []
+    assert snap["example_urls"] == []
+    assert snap["pinned_finds"] == []
 
 
 def test_get_run_example_urls_empty_when_no_live_config(client):

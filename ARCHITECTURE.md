@@ -131,6 +131,17 @@ Document ID = `search_name` (e.g. `wax_coat`).
 | `feedback_notes` | string | Distilled product preferences from learn cycle; injected into prompts |
 | `avoid_shops` | string[] | Domains filtered from candidates; written by learn cycle |
 
+Counting "searches this owner created since timestamp X" (the premium 2-per-day creation gate, `core/firestore_client.py: count_searches_created_since`) requires a composite index on `owner_id` (ASC) + `created_at` (ASC) — see `firestore.indexes.json`.
+
+### Collection: `users`
+
+Document ID = `user_doc_id(email)` (see `core/auth.py`).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `role` | string | `"free"` (default), `"premium"`, or `"admin"` |
+| `run_counts` | map | Keyed by UTC calendar month (`"YYYY-MM"`) → count of successful runs the user has started that month. Backs the monthly run caps (free 20, premium 100, admin unlimited); incremented via `firestore.Increment(1)` after each successful run, never decremented or reset in place — a new month key just starts at 0 |
+
 ### Collection: `shop_results/{search_name}/runs`
 
 Document ID = `run_date` (ISO date string, e.g. `2026-06-20`).
@@ -208,6 +219,7 @@ Base URL: `https://shopassistant.verbboard.com`
 | `GET` | `/api/user/search/{name}` | Full search config; owner or admin only |
 | `PUT` | `/api/user/search/{name}` | Create or update a search config; owner only (or any signed-in user creating a new doc, subject to the free-plan one-search limit) |
 | `POST` | `/api/user/search/{name}/run` | Trigger a run for an owned search; owner or admin. Free-plan owners are blocked once the search is more than 30 days old |
+| `POST` | `/api/user/search/{source_name}/clone` | Premium or admin only. Clones a public search's `criteria` (incl. `deal_breakers`) and `preferred_shops` into a new private search owned by the caller, with a fresh `created_at`; never copies `example_urls`, `pinned_finds`, or `feedback_notes`. 404 if the source is missing or not public (same detail either way). Counts toward the premium daily creation cap below |
 | `PUT` | `/api/feedback/{search_name}/{run_date}/batch` | Save feedback; body: `{items: [{url, text}]}`. Allowed for the search's owner (`sa_session`) or an admin — not restricted to `sa_admin`. Any item whose text contains an exact "Perfect match" segment (case/whitespace-insensitive, `;`-split) also pins that URL — see `pinned_finds` above |
 | `POST` | `/api/feedback/{search_name}/pinned/remove` | Unpin a result; body: `{url}`. Same access as the feedback batch endpoint above (owner or admin) |
 

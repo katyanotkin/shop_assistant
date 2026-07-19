@@ -137,7 +137,7 @@ Searches can be triggered automatically via Cloud Build on a schedule (configure
 
 ## Accounts and roles
 
-TailoredLoop is a multi-user service with a curated public layer open to anyone. Signed-in users get their own private search(es); the admin can promote any search to a public showcase. (A few pieces of this model — cloning a public search, self-serve subscriptions — are still planned and marked as such below.)
+TailoredLoop is a multi-user service with a curated public layer open to anyone. Signed-in users get their own private search(es); the admin can promote any search to a public showcase. (A few pieces of this model — free-tier cloning into an existing slot, self-serve subscriptions — are still planned and marked as such below.)
 
 ### Roles
 
@@ -155,12 +155,12 @@ Every account has one of three roles:
 |---|---|---|---|---|
 | Browse public results | ✓ | ✓ | ✓ | ✓ |
 | Sign in | — | ✓ | ✓ | ✓ |
-| Create 1 private search, or clone a public one into it | — | ✓ | ✓ | ✓ |
+| Create a private search | — | 1 total | 2 new or cloned per day | unlimited |
+| Clone a public search into a private copy | — | — (planned) | ✓ | ✓ |
 | Edit own search | — | ✓ | ✓ | ✓ |
 | Delete any search | — | — | — | ✓ |
-| Run own search (within 1 month of creation) | — | ✓ | ✓ | ✓ |
-| Create unlimited searches | — | — | ✓ | ✓ |
-| Run searches after 1 month | — | — | ✓ | ✓ |
+| Run own search | — | within 30 days of creation | within 90 days of creation | no window limit |
+| Runs per calendar month | — | 20 | 100 | unlimited |
 | View own private results & leave feedback | — | ✓ | ✓ | ✓ |
 | Promote any search to public | — | — | — | ✓ |
 | View all searches (any owner) | — | — | — | ✓ |
@@ -173,27 +173,30 @@ Deleting is admin-only across the board — Free and Premium users can edit thei
 
 Users sign in with Google. Each user's searches and results are private — only visible to that user and to the admin. This is enforced at the API level: a private search's config, run list, and run data all 404 for anyone else, indistinguishable from a search that doesn't exist.
 
-**Free tier** gives users 1 private search. They can create it, configure it, edit it, and run it for up to one month from the date the search was created. After one month, runs are disabled; the search and its results remain readable, and it can still be edited. Promotion to public does not change or reset the run window — the same 1-month clock applies regardless.
+**Free tier** gives users 1 private search. They can create it, configure it, edit it, and run it for up to one month from the date the search was created. After one month, runs are disabled; the search and its results remain readable, and it can still be edited. Promotion to public does not change or reset the run window — the same 1-month clock applies regardless. Runs are also capped at 20 per UTC calendar month; hitting the cap shows: *"You've used all 20 runs for this month. Runs reset on the 1st."*
 
 No user can delete their own search — see "Admin capabilities" below. A free user who wants a different search than the one they have can still edit its criteria freely, or replace it via cloning a public search into their slot (see "Copying a public search" below) — but only *before* their current search has ever been run. Once it's been run at least once, that slot is locked to edit-in-place only; they can no longer swap it for a different search. This closes off run-then-swap as a way to get repeated fresh 30-day windows out of one free account: editing an existing search keeps its original `created_at` and run window unchanged, and once used, the slot can't be traded in for a different search at all.
 
 When a free user tries a gated action the UI shows: *"You're on the Free plan. Contact us to get full access."*
 
-**Premium** users can create unlimited searches and run them indefinitely. They get the same workflow as today: describe what you want, generate a config, run it, read results, leave feedback.
+**Premium** users can create up to 2 new searches per UTC calendar day — from scratch, or by cloning a public search (see "Copying a public search" below); either kind counts the same toward the daily cap. Each search can be run for up to 90 days from the date it was created (mirroring free's 30-day window, just longer), and premium is capped at 100 runs per UTC calendar month. Otherwise they get the same workflow as today: describe what you want, generate a config, run it, read results, leave feedback.
+
+When a premium user hits the daily creation cap: *"You've reached today's limit of 2 new searches. Try again tomorrow."* When a search's run window has expired: *"This search's 90-day run window has expired. Create a new search to keep monitoring, or contact us if you need it extended."*
 
 ### Common results
 
 The admin can promote any search — their own or a user's — to **public**. Promoted searches appear on the public results page as a curated showcase:
 
 - The search config is visible to everyone but not editable by visitors or other users.
-- Results appear exactly as they do for the owner.
 - Visitors can browse results and click through to product pages but cannot run the search, leave feedback, or modify anything.
 
-### Copying a public search (planned)
+**Results of a promoted user-owned search.** Run results remain visible to everyone — scores, match/partial tags, AI explanations, candidate counts, and the config (criteria, preferred shops) are all part of the showcase. But three layers stay **owner-only** regardless of promotion, the same personal-signal categories the Copy feature already excludes: per-result **feedback text**, **pinned finds** ("Your picks"), and **reference products** ("Products like this"). Learned preference notes distilled by Learn mode (`feedback_notes`, avoided shops) are likewise owner-only, including the copies frozen inside each run's config snapshot. Non-owner viewers simply see the run without these sections. Promotion changes nothing about the owner's experience — their run window, monthly quota, and full view of their own pins/references/feedback are unaffected, and promotion requires no consent beyond the Terms of Service already in effect.
 
-Any signed-in user — Free or Premium — will be able to clone a public search into a private copy of their own — either to run it as-is or to polish the criteria first. The clone copies the criteria config and preferred shops; it does not copy the original owner's feedback, pinned finds, or reference products, since those are personal signal about what worked for *that* user's taste, not the objective spec. The clone's 1-month free-tier run window starts fresh at clone time, same as any newly created search.
+### Copying a public search
 
-For a Free user, cloning fills their existing 1-private-search slot rather than adding a bonus one — it's an alternate way to get to that one search, not an additional search. Since Free users can't delete their own search (see "Admin capabilities" below), cloning into an already-filled slot works by overwriting that search in place, the same way editing does — not by deleting and recreating. That overwrite is only available while the existing search has never been run; once it has been run, the slot is locked to edit-in-place and can no longer be swapped for a clone of something else.
+Premium and admin users can clone a public search into a private copy of their own — either to run it as-is or to polish the criteria first. A **Copy** button appears next to public searches the user doesn't own, in the sidebar. The clone copies the criteria config (including any deal-breaker flags) and preferred shops; it does not copy the original owner's feedback, pinned finds, or reference products, since those are personal signal about what worked for *that* user's taste, not the objective spec. The clone is a brand-new private search owned by the cloner, with its own fresh `created_at` — so it gets a full new 90-day run window — and it counts toward the premium 2-per-day creation cap the same as a from-scratch search. Its default title is "*source title* (copy)"; the cloner can rename it.
+
+**Free-tier cloning into an existing slot is still planned, not shipped.** The idea, unchanged from the original design: since Free users can't delete their own search (see "Admin capabilities" below), cloning would fill their existing 1-private-search slot rather than add a bonus one, by overwriting that search in place — the same way editing does, not by deleting and recreating — and only while the existing search has never been run. This is not implemented yet.
 
 ### Granting premium access
 
@@ -222,7 +225,7 @@ Today premium is granted manually by an admin, with no payment flow. As a subscr
 
 **Refinement — early upgraders keep their unused free days.** If a user upgrades to premium *before* their one existing search's 30-day free window has elapsed, that unused time isn't forfeited: on a later demotion, the search's remaining run-eligibility is the leftover balance from the original window (e.g. upgraded on day 5 of 30 → 25 days still owed), counted from the demotion date, not from the original `created_at` as if the premium period had counted against it. This only applies to the one search that falls within the free allowance — it's a fairness fix for the boundary case, not a general "premium time doesn't count" rule. Implementing this needs the backend to know when the user upgraded (and, if it happens more than once, when each premium period started/ended) to compute the unused balance — a small addition beyond the plain per-search `created_at` check described above, deferred alongside the rest of this section until a payment provider is chosen.
 
-**Differentiating premium beyond "unlimited + no expiry" (open, not committed).** Candidates that map to real cost/quality levers in the pipeline rather than generic tier features: more frequent scheduled runs per search, a higher candidate-fetch limit per run, a longer feedback history window for learn mode. None of these are committed — v1 of paid premium may stay exactly "unlimited searches, no run-window expiry," matching today's behavior.
+**Differentiating premium beyond free (levers set for now, not committed).** The owner has set concrete numbers for now, ahead of any payment flow: premium gets 2 new-or-cloned searches/day, a 90-day run window per search, and 100 runs/month; free gets 1 search, a 30-day run window, and 20 runs/month. These are a placeholder differentiation, not a final pricing decision, and are subject to revision once a payment provider is chosen. Other candidates that map to real cost/quality levers in the pipeline remain open and uncommitted: more frequent scheduled runs per search, a higher candidate-fetch limit per run, a longer feedback history window for learn mode.
 
 **Data model note for whoever picks this up.** When a payment provider is chosen, prefer adding a `subscription_status` field on the user doc (e.g. `active` / `past_due` / `canceled`) separate from `role`, so a failed-payment retry doesn't have to instantly demote — `role` stays the single coarse permission check the backend already gates on, `subscription_status` becomes the input that decides when to flip it.
 

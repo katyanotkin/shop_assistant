@@ -15,6 +15,14 @@
         { "fieldPath": "visibility", "order": "ASCENDING" },
         { "fieldPath": "active",     "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "shop_searches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "owner_id",   "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

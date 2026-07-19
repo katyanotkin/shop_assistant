@@ -63,13 +63,17 @@ Go to `/admin`, log in, and click **+ New search** in the sidebar. Enter a short
 
 Signed-in users on the main page (`/`) can create one private search without admin access.
 
-After signing in, a **+ New search** button appears in the sidebar. Free-plan users with one search already saved see the same button disabled, with a tooltip suggesting premium for another search. Admin-role users see an **Admin panel** link instead and use `/admin`.
+After signing in, a **+ New search** button appears in the sidebar. Free-plan users with one search already saved see the same button disabled, with a tooltip suggesting premium for another search. Premium users who have hit today's creation cap (see below) see the same button disabled with a tooltip. Admin-role users see an **Admin panel** link instead and use `/admin`.
 
 Click **+ New search**: enter a title (free text) and describe what you want. Click **Generate**: Gemini produces a structured config identical to the admin flow; the search's Firestore ID is derived from the title. A JSON preview appears. Click **Save** to store it; a **Run** button then appears. Click **Run** to execute the search immediately.
 
 The search appears under **My searches** in the sidebar. A **Run** button also appears in the toolbar when an owned search is selected.
 
-Free-plan searches can be run for 30 days from the date they were created. After 30 days the Run endpoint returns an error message ("contact us to upgrade").
+Free-plan searches can be run for 30 days from the date they were created, capped at 20 runs per UTC calendar month. After 30 days the Run endpoint returns an error message ("contact us to upgrade").
+
+Premium users can create up to 2 searches per UTC calendar day — new ones or clones of a public search (see below) — and can run each search for up to 90 days from creation, capped at 100 runs per UTC calendar month. Admin is not subject to any of these limits. Once a run cap or the daily creation cap is hit, the relevant endpoint returns a 403 with a message telling the user when it resets.
+
+A **Copy** button appears next to public searches a premium or admin user doesn't own, in the sidebar. Clicking it clones that search's criteria (including deal-breakers) and preferred shops into a new private search owned by the caller, with a fresh 90-day run window; it does not copy the source's feedback, pinned finds, or reference products. A clone counts toward the same daily creation cap as a from-scratch search.
 
 ### Dev / bulk import (CLI)
 

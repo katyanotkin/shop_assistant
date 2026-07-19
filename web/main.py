@@ -287,6 +287,14 @@ def get_searches(
             "active": c.get("active", True),
             "visibility": c.get("visibility", "public"),
             "owned": c.get("owner_id") == user_email if user_email else False,
+            # Only for the caller's own rows — lets the client compute today's
+            # creation count for the premium 2-per-day gate without a second
+            # round trip, without exposing other owners' creation dates.
+            "created_at": (
+                c["created_at"].isoformat()
+                if user_email and c.get("owner_id") == user_email and isinstance(c.get("created_at"), datetime)
+                else None
+            ),
         }
         for c in configs
         if is_admin or c.get("visibility", "public") == "public" or (user_email and c.get("owner_id") == user_email)
@@ -376,7 +384,20 @@ def get_run(
     # view. Sanitized so legacy pre-validation records can't reach the UI raw.
     run["example_urls"] = validate_example_urls((live_config or {}).get("example_urls") or [])
     if not _is_owner_or_admin(search_name, sa_admin, sa_session):
-        run = {**run, "feedback": {}}
+        # Personal-signal layers are owner-only even on public searches — the
+        # same categories the clone endpoint refuses to copy: feedback, pinned
+        # finds, reference products, and learn-mode distillations. The frozen
+        # config_snapshot carries its own copies, so redact those too.
+        run = {**run, "feedback": {}, "pinned_finds": [], "example_urls": []}
+        snapshot = run.get("config_snapshot")
+        if isinstance(snapshot, dict):
+            run["config_snapshot"] = {
+                **snapshot,
+                "feedback_notes": None,
+                "avoid_shops": [],
+                "example_urls": [],
+                "pinned_finds": [],
+            }
     return run
 
 
@@ -564,6 +585,43 @@ def admin_update_search_visibility(name: str, body: UpdateVisibilityBody):
 
 _SEARCH_NAME_RE = re.compile(r"^[a-z0-9_]{1,64}$")
 
+PREMIUM_DAILY_CREATES = 2
+RUN_WINDOW_DAYS = {"free": 30, "premium": 90}
+MONTHLY_RUN_LIMITS = {"free": 20, "premium": 100}
+PREMIUM_DAILY_LIMIT_MSG = "You've reached today's limit of 2 new searches. Try again tomorrow."
+
+
+def _month_key() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m")
+
+
+def _check_monthly_run_limit(user: dict) -> None:
+    """Free: 20 runs/month, premium: 100 — per user, per UTC calendar month.
+    Admin is ungated. Only successful runs are counted (see the increment after
+    run_search)."""
+    limit = MONTHLY_RUN_LIMITS.get(user.get("role"))
+    if not limit:
+        return
+    if fc.get_user_run_count(user["sub"], _month_key()) >= limit:
+        raise HTTPException(
+            status_code=403,
+            detail=f"You've used all {limit} runs for this month. Runs reset on the 1st.",
+        )
+
+
+def _check_premium_daily_limit(user: dict) -> None:
+    """Premium may create 2 searches per UTC calendar day — from scratch or as
+    clones, any mix. No-op for other roles: free has its own 1-search rule and
+    admin is ungated. Creation = the persisting write (edits keep created_at,
+    so they never count). Read-then-write without a transaction: concurrent
+    requests can exceed the cap by the in-flight count — accepted, these are
+    soft business limits, not security boundaries."""
+    if user.get("role") != "premium":
+        return
+    utc_midnight = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    if fc.count_searches_created_since(user["sub"], utc_midnight) >= PREMIUM_DAILY_CREATES:
+        raise HTTPException(status_code=403, detail=PREMIUM_DAILY_LIMIT_MSG)
+
 
 def _session_user(sa_session: str | None) -> dict | None:
     """Decode session JWT and refresh role from Firestore so promotions take effect without re-login."""
@@ -590,6 +648,9 @@ def user_generate_search(body: GenerateByTitleBody, sa_session: str | None = Coo
         raise HTTPException(status_code=401, detail="Sign in required")
     if user.get("role") == "free" and fc.list_user_searches(user["sub"]):
         raise HTTPException(status_code=403, detail="Free plan allows one search. Contact us to upgrade.")
+    # Soft pre-check so a premium user at quota doesn't burn a Gemini call on a
+    # draft they can't save; the authoritative gate is on the persisting PUT.
+    _check_premium_daily_limit(user)
     title = body.title.strip()
     search_name = fc.generate_unique_search_name(title)
     try:
@@ -642,6 +703,8 @@ async def user_save_search(name: str, request: Request, sa_session: str | None =
     if not existing and user.get("role") == "free":
         if fc.list_user_searches(user["sub"]):
             raise HTTPException(status_code=403, detail="Free plan allows one search. Contact us to upgrade.")
+    if not existing:
+        _check_premium_daily_limit(user)
     config["search_name"] = name
     config["title"] = title
     config["owner_id"] = user["sub"]
@@ -665,17 +728,67 @@ def user_run_search(name: str, sa_session: str | None = Cookie(default=None)):
     is_owner = config.get("owner_id") == user["sub"]
     if not is_owner and user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Not your search")
-    if user.get("role") == "free" and is_owner:
+    limit_days = RUN_WINDOW_DAYS.get(user.get("role"))
+    if limit_days and is_owner:
         created_at = config.get("created_at")
         if created_at:
             if not isinstance(created_at, datetime):
                 created_at = datetime.fromisoformat(str(created_at))
             if not created_at.tzinfo:
                 created_at = created_at.replace(tzinfo=timezone.utc)
-            if (datetime.now(timezone.utc) - created_at).days > 30:
-                raise HTTPException(
-                    status_code=403,
-                    detail="Free plan: 30-day run window has expired. Contact us to upgrade.",
-                )
+            if (datetime.now(timezone.utc) - created_at).days > limit_days:
+                if user.get("role") == "premium":
+                    detail = (
+                        "This search's 90-day run window has expired. Create a new search "
+                        "to keep monitoring, or contact us if you need it extended."
+                    )
+                else:
+                    detail = "Free plan: 30-day run window has expired. Contact us to upgrade."
+                raise HTTPException(status_code=403, detail=detail)
+    _check_monthly_run_limit(user)
     result = run_search(name, _settings, learn=True)
+    if MONTHLY_RUN_LIMITS.get(user.get("role")):
+        fc.increment_user_run_count(user["sub"], _month_key())
     return {"ok": True, "matches": len(result.matches), "partial": len(result.partial_matches)}
+
+
+class CloneBody(BaseModel):
+    title: str = Field(default="", max_length=200)
+
+
+@app.post("/api/user/search/{source_name}/clone")
+def user_clone_search(
+    source_name: str,
+    body: CloneBody | None = None,
+    sa_session: str | None = Cookie(default=None),
+):
+    """Copy a public search into a new private search of the caller's own.
+
+    Copies the objective spec only (criteria incl. deal_breakers + preferred
+    shops) — never the source owner's feedback, pinned finds, or reference
+    products. Counts toward the premium 2-creations-per-day limit."""
+    user = _session_user(sa_session)
+    if not user:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    if user.get("role") not in ("premium", "admin"):
+        raise HTTPException(status_code=403, detail="Copying a search requires Premium.")
+    source = fc.load_search_config(source_name)
+    if not source or source.get("visibility", "public") != "public":
+        raise HTTPException(status_code=404, detail="Search not found")
+    _check_premium_daily_limit(user)
+    title = ((body.title if body else "") or "").strip() or f"{source.get('title') or source_name} (copy)"
+    title = title[:200]
+    new_name = fc.generate_unique_search_name(title)
+    created_at = datetime.now(timezone.utc)
+    config = {
+        "search_name": new_name,
+        "title": title,
+        "criteria": source.get("criteria", {}),
+        "preferred_shops": source.get("preferred_shops", []),
+        "owner_id": user["sub"],
+        "visibility": "private",
+        "created_at": created_at,
+        "active": True,
+    }
+    fc.save_search_config(config)
+    return {**config, "created_at": created_at.isoformat()}
