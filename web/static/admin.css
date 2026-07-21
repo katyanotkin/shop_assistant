@@ -303,6 +303,26 @@
 .generate-panel { max-width: 560px; }
 .generate-title { margin: 0 0 20px; font-size: 16px; color: var(--text-main); font-weight: 600; }
 
+.panel-breadcrumb {
+  display: flex;
+  align-items: center;
+  margin: 0 0 20px;
+  font-size: 12px;
+}
+.breadcrumb-back {
+  padding: 0;
+  background: none;
+  border: none;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.breadcrumb-back:hover { color: var(--button-primary-bg); text-decoration: underline; }
+.breadcrumb-back:focus { outline: 2px solid var(--button-primary-bg); outline-offset: 2px; }
+.breadcrumb-sep { color: var(--text-muted); margin: 0 6px; }
+.breadcrumb-current { color: var(--text-main); font-weight: 500; }
+
 /* Reference products card */
 .references-card {
   margin-top: 28px;

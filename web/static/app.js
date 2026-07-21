@@ -398,6 +398,15 @@
     if (activeSearch) openEditPanel(activeSearch);
   });
 
+  // ── Shared panel breadcrumb ───────────────────────────────────────────────
+  function renderPanelBreadcrumb({ backLabel, current, backBtnId }) {
+    return `<div class="panel-breadcrumb">
+      <button type="button" class="breadcrumb-back" id="${backBtnId}">${backLabel}</button>
+      <span class="breadcrumb-sep">·</span>
+      <span class="breadcrumb-current">${current}</span>
+    </div>`;
+  }
+
   // ── Create search panel ───────────────────────────────────────────────────
   function openCreatePanel() {
     _savedToolbarVisible = !toolbar.hidden;
@@ -421,7 +430,7 @@
 
   function renderCreatePanel() {
     return `<div class="generate-panel">
-      <h2 class="generate-title">New search</h2>
+      ${renderPanelBreadcrumb({ backLabel: "← Back", current: "New search", backBtnId: "cs-panel-back-btn" })}
       <div class="field-row">
         <label class="field-label" for="cs-title">Title</label>
         <input type="text" id="cs-title" class="field-input" placeholder="e.g. Bathroom Cabinet" autocomplete="off">
@@ -454,6 +463,7 @@
     const setMsg = (text, cls) => { msg.textContent = text; msg.className = `save-msg ${cls}`; };
 
     document.getElementById("cs-cancel-btn").addEventListener("click", closeCreatePanel);
+    document.getElementById("cs-panel-back-btn").addEventListener("click", closeCreatePanel);
 
     document.getElementById("cs-generate-btn").addEventListener("click", async () => {
       const titleVal = document.getElementById("cs-title").value.trim();
@@ -546,7 +556,11 @@
       <span class="save-msg" id="edit-save-msg"></span>
     </div>`;
     return `<div class="generate-panel">
-      <h2 class="generate-title">Edit search</h2>
+      ${renderPanelBreadcrumb({
+        backLabel: "← Back to results",
+        current: `Editing "<span id="edit-panel-title">${esc(cfg.title || "")}</span>"`,
+        backBtnId: "edit-panel-back-btn",
+      })}
       <div class="field-row">
         <label class="field-label" for="edit-title">Title</label>
         <input type="text" id="edit-title" class="field-input" value="${esc(cfg.title || "")}" maxlength="200" autocomplete="off">
@@ -578,6 +592,7 @@
     const setMsg     = (text, cls) => { saveMsg.textContent = text; saveMsg.className = `save-msg ${cls}`; };
 
     document.getElementById("edit-cancel-btn").addEventListener("click", closeCreatePanel);
+    document.getElementById("edit-panel-back-btn").addEventListener("click", closeCreatePanel);
 
     document.getElementById("edit-save-btn").addEventListener("click", async () => {
       const title = titleInput.value.trim();
@@ -589,14 +604,15 @@
         const updated = { ...cfg, ...CriteriaForm.collectConfig(form), title };
         await api(`/api/user/search/${encodeURIComponent(cfg.search_name)}`, { method: "PUT", body: updated });
         setMsg("Saved.", "ok");
+        const titleSpan = document.getElementById("edit-panel-title");
+        if (titleSpan) titleSpan.textContent = updated.title;
         const searches = await api("/api/searches");
         _searches = searches;
         buildSearchList(searches);
         updateNewSearchBtn(searches);
         closeCreatePanel();
-        const name = cfg.search_name;
-        activeSearch = null;
-        selectSearch(name);
+        renderCriteriaBar(updated);
+        document.title = `${updated.title} — TailoredLoop`;
       } catch (e) {
         setMsg(e.message, "err");
         saveBtn.disabled = false;

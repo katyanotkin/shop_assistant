@@ -367,7 +367,7 @@ class TestPremiumCreateQuota:
 
             # Clicking Copy must land the user in the edit panel of the new
             # private clone (not e.g. the read-only results view).
-            expect(page.locator(".generate-title")).to_have_text("Edit search", timeout=15000)
+            expect(page.locator(".breadcrumb-current")).to_contain_text("Editing", timeout=15000)
             expect(page.locator("#edit-title")).to_be_visible()
 
             page.locator("#edit-cancel-btn").click()
