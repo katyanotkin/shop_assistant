@@ -277,12 +277,15 @@ class TestFreeTierLifecycle:
             gate_span = page.locator(".new-search-gate-msg")
             expect(gate_span).to_have_text(FREE_TIER_GATE_MSG)
 
-            # Run it — real pipeline (grounded search + fetch + rank), can take a while.
+            # Run it — real pipeline (grounded search + fetch + rank), can take a
+            # while. Timeout matches Cloud Run's request timeout (600s, set in
+            # cloudbuild.yaml) rather than hardcoding a shorter client-side
+            # ceiling that would time out before the server's own limit does.
             run_btn = page.locator("#cs-run-btn")
             expect(run_btn).to_be_visible()
             with page.expect_response(
                 lambda r: r.url.endswith(f"/api/user/search/{search_name}/run") and r.request.method == "POST",
-                timeout=300000,
+                timeout=620000,
             ) as run_info:
                 run_btn.click()
             run_resp = run_info.value
