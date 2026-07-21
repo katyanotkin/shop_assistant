@@ -67,7 +67,10 @@
 
     const criteriaRows = CRITERIA_FIELDS.map(f => {
       const raw = c[f.name];
-      const value = Array.isArray(raw) ? join(raw) : (raw ?? "");
+      // String(), not `raw ?? ""` — max_price is stored as a JS number, and a
+      // truthy number defeats esc()'s `s || ""` guard (no .replace method),
+      // crashing the render. Mirrors the same coercion customRows uses below.
+      const value = Array.isArray(raw) ? join(raw) : String(raw ?? "");
       return fieldRow(f.label, f.name, value, f.type, f.immutable, dbSet.has(f.name));
     }).join("\n");
 
@@ -87,7 +90,7 @@
 
     const topRows = TOP_LEVEL_FIELDS.map(f => {
       const raw = cfg[f.name];
-      const value = Array.isArray(raw) ? raw.join("\n") : (raw ?? "");
+      const value = Array.isArray(raw) ? raw.join("\n") : String(raw ?? "");
       return fieldRow(f.label, f.name, value, f.type, f.immutable);
     }).join("\n");
 

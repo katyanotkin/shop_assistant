@@ -489,6 +489,65 @@ class TestAdminPromoteUser:
 
 
 # ---------------------------------------------------------------------------
+# 4b. Regression: numeric criteria fields (max_price) must not crash the
+# shared criteria-form edit renderer, in either the admin or user-facing UI.
+# ---------------------------------------------------------------------------
+# criteria-form.js's CRITERIA_FIELDS loop left non-array values un-stringified
+# ("raw ?? \"\"" instead of "String(raw ?? \"\")"), so max_price — the one
+# "number"-typed field in the manifest — reached esc() as a raw JS number.
+# A truthy number defeats esc()'s "s || \"\"" falsy-guard (numbers have no
+# .replace method), throwing "(s || \"\").replace is not a function" and
+# aborting the whole renderConfigHeader(cfg) + renderEdit(cfg) + ... template
+# literal before any of it is assigned — so the header never rendered either,
+# not just the price field. Found via a real admin session on wax_coat
+# (max_price: 500); reproduced here with synthetic data instead.
+
+
+class TestEditPanelNumericField:
+    """A search with a numeric max_price must open cleanly in the admin edit
+    panel (shared rendering code with the user-facing edit panel — see
+    criteria-form.js's CRITERIA_FIELDS loop)."""
+
+    def test_admin_edit_panel_renders_max_price_without_crashing(self, browser, request):
+        admin_password = web_main._settings.admin_password
+        if not admin_password:
+            pytest.skip("ADMIN_PASSWORD not set — cannot exercise the admin password-login flow")
+
+        search_name = "qatp_numeric_field_probe"
+        fc.save_search_config(
+            {
+                "search_name": search_name,
+                "title": "QATP Numeric Field Probe",
+                "active": True,
+                "visibility": "private",
+                "owner_id": "admin",
+                "criteria": {"category": ["qatp synthetic widget"], "max_price": 500},
+                "preferred_shops": [],
+            }
+        )
+        request.addfinalizer(lambda: fc.delete_search_config(search_name))
+
+        context = _new_context(browser)
+        page = context.new_page()
+        errs = []
+        page.on("console", lambda msg: errs.append(msg.text) if msg.type == "error" else None)
+        page.on("pageerror", lambda exc: errs.append(str(exc)))
+        try:
+            page.goto("/admin/login")
+            page.fill('input[name="password"]', admin_password)
+            page.get_by_role("button", name="Sign in with password").click()
+            page.wait_for_url(f"{BASE_URL}/admin")
+            page.wait_for_selector("#admin-search-list li")
+
+            page.locator("#admin-search-list li", has_text="QATP Numeric Field Probe").click()
+            expect(page.locator(".config-search-name")).to_have_text("QATP Numeric Field Probe", timeout=15000)
+            expect(page.locator('input[name="max_price"]')).to_have_value("500")
+            assert not errs, f"console/page errors while rendering the edit panel: {errs}"
+        finally:
+            context.close()
+
+
+# ---------------------------------------------------------------------------
 # 5. Feedback-label relabel sanity check — /feedback page heading
 # ---------------------------------------------------------------------------
 # The per-result "Feedback on <product>" / run-notes "Teach this search"
