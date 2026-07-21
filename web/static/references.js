@@ -39,7 +39,6 @@
       <div class="references-header">
         <span class="references-title">Reference products</span>
         <span class="ref-count"></span>
-        <span class="ref-autosave-msg save-msg"></span>
       </div>
       <p class="references-desc">Add up to 3 products you already love — the AI uses these to calibrate what a great match looks like for you.</p>
       <div class="ref-chips"></div>
@@ -47,6 +46,7 @@
         <input type="url" class="field-input ref-url-input" placeholder="Paste a product URL…">
         <button type="button" class="btn-ref-add">Add</button>
       </div>
+      <span class="ref-autosave-msg save-msg"></span>
       ${withSaveButton ? `<div class="ref-action-row">
         <button type="button" class="btn-ref-save btn-primary">Save references</button>
         <span class="ref-save-msg save-msg"></span>

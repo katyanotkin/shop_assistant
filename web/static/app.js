@@ -337,12 +337,18 @@
     try {
       const owned = _searches.find(s => s.name === name)?.owned || false;
       const promises = [
-        api(`/api/results/${encodeURIComponent(name)}`),
+        api(`/api/results/${encodeURIComponent(name)}`).catch(e => {
+          if (e.status === 404) return [];
+          throw e;
+        }),
         api(`/api/search/${encodeURIComponent(name)}`).catch(() => null),
       ];
       if (owned) promises.push(api(`/api/user/search/${encodeURIComponent(name)}`).catch(() => null));
       const [dates, config, ownerConfig] = await Promise.all(promises);
       dateSelect.innerHTML = dates.map(d => `<option value="${d}">${d}</option>`).join("");
+      dateSelect.hidden = dates.length === 0;
+      const dateLabel = document.querySelector(".date-label");
+      if (dateLabel) dateLabel.hidden = dates.length === 0;
       toolbar.hidden = false;
       if (config) renderCriteriaBar(config);
       runSearchBtn.hidden = !owned;
@@ -353,7 +359,13 @@
       runSearchBtn.disabled = expired;
       runGateMsg.hidden = !expired;
       if (expired) runGateMsg.textContent = FREE_PLAN_MSG;
-      await loadRun(name, dates[0], _showFeedback);
+      if (dates.length === 0) {
+        resultsPanel.innerHTML = owned
+          ? `<p class="empty-state">This search hasn't been run yet. Click Run to get results.</p>`
+          : `<p class="empty-state">No runs yet for this search.</p>`;
+      } else {
+        await loadRun(name, dates[0], _showFeedback);
+      }
     } catch {
       resultsPanel.innerHTML = `<p class="empty-state">No runs found for this search.</p>`;
     }
@@ -695,7 +707,14 @@
       updateNewSearchBtn(searches);
 
       const fromPath = decodeURIComponent(window.location.pathname.slice(1));
-      const initial  = searches.find(s => s.name === fromPath) ? fromPath : searches[0]?.name;
+      let initial;
+      if (searches.find(s => s.name === fromPath)) {
+        initial = fromPath;
+      } else {
+        const mine = searches.filter(s => s.owned === true && s.created_at)
+          .sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0));
+        initial = mine[0]?.name || searches[0]?.name;
+      }
       if (initial) selectSearch(initial, { replace: true });
     } catch {
       searchList.innerHTML = `<li style="padding:12px 16px;color:var(--text-muted)">Failed to load searches</li>`;
