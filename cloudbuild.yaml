@@ -24,6 +24,15 @@ steps:
       - --platform=managed
       - --allow-unauthenticated
       - --timeout=600
+      # Search runs are long, synchronous, and parsing/CPU-heavy (BeautifulSoup,
+      # JSON decode across up to 40 candidates). Cloud Run's default
+      # concurrency=80 lets ordinary page-load traffic share the same 1-vCPU
+      # instance as an in-flight run, starving it of CPU and dragging runs
+      # toward the request timeout. concurrency=1 gives a run its own instance
+      # (Cloud Run scales out for other concurrent traffic instead); safe at
+      # this app's traffic level since maxScale is already 20.
+      - --concurrency=1
+      - --no-cpu-throttling
       - --set-env-vars=GOOGLE_CLOUD_PROJECT=$PROJECT_ID,FIRESTORE_DATABASE=tailoredloop
       - --set-secrets=ADMIN_PASSWORD=shop-assistant-admin-password:latest,GOOGLE_CLIENT_ID=shop-assistant-google-client-id:latest,GOOGLE_CLIENT_SECRET=shop-assistant-google-client-secret:latest,SESSION_SECRET=shop-assistant-session-secret:latest,BOOTSTRAP_ADMIN_EMAIL=shop-assistant-bootstrap-admin-email:latest
 
