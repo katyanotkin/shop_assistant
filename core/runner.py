@@ -24,6 +24,7 @@ _CSV_FIELDS = [
     "matched",
     "unmatched",
     "notes",
+    "total_candidates",
 ]
 
 

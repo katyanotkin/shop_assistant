@@ -1,7 +1,10 @@
+import csv
+import pathlib
 from contextlib import ExitStack
 from unittest.mock import patch
 
-from core.runner import run_search
+from core import models
+from core.runner import run_search, save_csv
 from core.settings import Settings
 
 _FAKE_CONFIG = {
@@ -100,3 +103,32 @@ def test_pinned_finds_included_in_config_snapshot():
     result, _ = _run(config=config)
     assert len(result.config_snapshot.pinned_finds) == 1
     assert result.config_snapshot.pinned_finds[0].url == "https://example.com/pinned"
+
+
+# --- save_csv: real (unmocked) CSV writing, no matches ---
+# Regression test for a bug where a legitimate "no matches today" run crashed
+# with ValueError (the no-match placeholder row set a "total_candidates" key
+# that wasn't in _CSV_FIELDS, and DictWriter has no extrasaction="ignore").
+# Every other test in this file patches save_csv out entirely, so this needs
+# to call the real function to catch a schema mismatch like this again.
+
+
+def test_save_csv_writes_no_match_row_without_crashing(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = models.RunResult(
+        search_name="no_match_search",
+        run_date="2026-07-20",
+        matches=[],
+        partial_matches=[],
+        no_match=True,
+        total_candidates=7,
+        config_snapshot=models.SearchConfig(
+            search_name="no_match_search", title="x", criteria=models.SearchCriteria(category=["x"])
+        ),
+    )
+    path = save_csv(result)
+    assert path == pathlib.Path("results/no_match_search_2026-07-20.csv")
+    with open(path, newline="", encoding="utf-8") as f:
+        row = next(csv.DictReader(f, delimiter="\t"))
+    assert row["match_type"] == "no_match"
+    assert row["total_candidates"] == "7"
