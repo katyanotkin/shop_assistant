@@ -570,3 +570,116 @@ class TestSiteFeedbackPage:
             expect(page.locator("h1")).to_have_text("Site feedback")
         finally:
             context.close()
+
+
+# ---------------------------------------------------------------------------
+# 6. Edit-panel breadcrumb + in-place save (no full selectSearch() reload)
+# ---------------------------------------------------------------------------
+# Regression coverage for commit c6d75a9 ("fix: intuitive nav between results
+# and edit-config panel"): both the create and edit panels now show a
+# breadcrumb wired to the existing closeCreatePanel(), and saving an edit no
+# longer calls selectSearch() / refetches /api/results or /api/search — it
+# patches the criteria bar and document.title in place, leaving only the
+# pre-existing /api/searches sidebar refresh. Reuses the redaction_search
+# fixture (an owned search + run seeded directly via Firestore, no Gemini
+# call) purely to make #edit-search-btn reachable through selectSearch.
+
+
+class TestEditPanelBreadcrumbAndInPlaceSave:
+    """Editing an existing search's config shows a breadcrumb naming which
+    search is being edited, and saving patches the criteria bar / page title
+    in place instead of doing a full selectSearch() reload."""
+
+    def test_back_button_returns_to_results(self, browser, synthetic_user, redaction_search):
+        user = synthetic_user(redaction_search["owner_email"], role="free", display_name="QATP Edit Owner")
+        context = _new_context(browser, user["cookie"])
+        page = context.new_page()
+        try:
+            page.goto(f"/{redaction_search['search_name']}")
+            page.wait_for_selector("#results-panel .card", timeout=20000)
+
+            expect(page.locator("#edit-search-btn")).to_be_visible()
+            page.locator("#edit-search-btn").click()
+
+            expect(page.locator(".breadcrumb-current")).to_have_text('Editing "QATP Redaction Probe"', timeout=15000)
+            expect(page.locator("#results-panel")).to_be_hidden()
+            expect(page.locator("#create-panel")).to_be_visible()
+
+            page.locator("#edit-panel-back-btn").click()
+
+            expect(page.locator("#results-panel")).to_be_visible()
+            expect(page.locator("#create-panel")).to_be_hidden()
+        finally:
+            context.close()
+
+    def test_save_patches_in_place_without_refetch(self, browser, synthetic_user, redaction_search):
+        user = synthetic_user(redaction_search["owner_email"], role="free", display_name="QATP Edit Owner 2")
+        context = _new_context(browser, user["cookie"])
+        page = context.new_page()
+        try:
+            page.goto(f"/{redaction_search['search_name']}")
+            page.wait_for_selector("#results-panel .card", timeout=20000)
+
+            page.locator("#edit-search-btn").click()
+            expect(page.locator(".breadcrumb-current")).to_contain_text("Editing", timeout=15000)
+
+            new_title = "QATP Redaction Probe Edited"
+            page.locator("#edit-title").fill(new_title)
+
+            # Track requests only from here on — the edit panel's own initial
+            # GET /api/user/search/{name} (to load the editable config) has
+            # already happened and is not part of what the save handler does.
+            requests_during_save: list[str] = []
+            page.on("request", lambda r: requests_during_save.append(f"{r.method} {r.url}"))
+
+            with page.expect_response(
+                lambda r: "/api/user/search/" in r.url and r.request.method == "PUT",
+                timeout=15000,
+            ):
+                page.locator("#edit-save-btn").click()
+
+            # Sync point: document.title only flips to the new title via the
+            # in-place patch at the very end of the save handler, so waiting
+            # for it means every request the handler makes has already fired.
+            expect(page).to_have_title(f"{new_title} — TailoredLoop", timeout=15000)
+
+            assert not any(
+                "/api/results/" in u for u in requests_during_save
+            ), f"save re-fetched results: {requests_during_save}"
+            assert not any(
+                "/api/search/" in u for u in requests_during_save
+            ), f"save re-fetched the public search-config endpoint: {requests_during_save}"
+            assert any(
+                u.endswith("/api/searches") for u in requests_during_save
+            ), f"save should still refresh the sidebar via GET /api/searches: {requests_during_save}"
+
+            expect(page.locator("#create-panel")).to_be_hidden()
+            expect(page.locator("#results-panel")).to_be_visible()
+            expect(page.locator("#criteria-bar")).to_be_visible()
+        finally:
+            context.close()
+
+    def test_new_search_panel_breadcrumb(self, browser, synthetic_user):
+        user = synthetic_user(
+            "qatp_new_search_breadcrumb@example.test", role="free", display_name="QATP New Search Breadcrumb"
+        )
+        context = _new_context(browser, user["cookie"])
+        page = context.new_page()
+        try:
+            page.goto("/")
+            page.wait_for_selector("#search-list")
+
+            new_btn = page.locator("#new-search-btn")
+            expect(new_btn).to_be_visible()
+            new_btn.click()
+
+            expect(page.locator(".breadcrumb-current")).to_have_text("New search", timeout=15000)
+            back_btn = page.locator("#cs-panel-back-btn")
+            expect(back_btn).to_be_visible()
+            expect(back_btn).to_be_enabled()
+
+            back_btn.click()
+
+            expect(page.locator("#create-panel")).to_be_hidden()
+        finally:
+            context.close()
