@@ -57,7 +57,7 @@ When a search runs, the system:
 6. Saves everything to the database and writes a local CSV file.
 7. Sends an email notification if any results are new since the last run (requires email configuration).
 
-A run typically takes a few minutes depending on how many candidate URLs are found (up to 40 by default).
+A run typically takes about a minute, depending on how many candidate URLs are found (up to 40 by default) — search, fetch, and scoring all happen concurrently rather than one step at a time.
 
 ### Step 3 — Read results
 

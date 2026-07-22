@@ -244,6 +244,8 @@ Base URL: `https://shopassistant.verbboard.com`
 | Firestore database | Named database `tailoredloop` in the same project (not the project's default database, which other apps in the project share) — set via `--set-env-vars=...,FIRESTORE_DATABASE=tailoredloop` in `cloudbuild.yaml`; `core/firestore_client.py` defaults to `tailoredloop` even if the env var is unset |
 | Secrets | Injected from Secret Manager via `--set-secrets` in `cloudbuild.yaml`: `ADMIN_PASSWORD`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, `BOOTSTRAP_ADMIN_EMAIL` |
 | Service account | `cloudbuild-deployer@knotmem26.iam.gserviceaccount.com` |
+| Request timeout | `--timeout=600` (600s) — the search pipeline can run close to the 300s default, which was getting killed mid-run |
+| Concurrency / CPU | `--concurrency=1 --no-cpu-throttling` — each in-flight run gets a dedicated instance and vCPU rather than sharing one with concurrent page-load traffic |
 | Vertex AI | `us-central1` (separate from Cloud Run region) |
 | Web process | `uvicorn web.main:app --host 0.0.0.0 --port 8080` inside `python:3.12-slim` |
 | Live regression | After deploy, run `BASE_URL=https://shopassistant.verbboard.com python -m pytest tests/test_live_qatp.py -v` |
