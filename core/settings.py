@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     gmail_from: str = ""
     match_score_threshold: float = 7.0
     partial_score_threshold: float = 4.0
-    fetch_timeout: float = 12.0
+    fetch_timeout: float = 8.0
     max_candidates: int = 40
     admin_password: Optional[str] = None
     base_url: Optional[str] = None

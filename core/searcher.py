@@ -1,4 +1,5 @@
 import json
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
 import google.genai as genai
@@ -83,19 +84,19 @@ def _search_shop(shop_url: str, criteria: models.SearchCriteria, client: genai.C
 def _grounded_search(query: str, client: genai.Client) -> list[dict]:
     from bs4 import BeautifulSoup
 
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=(
-            f"Find direct product detail pages (each showing a single specific product for sale) "
-            f"matching: {query}. Prefer individual product pages over category, collection, "
-            f"or search-results pages."
-        ),
-        config=types.GenerateContentConfig(tools=[types.Tool(google_search=types.GoogleSearch())]),
-    )
     seen: set[str] = set()
     results: list[dict] = []
 
     try:
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=(
+                f"Find direct product detail pages (each showing a single specific product for sale) "
+                f"matching: {query}. Prefer individual product pages over category, collection, "
+                f"or search-results pages."
+            ),
+            config=types.GenerateContentConfig(tools=[types.Tool(google_search=types.GoogleSearch())]),
+        )
         meta = response.candidates[0].grounding_metadata
 
         # Primary: chunks Gemini explicitly cited
@@ -115,8 +116,8 @@ def _grounded_search(query: str, client: genai.Client) -> list[dict]:
                 if href.startswith("http") and href not in seen:
                     seen.add(href)
                     results.append({"link": href, "title": a.get_text(strip=True)})
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  grounded search failed ({type(e).__name__}: {e}): {query!r}")
 
     return results
 
@@ -128,30 +129,37 @@ def search_products(
     shops: list[str] | None = None,
     feedback_notes: str = "",
 ) -> list[dict]:
-    """Two-stage AI search: planner generates queries, grounded Gemini returns URLs."""
+    """Two-stage AI search: planner generates queries, grounded Gemini returns URLs.
+
+    Preferred-shop searches and general discovery queries are each independent
+    Gemini+google_search round trips (observed ~5-40s each) — the dominant
+    cost of a run's search phase — so they run concurrently. This trades the
+    old early-exit-once-max_results-hit optimization for guaranteed wall-clock
+    savings across all queries; the final list is truncated to max_results
+    instead.
+    """
     client = genai.Client(vertexai=True, project=project, location=GEMINI_LOCATION)
+    shops = shops or []
 
-    seen: set[str] = set()
-    results: list[dict] = []
-
-    # Preferred shops first
-    for shop_url in shops or []:
-        for item in _search_shop(shop_url, criteria, client):
-            url = item["link"]
-            if url not in seen:
-                seen.add(url)
-                results.append(item)
-
-    # General discovery queries fill remaining slots
     queries = _plan_queries(criteria, client, feedback_notes=feedback_notes)
     print(f"Queries: {queries}")
-    for query in queries:
-        for item in _grounded_search(query, client):
+
+    with ThreadPoolExecutor(max_workers=max(1, len(shops) + len(queries))) as pool:
+        shop_futures = [pool.submit(_search_shop, shop_url, criteria, client) for shop_url in shops]
+        query_futures = [pool.submit(_grounded_search, query, client) for query in queries]
+        shop_results = [f.result() for f in shop_futures]
+        query_results = [f.result() for f in query_futures]
+
+    # Merge in the same priority order as before — preferred shops first, then
+    # discovery queries in query order — so dedup keeps whichever occurrence
+    # came from the higher-priority source.
+    seen: set[str] = set()
+    results: list[dict] = []
+    for item_list in shop_results + query_results:
+        for item in item_list:
             url = item["link"]
             if url not in seen:
                 seen.add(url)
                 results.append(item)
-            if len(results) >= max_results:
-                return results
 
-    return results
+    return results[:max_results]

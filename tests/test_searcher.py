@@ -128,31 +128,34 @@ def test_search_products_deduplicates_urls():
 
 
 def test_search_products_respects_max_results():
+    # search_products now runs the discovery queries concurrently, so the mock
+    # must dispatch by the CONTENT of each call (which query it's for) rather
+    # than call order — a call-order-based side_effect isn't safe once calls
+    # can arrive from multiple threads in any order.
     queries = ["query one", "query two", "query three"]
 
     def make_chunk(i):
         return _make_grounding_chunk(f"https://shop.com/item{i}", f"Item {i}")
 
-    chunks_per_query = [
-        [make_chunk(1), make_chunk(2), make_chunk(3)],
-        [make_chunk(4), make_chunk(5), make_chunk(6)],
-        [make_chunk(7), make_chunk(8), make_chunk(9)],
-    ]
+    chunks_by_query = {
+        "query one": [make_chunk(1), make_chunk(2), make_chunk(3)],
+        "query two": [make_chunk(4), make_chunk(5), make_chunk(6)],
+        "query three": [make_chunk(7), make_chunk(8), make_chunk(9)],
+    }
 
     plan_response = MagicMock()
     plan_response.text = json.dumps(queries)
 
-    call_idx = 0
-
     def side_effect(*args, **kwargs):
-        nonlocal call_idx
-        if call_idx == 0:
-            call_idx += 1
+        contents = kwargs.get("contents") or args[1]
+        if isinstance(contents, str) and contents.startswith("You are a shopping search strategist"):
             return plan_response
-        resp = MagicMock()
-        resp.candidates[0].grounding_metadata.grounding_chunks = chunks_per_query[call_idx - 1]
-        call_idx += 1
-        return resp
+        for query, chunks in chunks_by_query.items():
+            if query in contents:
+                resp = MagicMock()
+                resp.candidates[0].grounding_metadata.grounding_chunks = chunks
+                return resp
+        raise AssertionError(f"unexpected call contents: {contents!r}")
 
     with patch("core.searcher.genai.Client") as MockClient:
         mock_client = MagicMock()

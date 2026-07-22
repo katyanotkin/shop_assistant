@@ -122,6 +122,7 @@ def run_search(search_name: str, settings: Settings, dry_run: bool = False, lear
         settings.google_cloud_project,
         feedback_notes=feedback_notes,
         example_urls=example_urls + pinned_urls,
+        fetch_timeout=settings.fetch_timeout,
     )
 
     matches: list[models.ProductMatch] = []

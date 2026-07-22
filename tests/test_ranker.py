@@ -269,7 +269,7 @@ def test_rank_all_skips_listing_url_before_fetching():
         mock_fetch.return_value = ("https://example.com/product/waxed-coat", "some product text")
         MockClient.return_value = _client_returning(VALID_RESPONSE)
 
-        results = rank_all(candidates, CRITERIA, project="test-project", delay=0)
+        results = rank_all(candidates, CRITERIA, project="test-project")
 
     assert len(results) == 1
     fetched_urls = [c.args[0] for c in mock_fetch.call_args_list]
@@ -292,7 +292,7 @@ def test_rank_all_dedupes_candidates_resolving_to_the_same_final_url():
         client = _client_returning(VALID_RESPONSE)
         MockClient.return_value = client
 
-        results = rank_all(candidates, CRITERIA, project="test-project", delay=0)
+        results = rank_all(candidates, CRITERIA, project="test-project")
 
     assert mock_fetch.call_count == 2
     assert len(results) == 1
@@ -311,7 +311,7 @@ def test_rank_all_skips_candidate_resolving_to_listing_url():
         client = _client_returning(VALID_RESPONSE)
         MockClient.return_value = client
 
-        results = rank_all(candidates, CRITERIA, project="test-project", delay=0)
+        results = rank_all(candidates, CRITERIA, project="test-project")
 
     assert results == []
     client.models.generate_content.assert_not_called()
@@ -340,11 +340,10 @@ def test_rank_all_fetches_example_refs_once_and_includes_in_every_prompt():
             candidates,
             CRITERIA,
             project="test-project",
-            delay=0,
             example_urls=["https://example.com/reference/coat"],
         )
 
-    mock_refs.assert_called_once_with(["https://example.com/reference/coat"])
+    mock_refs.assert_called_once_with(["https://example.com/reference/coat"], fetch_timeout=8.0)
     assert client.models.generate_content.call_count == 2
     for call in client.models.generate_content.call_args_list:
         contents = call.kwargs["contents"] if "contents" in call.kwargs else call.args[1]

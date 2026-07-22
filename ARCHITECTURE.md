@@ -49,16 +49,16 @@ SearchCriteria (Firestore)
 - **Output:** list of `{link, title}` dicts, extracted from two sources:
   1. `response.candidates[0].grounding_metadata.grounding_chunks[*].web` — URLs Gemini explicitly cited.
   2. `grounding_metadata.search_entry_point.rendered_content` — all `<a href>` links in the rendered Google SERP HTML (secondary fallback, parsed with BeautifulSoup).
-- For each configured `preferred_shop`, a separate `site:<domain>` scoped query is issued first (`_search_shop`), so preferred-shop results appear at the top of the candidate list.
-- URLs are deduplicated across all queries; the candidate list is capped at `max_candidates` (default 40, configurable via `MAX_CANDIDATES` env var).
+- For each configured `preferred_shop`, a separate `site:<domain>` scoped query is issued (`_search_shop`); all preferred-shop searches and all 3 planning queries run concurrently (`ThreadPoolExecutor`), then merge with preferred-shop results first so they still lead the candidate list.
+- URLs are deduplicated across all queries; the merged candidate list is truncated to `max_candidates` (default 40, configurable via `MAX_CANDIDATES` env var) — since queries now run concurrently there's no early exit once enough candidates are found, only a final truncation.
 
 ### Stage 3 — Fetcher (`core/fetcher.py`)
 
 - **Input:** candidate URL.
 - **Output:** `(final_url, text)` — `final_url` is the URL after following redirects; `text` is page content stripped of `script`, `style`, `nav`, `footer`, `header`, `aside` tags, truncated to 3500 characters.
 - Uses `httpx` with a Chrome-like `User-Agent` and `Accept-Language: en-US` header.
-- Timeout configurable via `FETCH_TIMEOUT` env var (default 12 s). On any error, returns `(url, "")`.
-- The fetcher is called inside `rank_all` rather than as a separate batch step, so fetch and rank are interleaved with a 1 s delay between candidates to avoid hammering shops.
+- Timeout configurable via `FETCH_TIMEOUT` env var (default 8 s). On any error, returns `(url, "")` and logs the exception type/message.
+- `rank_all` fetches and ranks candidates in two concurrent stages (`ThreadPoolExecutor`, up to 8 workers each) rather than one candidate at a time: all surviving candidates are fetched in parallel, then (after a sequential, order-preserving dedup pass) ranked in parallel. There is no per-candidate delay — an earlier flat 1s pacing delay was removed as unsupported by any documented rate limit, either on the Gemini side or a specific shop.
 - Before fetching, `core/ranker.py: is_listing_url` drops candidate URLs that are recognizably category/collection/search pages by path segment (e.g. `/collections/`, `/search/`, `/c/<slug>`), conservatively — unknown structures pass through to the ranker's listing-page rule instead. After fetching, candidates whose `final_url` has already been seen (grounding can hand out several redirect URLs for the same page) are deduped, and the resolved `final_url` is re-checked against `is_listing_url` in case the redirect landed on a listing page.
 
 ### Stage 4 — Ranker (`core/ranker.py`)

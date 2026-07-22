@@ -1,5 +1,5 @@
 import json
-import time
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
 import google.genai as genai
@@ -7,10 +7,16 @@ from google.genai import types
 
 from . import models
 from .feedback import format_feedback_section
-from .fetcher import fetch_page
+from .fetcher import DEFAULT_FETCH_TIMEOUT, fetch_page
 
 GEMINI_MODEL = "gemini-2.5-flash"
 GEMINI_LOCATION = "us-central1"
+
+# Fetch and rank are both I/O-bound (network fetch / Gemini call), so threads
+# parallelize effectively despite the GIL. No documented Gemini/Vertex AI
+# quota ties pacing to a specific QPS — this is comfortably under default
+# per-project limits for gemini-2.5-flash.
+_MAX_WORKERS = 8
 
 _EXAMPLE_TEXT_CHARS = 1200
 
@@ -38,12 +44,12 @@ def is_listing_url(url: str) -> bool:
     return bool(segments) and segments[0] in _LISTING_PREFIXES and len(segments) <= 2
 
 
-def fetch_example_refs(urls: list[str]) -> list[dict]:
+def fetch_example_refs(urls: list[str], fetch_timeout: float = DEFAULT_FETCH_TIMEOUT) -> list[dict]:
     """Fetch each reference product page once per run so the ranker sees actual
     product content, not just an opaque URL the model cannot open."""
     refs = []
     for u in urls:
-        _, text = fetch_page(u)
+        _, text = fetch_page(u, timeout=fetch_timeout)
         refs.append({"url": u, "text": text[:_EXAMPLE_TEXT_CHARS]})
     return refs
 
@@ -162,30 +168,48 @@ def rank_all(
     candidates: list[dict],
     criteria: models.SearchCriteria,
     project: str,
-    delay: float = 1.0,
     feedback_notes: str = "",
     example_urls: list[str] | None = None,
+    fetch_timeout: float = DEFAULT_FETCH_TIMEOUT,
 ) -> list[dict]:
     client = genai.Client(vertexai=True, project=project, location=GEMINI_LOCATION)
-    example_refs = fetch_example_refs(example_urls or [])
-    results = []
-    seen_final_urls: set[str] = set()
+    example_refs = fetch_example_refs(example_urls or [], fetch_timeout=fetch_timeout)
+
+    # Stage 1: drop obvious listing URLs before spending a fetch on them, then
+    # fetch the rest concurrently — most of a serial run's wall-clock time was
+    # spent here, each fetch paying up to fetch_page's own timeout back-to-back.
+    to_fetch = []
     for item in candidates:
         url = item.get("link", "")
-        print(f"  [{len(results) + 1}/{len(candidates)}] {url}")
         if is_listing_url(url):
-            print("    skipped: category/listing URL")
+            print(f"  skipped (listing URL): {url}")
             continue
-        final_url, text = fetch_page(url)
-        # Grounding hands out per-result redirect URLs, so the same page can
-        # arrive several times — dedupe on the resolved URL, not the redirect.
+        to_fetch.append(url)
+
+    with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
+        fetched = list(zip(to_fetch, pool.map(lambda u: fetch_page(u, timeout=fetch_timeout), to_fetch)))
+
+    # Stage 2: dedupe + post-fetch listing filter, sequential over the fetched
+    # results in ORIGINAL candidate order — cheap (no I/O), and this ordering
+    # is what makes "first candidate in the list wins a duplicate" deterministic
+    # regardless of which fetch happened to finish first in stage 1.
+    seen_final_urls: set[str] = set()
+    to_rank: list[tuple[str, str]] = []
+    for url, (final_url, text) in fetched:
         if final_url in seen_final_urls:
-            print("    skipped: duplicate of already-ranked page")
+            print(f"  skipped (duplicate): {url}")
             continue
         seen_final_urls.add(final_url)
         if is_listing_url(final_url):
-            print("    skipped: resolved to category/listing URL")
+            print(f"  skipped (resolved to listing URL): {url}")
             continue
+        to_rank.append((final_url, text))
+
+    print(f"  Ranking {len(to_rank)}/{len(candidates)} candidates")
+
+    # Stage 3: rank survivors concurrently — each is an independent Gemini call.
+    def _rank(item: tuple[str, str]) -> dict:
+        final_url, text = item
         ranked = rank_candidate(
             final_url,
             text,
@@ -195,7 +219,8 @@ def rank_all(
             example_refs=example_refs,
         )
         ranked["url"] = final_url
-        results.append(ranked)
-        if delay:
-            time.sleep(delay)
+        return ranked
+
+    with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
+        results = list(pool.map(_rank, to_rank))
     return results
