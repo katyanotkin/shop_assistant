@@ -85,6 +85,17 @@
   pointer-events: none;
 }
 
+.admin-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.admin-content > .toolbar {
+  margin: 16px 24px 0;
+}
+
 .admin-panels {
   flex: 1;
   display: grid;
@@ -96,6 +107,49 @@
 
 .admin-panels--config-collapsed {
   grid-template-columns: 36px 1fr;
+}
+
+/* Public/signed-in-user page only: #config-panel is entirely hidden (not
+   just collapsed) for non-owner viewers, who never get an edit affordance
+   at all — without this, the grid still reserves the empty right-hand 1fr
+   track and results are stuck in a half-width column. */
+.admin-panels--no-config {
+  grid-template-columns: 1fr;
+}
+
+/* Reused on the public/signed-in-user page, where .admin-panels sits inside
+   .content (which already has its own 24px padding) rather than directly in
+   .admin-layout — cancel the double padding rather than duplicating the grid. */
+.content > .admin-panels {
+  margin: -24px;
+  min-height: calc(100vh - var(--topbar-h));
+}
+
+.readonly-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: var(--line-soft);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.readonly-banner-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.edit-form--readonly .field-input:disabled,
+.edit-form--readonly .active-label input:disabled {
+  background: var(--page-bg);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 1;
 }
 
 .config-panel-header {

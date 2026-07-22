@@ -44,7 +44,6 @@
         <label for="date-select" class="date-label">Run date</label>
         <select id="date-select" class="date-select" aria-label="Run date"></select>
         <button id="run-search-btn" class="btn-run" hidden>Run</button>
-        <button id="edit-search-btn" class="btn-run" hidden>Edit</button>
         <span id="run-gate-msg" class="save-msg err" hidden></span>
       </div>
 
@@ -52,8 +51,20 @@
 
       <div id="create-panel" hidden></div>
 
-      <div id="results-panel">
-        <p class="empty-state">Select a search from the left to view results.</p>
+      <div class="admin-panels" id="user-panels">
+        <section class="admin-panel admin-panel--config" id="config-panel" aria-label="Config" hidden>
+          <div class="config-panel-header">
+            <button class="panel-collapse-btn" id="config-collapse-btn" title="Collapse config" aria-label="Collapse config" aria-expanded="true">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+          <div id="config-content"></div>
+        </section>
+        <section class="admin-panel admin-panel--results" id="results-panel" aria-label="Results">
+          <p class="empty-state">Select a search from the left to view results.</p>
+        </section>
       </div>
     </main>
   </div>

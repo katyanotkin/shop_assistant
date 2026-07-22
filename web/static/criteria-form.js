@@ -39,11 +39,12 @@
       <input type="checkbox" class="field-dealbreaker" data-field="${safeName}" ${dealBreaker ? "checked" : ""}> Deal-breaker</label>`;
   }
 
-  function fieldRow(label, name, value, type, immutable, dealBreaker = false) {
+  function fieldRow(label, name, value, type, immutable, dealBreaker = false, readOnly = false) {
     const present = value !== null && value !== undefined && value !== "";
     const hidden  = !immutable && !present;
-    const removeBtn = immutable ? "" : `<button type="button" class="btn-field-remove" aria-label="Remove ${label}">×</button>`;
-    const dbToggle = dealBreakerToggle(name, type, immutable, dealBreaker);
+    const removeBtn = (immutable || readOnly) ? "" : `<button type="button" class="btn-field-remove" aria-label="Remove ${label}">×</button>`;
+    const dbToggle = readOnly ? "" : dealBreakerToggle(name, type, immutable, dealBreaker);
+    const disabledAttr = readOnly ? " disabled" : "";
     const attrs = [
       `class="field-row${immutable ? "" : " field-row--opt"}"`,
       `data-field-name="${name}"`,
@@ -52,16 +53,16 @@
     const safeValue = esc(value ?? "");
     if (type === "textarea") return `<div ${attrs}>
       <label class="field-label">${label}</label>
-      <textarea name="${name}" class="field-input" rows="3">${safeValue}</textarea>${removeBtn}</div>`;
+      <textarea name="${name}" class="field-input" rows="3"${disabledAttr}>${safeValue}</textarea>${removeBtn}</div>`;
     if (type === "number") return `<div ${attrs}>
       <label class="field-label">${label}</label>
-      <input type="number" name="${name}" class="field-input" value="${safeValue}" step="any">${dbToggle}${removeBtn}</div>`;
+      <input type="number" name="${name}" class="field-input" value="${safeValue}" step="any"${disabledAttr}>${dbToggle}${removeBtn}</div>`;
     return `<div ${attrs}>
       <label class="field-label">${label}</label>
-      <input type="text" name="${name}" class="field-input" value="${safeValue}">${dbToggle}${removeBtn}</div>`;
+      <input type="text" name="${name}" class="field-input" value="${safeValue}"${disabledAttr}>${dbToggle}${removeBtn}</div>`;
   }
 
-  function renderEditFields(cfg) {
+  function renderEditFields(cfg, readOnly = false) {
     const c = cfg.criteria || {};
     const dbSet = new Set(c.deal_breakers || []);
 
@@ -71,7 +72,7 @@
       // truthy number defeats esc()'s `s || ""` guard (no .replace method),
       // crashing the render. Mirrors the same coercion customRows uses below.
       const value = Array.isArray(raw) ? join(raw) : String(raw ?? "");
-      return fieldRow(f.label, f.name, value, f.type, f.immutable, dbSet.has(f.name));
+      return fieldRow(f.label, f.name, value, f.type, f.immutable, dbSet.has(f.name), readOnly);
     }).join("\n");
 
     const knownNames = new Set(CRITERIA_FIELDS.map(f => f.name));
@@ -80,19 +81,22 @@
       .map(k => {
         const raw = c[k];
         const value = Array.isArray(raw) ? join(raw) : String(raw ?? "");
+        const disabledAttr = readOnly ? " disabled" : "";
         return `<div class="field-row field-row--opt field-row--custom" data-field-name="${esc(k)}">
           <label class="field-label">${esc(toLabel(k))}</label>
-          <input type="text" name="${esc(k)}" class="field-input" value="${esc(value)}">
-          ${dealBreakerToggle(k, "text", false, dbSet.has(k))}
-          <button type="button" class="btn-field-remove" aria-label="Remove ${esc(toLabel(k))}">×</button>
+          <input type="text" name="${esc(k)}" class="field-input" value="${esc(value)}"${disabledAttr}>
+          ${readOnly ? "" : dealBreakerToggle(k, "text", false, dbSet.has(k))}
+          ${readOnly ? "" : `<button type="button" class="btn-field-remove" aria-label="Remove ${esc(toLabel(k))}">×</button>`}
         </div>`;
       }).join("\n");
 
     const topRows = TOP_LEVEL_FIELDS.map(f => {
       const raw = cfg[f.name];
       const value = Array.isArray(raw) ? raw.join("\n") : String(raw ?? "");
-      return fieldRow(f.label, f.name, value, f.type, f.immutable);
+      return fieldRow(f.label, f.name, value, f.type, f.immutable, false, readOnly);
     }).join("\n");
+
+    if (readOnly) return `${criteriaRows}\n${customRows}\n${topRows}`;
 
     const allOptional = [...CRITERIA_FIELDS, ...TOP_LEVEL_FIELDS].filter(f => !f.immutable);
 
@@ -116,17 +120,40 @@
     </details>`;
   }
 
-  function renderEdit(cfg, actionsHtml = "") {
-    return `<div class="edit-form" data-name="${esc(cfg.search_name)}">
+  function renderEdit(cfg, actionsHtml = "", opts = {}) {
+    const readOnly = !!opts.readOnly;
+    return `<div class="edit-form${readOnly ? " edit-form--readonly" : ""}" data-name="${esc(cfg.search_name)}">
       <div class="edit-top">
         <label class="active-label">
-          <input type="checkbox" name="active" ${cfg.active ? "checked" : ""}> Active
+          <input type="checkbox" name="active" ${cfg.active ? "checked" : ""}${readOnly ? " disabled" : ""}> Active
         </label>
       </div>
       ${renderDescription(cfg)}
-      ${renderEditFields(cfg)}
+      ${renderEditFields(cfg, readOnly)}
       ${actionsHtml}
     </div>`;
+  }
+
+  // A selected run date is "latest" when it matches the first (most recent)
+  // entry in the dates list — shared by admin.js and app.js so both surfaces
+  // agree on when the config panel is live-editable vs. a read-only snapshot.
+  function isLatestRun(selectedDate, dates) {
+    return !!selectedDate && Array.isArray(dates) && dates.length > 0 && selectedDate === dates[0];
+  }
+
+  // Identical on both surfaces: a neutral (not amber/red — those already mean
+  // score-bands) notice that the config panel is showing a frozen historical
+  // snapshot rather than the live, editable config.
+  function renderReadOnlyBanner(date) {
+    return `<div class="readonly-banner">
+      <span aria-hidden="true">🔒</span>
+      <span>Read-only — showing config as of ${esc(date)}.</span>
+      <button type="button" class="btn-run readonly-banner-btn" id="readonly-switch-latest-btn">Switch to latest run to edit</button>
+    </div>`;
+  }
+
+  function bindReadOnlyBanner(onSwitchToLatest) {
+    document.getElementById("readonly-switch-latest-btn")?.addEventListener("click", onSwitchToLatest);
   }
 
   function collectConfig(form) {
@@ -260,5 +287,8 @@
     collectConfig,
     bindFieldControls,
     toLabel,
+    isLatestRun,
+    renderReadOnlyBanner,
+    bindReadOnlyBanner,
   };
 })();

@@ -4,6 +4,19 @@
   const configContent = document.getElementById("config-content");
   const resultsPanel  = document.getElementById("results-panel");
   const adminPanels   = document.querySelector(".admin-panels");
+  const dateToolbar   = document.getElementById("admin-date-toolbar");
+  const dateSelectEl  = document.getElementById("admin-date-select");
+
+  let latestRunDate = null;
+  let currentRunDate = null;
+
+  // Monotonic navigation token — see the identical comment in app.js. Bumped
+  // once per user-initiated navigation (selecting a different search or
+  // switching run date) so a slow-resolving earlier navigation can never
+  // clobber a faster-resolving later one.
+  let _navSeq = 0;
+  function _beginNav() { return ++_navSeq; }
+  function _isCurrentNav(seq) { return seq === _navSeq; }
 
   // ── API ──────────────────────────────────────────────────────────────────
 
@@ -124,7 +137,7 @@
         allBtns.forEach(b => b.disabled = false);
         setMsg(`Done — ${result.matches} matches, ${result.partial} partial.`, "ok");
         if (opts.onSave) await opts.onSave(cfg.search_name);
-        loadResults(cfg.search_name);
+        await afterRun(cfg.search_name);
       } catch (e) {
         clearInterval(timer);
         btn.textContent = originalText;
@@ -158,13 +171,13 @@
 
   // ── Results panel ─────────────────────────────────────────────────────────
 
-  function bindUnpin(container, name) {
+  function bindUnpin(container, name, runDate, seq) {
     container.querySelectorAll(".btn-unpin").forEach(btn => {
       btn.addEventListener("click", async () => {
         btn.disabled = true;
         try {
           await api("POST", `/api/feedback/${encodeURIComponent(name)}/pinned/remove`, { url: btn.dataset.url });
-          loadResults(name);
+          loadResults(name, runDate, seq);
         } catch (e) {
           btn.disabled = false;
           btn.textContent = e.message;
@@ -173,44 +186,106 @@
     });
   }
 
-  async function loadResults(name) {
+  function renderRun(run, name, runDate, seq) {
+    const freshUrls = new Set([...(run.matches || []), ...(run.partial_matches || [])].map(m => m.url));
+    const pinned = (run.pinned_finds || []).filter(m => !freshUrls.has(m.url));
+    if (run.no_match || (!run.matches?.length && !run.partial_matches?.length && !pinned.length)) {
+      resultsPanel.innerHTML = `<p class="empty-state">No matches in this run.</p>` + References.renderNote(run, { siteName });
+      return;
+    }
+    const feedbackMap = run.feedback || {};
+    let html = `<p class="run-meta">${esc(runDate)} · ${run.total_candidates ?? "?"} candidates</p>`;
+    html += References.renderNote(run, { siteName });
+    html += Feedback.renderSaveAllRow(feedbackMap);
+    if (pinned.length)
+      html += `<div class="results-section"><p class="section-heading">Your picks (${pinned.length})</p>
+        <div class="cards">${pinned.map(m => renderResultCard(m, feedbackMap, { pinned: true })).join("")}</div></div>`;
+    if (run.matches?.length)
+      html += `<div class="results-section"><p class="section-heading">Matches (${run.matches.length})</p>
+        <div class="cards">${run.matches.map(m => renderResultCard(m, feedbackMap)).join("")}</div></div>`;
+    if (run.partial_matches?.length)
+      html += `<div class="results-section"><p class="section-heading">Partial (${run.partial_matches.length})</p>
+        <div class="cards">${run.partial_matches.map(m => renderResultCard(m, feedbackMap)).join("")}</div></div>`;
+    resultsPanel.innerHTML = html;
+    Feedback.bindFeedback(resultsPanel, async items => {
+      await api("PUT", `/api/feedback/${encodeURIComponent(name)}/${encodeURIComponent(runDate)}/batch`, { items });
+      // A "Perfect match" item in this batch may have just created a pin —
+      // reload so a new "Your picks" section (or an updated one) shows up
+      // without the user having to navigate away and back.
+      loadResults(name, runDate, seq);
+    });
+    bindUnpin(resultsPanel, name, runDate, seq);
+  }
+
+  // `seq` defaults to the current nav token for same-context refreshes
+  // (feedback save, unpin) that aren't a fresh navigation in their own right.
+  async function loadResults(name, runDate, seq = _navSeq) {
     resultsPanel.innerHTML = `<p class="loading">Loading…</p>`;
     try {
-      const dates = await api("GET", `/api/results/${encodeURIComponent(name)}`);
-      const runDate = dates[0];
-      const run = await api("GET", `/api/results/${encodeURIComponent(name)}/${runDate}`);
-      const freshUrls = new Set([...(run.matches || []), ...(run.partial_matches || [])].map(m => m.url));
-      const pinned = (run.pinned_finds || []).filter(m => !freshUrls.has(m.url));
-      if (run.no_match || (!run.matches?.length && !run.partial_matches?.length && !pinned.length)) {
-        resultsPanel.innerHTML = `<p class="empty-state">No matches in latest run.</p>` + References.renderNote(run, { siteName });
-        return;
-      }
-      const feedbackMap = run.feedback || {};
-      let html = `<p class="run-meta">${runDate} · ${run.total_candidates ?? "?"} candidates</p>`;
-      html += References.renderNote(run, { siteName });
-      html += Feedback.renderSaveAllRow(feedbackMap);
-      if (pinned.length)
-        html += `<div class="results-section"><p class="section-heading">Your picks (${pinned.length})</p>
-          <div class="cards">${pinned.map(m => renderResultCard(m, feedbackMap, { pinned: true })).join("")}</div></div>`;
-      if (run.matches?.length)
-        html += `<div class="results-section"><p class="section-heading">Matches (${run.matches.length})</p>
-          <div class="cards">${run.matches.map(m => renderResultCard(m, feedbackMap)).join("")}</div></div>`;
-      if (run.partial_matches?.length)
-        html += `<div class="results-section"><p class="section-heading">Partial (${run.partial_matches.length})</p>
-          <div class="cards">${run.partial_matches.map(m => renderResultCard(m, feedbackMap)).join("")}</div></div>`;
-      resultsPanel.innerHTML = html;
-      Feedback.bindFeedback(resultsPanel, async items => {
-        await api("PUT", `/api/feedback/${encodeURIComponent(name)}/${encodeURIComponent(runDate)}/batch`, { items });
-        // A "Perfect match" item in this batch may have just created a pin —
-        // reload so a new "Your picks" section (or an updated one) shows up
-        // without the user having to navigate away and back.
-        loadResults(name);
-      });
-      bindUnpin(resultsPanel, name);
+      const run = await api("GET", `/api/results/${encodeURIComponent(name)}/${encodeURIComponent(runDate)}`);
+      if (!_isCurrentNav(seq)) return null;
+      renderRun(run, name, runDate, seq);
+      return run;
     } catch {
+      if (!_isCurrentNav(seq)) return null;
       resultsPanel.innerHTML = `<p class="empty-state">No results yet.</p>`;
+      return null;
     }
   }
+
+  // ── Run-scoped config panel: live/editable on the latest run, a read-only
+  // frozen snapshot on any earlier one ────────────────────────────────────────
+
+  function isLatest(date) {
+    return CriteriaForm.isLatestRun(date, latestRunDate ? [latestRunDate] : []);
+  }
+
+  async function renderLiveConfig(name, seq = _navSeq) {
+    configContent.innerHTML = `<p class="loading">Loading…</p>`;
+    try {
+      const cfg = await api("GET", `/api/admin/search/${encodeURIComponent(name)}`);
+      if (!_isCurrentNav(seq)) return;
+      configContent.innerHTML = renderConfigHeader(cfg) + renderEdit(cfg) + renderReferences();
+      bindVisibilityToggle(configContent.querySelector(".config-header-row"));
+      bindDeleteButton(configContent.querySelector(".config-header-row"));
+      const form = configPanel.querySelector(".edit-form");
+      bindEdit(form);
+      bindReferences(configPanel.querySelector(".references-card"), form, name);
+    } catch (e) {
+      if (!_isCurrentNav(seq)) return;
+      configContent.innerHTML = `<p class="empty-state">${esc(e.message)}</p>`;
+    }
+  }
+
+  function renderReadOnlyConfig(snap, date, name) {
+    configContent.innerHTML = CriteriaForm.renderReadOnlyBanner(date) + renderConfigHeader(snap, { readOnly: true })
+      + CriteriaForm.renderEdit(snap, "", { readOnly: true });
+    CriteriaForm.bindReadOnlyBanner(() => {
+      dateSelectEl.value = latestRunDate;
+      selectRunDate(name, latestRunDate);
+    });
+  }
+
+  function populateDateSelect(dates) {
+    dateSelectEl.innerHTML = dates.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join("");
+    dateToolbar.hidden = dates.length === 0;
+  }
+
+  async function selectRunDate(name, date) {
+    const seq = _beginNav();
+    currentRunDate = date;
+    const run = await loadResults(name, date, seq);
+    if (!_isCurrentNav(seq)) return;
+    if (isLatest(date)) {
+      await renderLiveConfig(name, seq);
+    } else if (run) {
+      renderReadOnlyConfig(run.config_snapshot || {}, date, name);
+    }
+  }
+
+  dateSelectEl.addEventListener("change", () => {
+    if (activeName) selectRunDate(activeName, dateSelectEl.value);
+  });
 
   // ── Generate from description ─────────────────────────────────────────────
 
@@ -260,14 +335,22 @@
 
   // ── Config header (search name + visibility toggle) ──────────────────────
 
-  function renderConfigHeader(cfg) {
+  function renderConfigHeader(cfg, opts = {}) {
     const vis = cfg.visibility || "public";
+    const name = cfg.search_name || "";
+    const title = `<span class="config-search-name">${esc(cfg.title || name.replace(/_/g, " "))}</span>`;
+    if (opts.readOnly) {
+      // Visibility toggle and delete act on the LIVE search, not this frozen
+      // snapshot — showing them while browsing history would mutate the
+      // wrong thing, so they're omitted entirely rather than disabled.
+      return `<div class="config-header-row">${title}</div>`;
+    }
     return `<div class="config-header-row">
-      <span class="config-search-name">${esc(cfg.title || cfg.search_name.replace(/_/g, " "))}</span>
-      <button type="button" class="btn-visibility btn-run" data-name="${esc(cfg.search_name)}" data-visibility="${esc(vis)}">
+      ${title}
+      <button type="button" class="btn-visibility btn-run" data-name="${esc(name)}" data-visibility="${esc(vis)}">
         ${vis === "public" ? "Make private" : "Make public"}
       </button>
-      <button type="button" class="btn-run edit-delete-btn" data-name="${esc(cfg.search_name)}">Delete</button>
+      <button type="button" class="btn-run edit-delete-btn" data-name="${esc(name)}">Delete</button>
       <span class="visibility-msg save-msg"></span>
     </div>`;
   }
@@ -303,7 +386,11 @@
       btn.disabled = true;
       try {
         await api("DELETE", `/api/admin/search/${encodeURIComponent(name)}`);
+        _beginNav(); // invalidate any in-flight load for the just-deleted search
         activeName = null;
+        latestRunDate = null;
+        currentRunDate = null;
+        dateToolbar.hidden = true;
         configContent.innerHTML = `<p class="empty-state">Select a search from the left.</p>`;
         resultsPanel.innerHTML = "";
         await refreshSidebar();
@@ -334,7 +421,11 @@
   }
 
   async function loadUsers() {
+    _beginNav(); // invalidate any in-flight search load
     activeName = null;
+    latestRunDate = null;
+    currentRunDate = null;
+    dateToolbar.hidden = true;
     searchList.querySelectorAll("li").forEach(el => el.classList.remove("active"));
     configContent.innerHTML   = `<p class="loading">Loading users…</p>`;
     resultsPanel.innerHTML    = `<p class="empty-state">Select a search to view results.</p>`;
@@ -380,8 +471,22 @@
 
   let activeName = null;
 
+  async function afterRun(name) {
+    const seq = _beginNav();
+    let dates = [];
+    try { dates = await api("GET", `/api/results/${encodeURIComponent(name)}`); } catch { /* no runs yet */ }
+    if (!_isCurrentNav(seq)) return; // superseded by a newer navigation while the run was in flight
+    latestRunDate = dates[0] || null;
+    populateDateSelect(dates);
+    if (latestRunDate) {
+      dateSelectEl.value = latestRunDate;
+      await selectRunDate(name, latestRunDate);
+    }
+  }
+
   async function selectSearch(name) {
     if (activeName === name) return;
+    const seq = _beginNav();
     activeName = name;
 
     searchList.querySelectorAll("li").forEach(el =>
@@ -390,19 +495,23 @@
     configContent.innerHTML = `<p class="loading">Loading…</p>`;
     resultsPanel.innerHTML = `<p class="loading">Loading…</p>`;
 
-    try {
-      const cfg = await api("GET", `/api/admin/search/${name}`);
-      configContent.innerHTML = renderConfigHeader(cfg) + renderEdit(cfg) + renderReferences();
-      bindVisibilityToggle(configContent.querySelector(".config-header-row"));
-      bindDeleteButton(configContent.querySelector(".config-header-row"));
-      const form = configPanel.querySelector(".edit-form");
-      bindEdit(form);
-      bindReferences(configPanel.querySelector(".references-card"), form, name);
-    } catch (e) {
-      configContent.innerHTML = `<p class="empty-state">${esc(e.message)}</p>`;
+    let dates = [];
+    try { dates = await api("GET", `/api/results/${encodeURIComponent(name)}`); } catch { /* no runs yet */ }
+    if (!_isCurrentNav(seq)) return; // superseded by a newer selectSearch/selectRunDate
+    latestRunDate = dates[0] || null;
+    populateDateSelect(dates);
+
+    if (dates.length === 0) {
+      // Zero-run search: no "latest run" to point at — must default to the
+      // live editable config, not an absent state.
+      currentRunDate = null;
+      resultsPanel.innerHTML = `<p class="empty-state">No results yet.</p>`;
+      await renderLiveConfig(name, seq);
+      return;
     }
 
-    loadResults(name);
+    dateSelectEl.value = latestRunDate;
+    await selectRunDate(name, latestRunDate);
   }
 
   // ── Sidebar collapse ──────────────────────────────────────────────────────
@@ -443,7 +552,11 @@
     if (searches.length) selectSearch(searches[0].search_name);
 
     document.getElementById("btn-new-search").addEventListener("click", () => {
+      _beginNav(); // invalidate any in-flight search load
       activeName = null;
+      latestRunDate = null;
+      currentRunDate = null;
+      dateToolbar.hidden = true;
       searchList.querySelectorAll("li").forEach(el => el.classList.remove("active"));
       configContent.innerHTML = renderGenerate();
       resultsPanel.innerHTML = `<p class="empty-state">Save the new search, then run it to see results.</p>`;

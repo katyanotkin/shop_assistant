@@ -5,19 +5,52 @@
   const resultsPanel      = document.getElementById("results-panel");
   const createPanel       = document.getElementById("create-panel");
   const runSearchBtn      = document.getElementById("run-search-btn");
-  const editSearchBtn     = document.getElementById("edit-search-btn");
   const runGateMsg        = document.getElementById("run-gate-msg");
   const newSearchContainer = document.getElementById("new-search-container");
+  const configPanel       = document.getElementById("config-panel");
+  const configContent     = document.getElementById("config-content");
+  const userPanels        = document.getElementById("user-panels");
 
   const _defaultTitle = document.title;
 
   let activeSearch = null;
   let me           = { role: "free", anonymous: true };
-  let _loadSeq     = 0;
   let _searches    = [];
   let _showFeedback = false;
   let _savedToolbarVisible  = false;
   let _savedCriteriaVisible = false;
+  let _savedConfigVisible   = false;
+  let activeOwned  = false;
+  let latestRunDate  = null;
+  let currentRunDate = null;
+
+  // Monotonic navigation token: bumped once per user-initiated navigation
+  // (selecting a different search, or switching run date). Every async
+  // continuation that's about to write to the config or results panel checks
+  // it first, so a slow-resolving earlier navigation can never clobber a
+  // faster-resolving later one — e.g. clicking search A then quickly
+  // clicking search B must never leave A's (editable!) config panel on
+  // screen after B has finished loading.
+  let _navSeq = 0;
+  function _beginNav() { return ++_navSeq; }
+  function _isCurrentNav(seq) { return seq === _navSeq; }
+
+  // ── Config panel visibility: also toggles the grid down to a single
+  // column when hidden, so non-owner viewers (who never see this panel)
+  // don't end up with results stuck in a half-width track ─────────────────
+  function setConfigPanelHidden(hidden) {
+    configPanel.hidden = hidden;
+    userPanels.classList.toggle("admin-panels--no-config", hidden);
+  }
+
+  // ── Config panel collapse (mirrors admin.js's identical toggle) ──────────
+  const configCollapseBtn = document.getElementById("config-collapse-btn");
+  configCollapseBtn?.addEventListener("click", () => {
+    const collapsed = userPanels.classList.toggle("admin-panels--config-collapsed");
+    configCollapseBtn.setAttribute("aria-expanded", String(!collapsed));
+    configCollapseBtn.setAttribute("aria-label", collapsed ? "Expand config" : "Collapse config");
+    configCollapseBtn.title = collapsed ? "Expand config" : "Collapse config";
+  });
 
   // ── Sidebar collapse ──────────────────────────────────────────────────────
   const sidebarEl     = document.getElementById("sidebar");
@@ -268,7 +301,7 @@
     resultsPanel.innerHTML = html;
   }
 
-  function bindUnpin(container, searchName, runDate, showFeedback) {
+  function bindUnpin(container, searchName, runDate, showFeedback, seq) {
     container.querySelectorAll(".btn-unpin").forEach(btn => {
       btn.addEventListener("click", async () => {
         btn.disabled = true;
@@ -277,7 +310,7 @@
             method: "POST",
             body: { url: btn.dataset.url },
           });
-          loadRun(searchName, runDate, showFeedback);
+          loadRun(searchName, runDate, showFeedback, seq);
         } catch (e) {
           btn.disabled = false;
           btn.textContent = e.message;
@@ -287,12 +320,13 @@
   }
 
   // ── Load / select ─────────────────────────────────────────────────────────
-  async function loadRun(searchName, runDate, showFeedback) {
-    const seq = ++_loadSeq;
+  // `seq` defaults to the current nav token for same-context refreshes
+  // (feedback save, unpin) that aren't a fresh navigation in their own right.
+  async function loadRun(searchName, runDate, showFeedback, seq = _navSeq) {
     resultsPanel.innerHTML = `<p class="loading">Loading…</p>`;
     try {
       const run = await api(`/api/results/${encodeURIComponent(searchName)}/${encodeURIComponent(runDate)}`);
-      if (seq !== _loadSeq) return;
+      if (!_isCurrentNav(seq)) return null;
       renderResults(run, showFeedback);
       if (showFeedback) {
         Feedback.bindFeedback(resultsPanel, async items => {
@@ -302,18 +336,119 @@
           // A "Perfect match" item in this batch may have just created a pin —
           // reload so a new "Your picks" section (or an updated one) shows up
           // without the user having to navigate away and back.
-          loadRun(searchName, runDate, showFeedback);
+          loadRun(searchName, runDate, showFeedback, seq);
         });
       }
-      bindUnpin(resultsPanel, searchName, runDate, showFeedback);
+      bindUnpin(resultsPanel, searchName, runDate, showFeedback, seq);
+      return run;
     } catch (e) {
-      if (seq !== _loadSeq) return;
+      if (!_isCurrentNav(seq)) return null;
       resultsPanel.innerHTML = `<p class="empty-state">Failed to load results: ${esc(e.message)}</p>`;
+      return null;
+    }
+  }
+
+  // ── Run-scoped config panel: live/editable on the latest run, a read-only
+  // frozen snapshot on any earlier one — mirrors admin.js's identical pattern.
+  function isLatestDate(date) {
+    return CriteriaForm.isLatestRun(date, latestRunDate ? [latestRunDate] : []);
+  }
+
+  async function renderLiveConfig(name, seq = _navSeq) {
+    configContent.innerHTML = `<p class="loading">Loading…</p>`;
+    try {
+      const cfg = await api(`/api/user/search/${encodeURIComponent(name)}`);
+      if (!_isCurrentNav(seq)) return;
+      const actions = `<div class="action-row">
+        <button type="button" class="btn-primary" id="edit-save-btn">Save</button>
+        <span class="save-msg" id="edit-save-msg"></span>
+      </div>`;
+      configContent.innerHTML = `
+        <div class="config-header-row"><span class="config-search-name">${esc(cfg.title || "")}</span></div>
+        <div class="field-row">
+          <label class="field-label" for="edit-title">Title</label>
+          <input type="text" id="edit-title" class="field-input" value="${esc(cfg.title || "")}" maxlength="200" autocomplete="off">
+        </div>
+        ${CriteriaForm.renderEdit(cfg, actions)}
+        ${References.renderReferences({ withSaveButton: false })}
+      `;
+      bindLiveConfigForm(cfg, name);
+    } catch (e) {
+      if (!_isCurrentNav(seq)) return;
+      configContent.innerHTML = `<p class="empty-state">Failed to load config: ${esc(e.message)}</p>`;
+    }
+  }
+
+  function bindLiveConfigForm(cfg, name) {
+    const form = configContent.querySelector(".edit-form");
+    CriteriaForm.bindFieldControls(form);
+    References.bindReferences(configContent.querySelector(".references-card"), form.querySelector('[name="example_urls"]'), {
+      siteName,
+      // The user PUT replaces the whole config, so persist the STORED config
+      // plus the new references — in-progress criteria edits stay unsaved
+      // until the user presses Save.
+      onChange: async urls => {
+        await api(`/api/user/search/${encodeURIComponent(name)}`, {
+          method: "PUT",
+          body: { ...cfg, example_urls: urls },
+        });
+        cfg.example_urls = urls;
+      },
+    });
+
+    const titleInput = document.getElementById("edit-title");
+    const saveMsg    = document.getElementById("edit-save-msg");
+    const setMsg     = (text, cls) => { saveMsg.textContent = text; saveMsg.className = `save-msg ${cls}`; };
+
+    document.getElementById("edit-save-btn").addEventListener("click", async () => {
+      const title = titleInput.value.trim();
+      if (!title) { setMsg("Title is required.", "err"); return; }
+      const saveBtn = document.getElementById("edit-save-btn");
+      saveBtn.disabled = true;
+      setMsg("Saving…", "");
+      try {
+        const updated = { ...cfg, ...CriteriaForm.collectConfig(form), title };
+        await api(`/api/user/search/${encodeURIComponent(name)}`, { method: "PUT", body: updated });
+        setMsg("Saved.", "ok");
+        const nameSpan = configContent.querySelector(".config-search-name");
+        if (nameSpan) nameSpan.textContent = updated.title;
+        const searches = await api("/api/searches");
+        _searches = searches;
+        buildSearchList(searches);
+        updateNewSearchBtn(searches);
+        document.title = `${updated.title} — TailoredLoop`;
+      } catch (e) {
+        setMsg(e.message, "err");
+      }
+      saveBtn.disabled = false;
+    });
+  }
+
+  function renderReadOnlyConfig(snap, date, name) {
+    configContent.innerHTML = CriteriaForm.renderReadOnlyBanner(date)
+      + `<div class="config-header-row"><span class="config-search-name">${esc(snap.title || "")}</span></div>`
+      + CriteriaForm.renderEdit(snap, "", { readOnly: true });
+    CriteriaForm.bindReadOnlyBanner(() => {
+      dateSelect.value = latestRunDate;
+      selectRunDate(name, latestRunDate);
+    });
+  }
+
+  async function selectRunDate(name, date) {
+    const seq = _beginNav();
+    currentRunDate = date;
+    const run = await loadRun(name, date, _showFeedback, seq);
+    if (!_isCurrentNav(seq) || !activeOwned) return;
+    if (isLatestDate(date)) {
+      await renderLiveConfig(name, seq);
+    } else if (run) {
+      renderReadOnlyConfig(run.config_snapshot || {}, date, name);
     }
   }
 
   async function selectSearch(name, { replace = false } = {}) {
     if (activeSearch === name) return;
+    const seq = _beginNav();
 
     if (!createPanel.hidden) closeCreatePanel();
 
@@ -327,9 +462,9 @@
       el.classList.toggle("active", el.dataset.name === name));
 
     runSearchBtn.hidden = true;
-    editSearchBtn.hidden = true;
     runGateMsg.hidden = true;
     toolbar.hidden = true;
+    setConfigPanelHidden(true);
     const criteriaBar = document.getElementById("criteria-bar");
     if (criteriaBar) criteriaBar.hidden = true;
     resultsPanel.hidden = false;
@@ -345,34 +480,49 @@
       ];
       if (owned) promises.push(api(`/api/user/search/${encodeURIComponent(name)}`).catch(() => null));
       const [dates, config, ownerConfig] = await Promise.all(promises);
+      if (!_isCurrentNav(seq)) return; // superseded by a newer selectSearch/selectRunDate
+      latestRunDate = dates[0] || null;
       dateSelect.innerHTML = dates.map(d => `<option value="${d}">${d}</option>`).join("");
       dateSelect.hidden = dates.length === 0;
       const dateLabel = document.querySelector(".date-label");
       if (dateLabel) dateLabel.hidden = dates.length === 0;
       toolbar.hidden = false;
-      if (config) renderCriteriaBar(config);
       runSearchBtn.hidden = !owned;
       const canEdit = owned && me.role !== "admin";
       _showFeedback = canEdit;
-      editSearchBtn.hidden = !canEdit;
+      // The full editable/read-only config panel replaces the compact
+      // chip summary for the search's own owner — showing both would be
+      // redundant. Non-owners (and admin viewing here) keep the chip bar.
+      activeOwned = canEdit;
+      setConfigPanelHidden(!canEdit);
+      if (config) {
+        if (canEdit) { if (criteriaBar) criteriaBar.hidden = true; }
+        else renderCriteriaBar(config);
+      }
       const expired = owned && me.role === "free" && isRunWindowExpired(ownerConfig && ownerConfig.created_at);
       runSearchBtn.disabled = expired;
       runGateMsg.hidden = !expired;
       if (expired) runGateMsg.textContent = FREE_PLAN_MSG;
       if (dates.length === 0) {
+        currentRunDate = null;
         resultsPanel.innerHTML = owned
           ? `<p class="empty-state">This search hasn't been run yet. Click Run to get results.</p>`
           : `<p class="empty-state">No runs yet for this search.</p>`;
+        // Zero-run search: no "latest run" to point at — must default to the
+        // live editable config rather than an absent state.
+        if (canEdit) await renderLiveConfig(name, seq);
       } else {
-        await loadRun(name, dates[0], _showFeedback);
+        dateSelect.value = latestRunDate;
+        await selectRunDate(name, latestRunDate);
       }
     } catch {
+      if (!_isCurrentNav(seq)) return;
       resultsPanel.innerHTML = `<p class="empty-state">No runs found for this search.</p>`;
     }
   }
 
   dateSelect.addEventListener("change", () => {
-    if (activeSearch) loadRun(activeSearch, dateSelect.value, _showFeedback);
+    if (activeSearch) selectRunDate(activeSearch, dateSelect.value);
   });
 
   runSearchBtn.addEventListener("click", async () => {
@@ -384,18 +534,18 @@
     try {
       await api(`/api/user/search/${encodeURIComponent(name)}/run`, { method: "POST" });
       const dates = await api(`/api/results/${encodeURIComponent(name)}`);
+      latestRunDate = dates[0] || null;
       dateSelect.innerHTML = dates.map(d => `<option value="${d}">${d}</option>`).join("");
-      if (dates.length) await loadRun(name, dates[0], _showFeedback);
+      if (dates.length) {
+        dateSelect.value = latestRunDate;
+        await selectRunDate(name, latestRunDate);
+      }
     } catch (e) {
       resultsPanel.innerHTML = `<p class="empty-state">Run failed: ${esc(e.message)}</p>`;
     } finally {
       runSearchBtn.textContent = origText;
       runSearchBtn.disabled = false;
     }
-  });
-
-  editSearchBtn.addEventListener("click", () => {
-    if (activeSearch) openEditPanel(activeSearch);
   });
 
   // ── Shared panel breadcrumb ───────────────────────────────────────────────
@@ -412,8 +562,10 @@
     _savedToolbarVisible = !toolbar.hidden;
     const criteriaBar = document.getElementById("criteria-bar");
     _savedCriteriaVisible = criteriaBar ? !criteriaBar.hidden : false;
+    _savedConfigVisible = !configPanel.hidden;
     toolbar.hidden = true;
     if (criteriaBar) criteriaBar.hidden = true;
+    setConfigPanelHidden(true);
     resultsPanel.hidden = true;
     createPanel.innerHTML = renderCreatePanel();
     createPanel.hidden = false;
@@ -426,6 +578,7 @@
     if (_savedToolbarVisible) toolbar.hidden = false;
     const criteriaBar = document.getElementById("criteria-bar");
     if (criteriaBar && _savedCriteriaVisible) criteriaBar.hidden = false;
+    if (_savedConfigVisible) setConfigPanelHidden(false);
   }
 
   function renderCreatePanel() {
@@ -528,99 +681,6 @@
     });
   }
 
-  // ── Edit search panel ─────────────────────────────────────────────────────
-  async function openEditPanel(name) {
-    _savedToolbarVisible = !toolbar.hidden;
-    const criteriaBar = document.getElementById("criteria-bar");
-    _savedCriteriaVisible = criteriaBar ? !criteriaBar.hidden : false;
-    toolbar.hidden = true;
-    if (criteriaBar) criteriaBar.hidden = true;
-    resultsPanel.hidden = true;
-    createPanel.innerHTML = `<p class="loading">Loading…</p>`;
-    createPanel.hidden = false;
-    try {
-      const cfg = await api(`/api/user/search/${encodeURIComponent(name)}`);
-      createPanel.innerHTML = renderEditPanel(cfg);
-      bindEditPanel(cfg);
-    } catch (e) {
-      createPanel.innerHTML = `<p class="empty-state">Failed to load search: ${esc(e.message)}</p>
-        <div class="action-row"><button id="edit-back-btn" class="btn-run">Back</button></div>`;
-      document.getElementById("edit-back-btn").addEventListener("click", closeCreatePanel);
-    }
-  }
-
-  function renderEditPanel(cfg) {
-    const actions = `<div class="action-row">
-      <button type="button" class="btn-primary" id="edit-save-btn">Save</button>
-      <button type="button" class="btn-run" id="edit-cancel-btn">Cancel</button>
-      <span class="save-msg" id="edit-save-msg"></span>
-    </div>`;
-    return `<div class="generate-panel">
-      ${renderPanelBreadcrumb({
-        backLabel: "← Back to results",
-        current: `Editing "<span id="edit-panel-title">${esc(cfg.title || "")}</span>"`,
-        backBtnId: "edit-panel-back-btn",
-      })}
-      <div class="field-row">
-        <label class="field-label" for="edit-title">Title</label>
-        <input type="text" id="edit-title" class="field-input" value="${esc(cfg.title || "")}" maxlength="200" autocomplete="off">
-      </div>
-      ${CriteriaForm.renderEdit(cfg, actions)}
-      ${References.renderReferences({ withSaveButton: false })}
-    </div>`;
-  }
-
-  function bindEditPanel(cfg) {
-    const form = createPanel.querySelector(".edit-form");
-    CriteriaForm.bindFieldControls(form);
-    References.bindReferences(createPanel.querySelector(".references-card"), form.querySelector('[name="example_urls"]'), {
-      siteName,
-      // The user PUT replaces the whole config, so persist the STORED config
-      // plus the new references — in-progress criteria edits stay unsaved
-      // until the user presses Save.
-      onChange: async urls => {
-        await api(`/api/user/search/${encodeURIComponent(cfg.search_name)}`, {
-          method: "PUT",
-          body: { ...cfg, example_urls: urls },
-        });
-        cfg.example_urls = urls;
-      },
-    });
-
-    const titleInput = document.getElementById("edit-title");
-    const saveMsg    = document.getElementById("edit-save-msg");
-    const setMsg     = (text, cls) => { saveMsg.textContent = text; saveMsg.className = `save-msg ${cls}`; };
-
-    document.getElementById("edit-cancel-btn").addEventListener("click", closeCreatePanel);
-    document.getElementById("edit-panel-back-btn").addEventListener("click", closeCreatePanel);
-
-    document.getElementById("edit-save-btn").addEventListener("click", async () => {
-      const title = titleInput.value.trim();
-      if (!title) { setMsg("Title is required.", "err"); return; }
-      const saveBtn = document.getElementById("edit-save-btn");
-      saveBtn.disabled = true;
-      setMsg("Saving…", "");
-      try {
-        const updated = { ...cfg, ...CriteriaForm.collectConfig(form), title };
-        await api(`/api/user/search/${encodeURIComponent(cfg.search_name)}`, { method: "PUT", body: updated });
-        setMsg("Saved.", "ok");
-        const titleSpan = document.getElementById("edit-panel-title");
-        if (titleSpan) titleSpan.textContent = updated.title;
-        const searches = await api("/api/searches");
-        _searches = searches;
-        buildSearchList(searches);
-        updateNewSearchBtn(searches);
-        closeCreatePanel();
-        renderCriteriaBar(updated);
-        document.title = `${updated.title} — TailoredLoop`;
-      } catch (e) {
-        setMsg(e.message, "err");
-        saveBtn.disabled = false;
-      }
-    });
-
-  }
-
   // ── Sidebar ───────────────────────────────────────────────────────────────
   function buildSearchList(searches) {
     const mine       = searches.filter(s => s.owned);
@@ -678,7 +738,8 @@
           _searches = refreshed;
           buildSearchList(refreshed);
           updateNewSearchBtn(refreshed);
-          openEditPanel(created.search_name);
+          activeSearch = null;
+          selectSearch(created.search_name);
         } catch (err) {
           btn.disabled = false;
           btn.textContent = err.message;
