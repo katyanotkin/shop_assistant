@@ -310,6 +310,7 @@ def test_get_run_redacts_personal_layers_from_non_owner_on_public_search(client)
         "partial_matches": [],
         "config_snapshot": {
             "criteria": {"category": ["coat"]},
+            "description": "women's waxed cotton coat, midi length",
             "feedback_notes": "prefers unlined",
             "avoid_shops": ["bad.example"],
             "example_urls": ["https://ref.example/coat"],
@@ -330,6 +331,7 @@ def test_get_run_redacts_personal_layers_from_non_owner_on_public_search(client)
     assert data["example_urls"] == []
     snap = data["config_snapshot"]
     assert snap["criteria"] == {"category": ["coat"]}  # objective spec stays public
+    assert snap["description"] is None
     assert snap["feedback_notes"] is None
     assert snap["avoid_shops"] == []
     assert snap["example_urls"] == []

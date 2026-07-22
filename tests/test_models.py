@@ -54,6 +54,16 @@ def test_product_match_is_new_can_be_set():
     assert m.is_new is True
 
 
+def test_product_match_defaults_carried_over_false():
+    m = ProductMatch(url="https://example.com", title="Test Jacket", score=8.0)
+    assert m.carried_over is False
+
+
+def test_product_match_carried_over_can_be_set():
+    m = ProductMatch(url="https://example.com", title="Test Jacket", score=8.0, carried_over=True)
+    assert m.carried_over is True
+
+
 def test_product_match_optional_fields():
     m = ProductMatch(url="https://example.com", title="", score=0.0)
     assert m.price is None

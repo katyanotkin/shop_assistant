@@ -486,6 +486,60 @@ class TestApiResultsRunDetail:
 
 
 # ---------------------------------------------------------------------------
+# H. config_snapshot.description — redacted for anonymous viewers
+# ---------------------------------------------------------------------------
+
+
+class TestApiResultsRunDetailDescriptionRedaction:
+    """config_snapshot.description is personal-signal input (free-text the
+    owner typed, which may carry context never reflected in the structured
+    criteria) — anonymous viewers of a public search's run must never receive
+    it, the same redaction tier as feedback_notes/avoid_shops/example_urls/
+    pinned_finds."""
+
+    def test_snapshot_description_redacted_for_anonymous(self, discovered_search, discovered_run):
+        data = _get(f"/api/results/{discovered_search}/{discovered_run}").json()
+        snapshot = data.get("config_snapshot")
+        if not isinstance(snapshot, dict) or "description" not in snapshot:
+            pytest.skip(f"'{discovered_search}' run has no config_snapshot.description to check")
+        assert snapshot["description"] is None, (
+            f"/api/results/{discovered_search}/{discovered_run} config_snapshot.description "
+            f"leaked to an anonymous caller: {snapshot['description']!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# I. matches/partial_matches — carried_over field and is_new exclusivity
+# ---------------------------------------------------------------------------
+
+
+class TestApiResultsRunDetailCarriedOver:
+    """Every match/partial_match item carries a carried_over flag alongside
+    is_new, and a single result item must never be flagged both — carried_over
+    means it was re-verified from an earlier run's results, is_new means a
+    fresh discovery this run; the two are mutually exclusive by definition."""
+
+    def test_match_items_have_carried_over_field(self, discovered_search, discovered_run):
+        data = _get(f"/api/results/{discovered_search}/{discovered_run}").json()
+        for list_key in ("matches", "partial_matches"):
+            items = data.get(list_key, [])
+            for i, item in enumerate(items):
+                assert "carried_over" in item, f"{list_key}[{i}] missing 'carried_over' field: {item!r}"
+                assert isinstance(
+                    item["carried_over"], bool
+                ), f"{list_key}[{i}] 'carried_over' is not a bool: {item['carried_over']!r}"
+
+    def test_is_new_and_carried_over_are_mutually_exclusive(self, discovered_search, discovered_run):
+        data = _get(f"/api/results/{discovered_search}/{discovered_run}").json()
+        for list_key in ("matches", "partial_matches"):
+            items = data.get(list_key, [])
+            for i, item in enumerate(items):
+                assert not (
+                    item.get("is_new") and item.get("carried_over")
+                ), f"{list_key}[{i}] is flagged both is_new and carried_over: {item!r}"
+
+
+# ---------------------------------------------------------------------------
 # E. PUT /api/feedback/{search_name}/{run_date}/batch — admin protected
 # ---------------------------------------------------------------------------
 

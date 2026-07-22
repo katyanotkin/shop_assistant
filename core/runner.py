@@ -18,6 +18,7 @@ _CSV_FIELDS = [
     "match_type",
     "score",
     "is_new",
+    "carried_over",
     "title",
     "url",
     "price",
@@ -66,6 +67,7 @@ def _to_row(m: models.ProductMatch, match_type: str, result: models.RunResult) -
         "match_type": match_type,
         "score": m.score,
         "is_new": m.is_new,
+        "carried_over": m.carried_over,
         "title": m.title,
         "url": m.url,
         "price": m.price if m.price is not None else "",
@@ -114,6 +116,22 @@ def run_search(search_name: str, settings: Settings, dry_run: bool = False, lear
         if before > len(candidates):
             print(f"  Filtered {before - len(candidates)} candidates from avoided shops")
 
+    # Carry forward Matches + Partial matches from the last 2 runs so a good
+    # result isn't silently lost just because this run's fresh queries don't
+    # resurface it. Re-verified fresh below (fetch + score), not redisplayed
+    # with a stale score — shares the same max_candidates cap as new discovery
+    # and is given priority within it (prepended) since avoiding loss is the
+    # whole point.
+    carried_forward_urls: set[str] = set()
+    if not dry_run:
+        recent = fc.load_recent_matches(search_name, limit=2)
+        if avoid_shops:
+            recent = [c for c in recent if urlparse(c.get("link", "")).netloc.removeprefix("www.") not in avoid_shops]
+        existing_urls = {c.get("link", "") for c in candidates}
+        new_recent = [c for c in recent if c.get("link", "") not in existing_urls]
+        carried_forward_urls = {c["link"] for c in new_recent}
+        candidates = (new_recent + candidates)[: settings.max_candidates]
+
     print(f"Candidates: {len(candidates)}")
 
     ranked = rank_all(
@@ -153,7 +171,9 @@ def run_search(search_name: str, settings: Settings, dry_run: bool = False, lear
         prev_urls = {m["url"] for m in last_run.get("matches", []) + last_run.get("partial_matches", [])}
 
     for m in matches + partial_matches:
-        if m.url not in prev_urls:
+        if m.url in carried_forward_urls:
+            m.carried_over = True
+        elif m.url not in prev_urls:
             m.is_new = True
 
     effective_config = models.SearchConfig(
@@ -201,7 +221,7 @@ def print_result(result: models.RunResult) -> None:
     if result.matches:
         print(f"\nMatches ({len(result.matches)}):")
         for m in result.matches:
-            new_tag = " [NEW]" if m.is_new else ""
+            new_tag = " [NEW]" if m.is_new else " [CARRIED OVER]" if m.carried_over else ""
             print(f"  [{m.score:.0f}/10]{new_tag} {m.title or '(no title)'}")
             print(f"    {_link(m.url)}")
             if m.price:
@@ -214,7 +234,7 @@ def print_result(result: models.RunResult) -> None:
     if result.partial_matches:
         print(f"\nPartial matches ({len(result.partial_matches)}):")
         for m in result.partial_matches:
-            new_tag = " [NEW]" if m.is_new else ""
+            new_tag = " [NEW]" if m.is_new else " [CARRIED OVER]" if m.carried_over else ""
             print(f"  [{m.score:.0f}/10]{new_tag} {m.title or '(no title)'}")
             print(f"    {_link(m.url)}")
             if m.unmatched:

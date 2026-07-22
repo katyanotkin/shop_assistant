@@ -108,6 +108,14 @@
       </div>`;
   }
 
+  function renderDescription(cfg) {
+    if (!cfg.description) return "";
+    return `<details class="description-disclosure">
+      <summary>Original request</summary>
+      <p class="card-notes">${esc(cfg.description)}</p>
+    </details>`;
+  }
+
   function renderEdit(cfg, actionsHtml = "") {
     return `<div class="edit-form" data-name="${esc(cfg.search_name)}">
       <div class="edit-top">
@@ -115,6 +123,7 @@
           <input type="checkbox" name="active" ${cfg.active ? "checked" : ""}> Active
         </label>
       </div>
+      ${renderDescription(cfg)}
       ${renderEditFields(cfg)}
       ${actionsHtml}
     </div>`;

@@ -172,6 +172,21 @@
 /* Edit form */
 .edit-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 
+.description-disclosure {
+  margin-bottom: 12px;
+}
+.description-disclosure > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-muted);
+  user-select: none;
+}
+.description-disclosure > summary:hover { color: var(--text-main); }
+.description-disclosure > .card-notes {
+  margin-top: 6px;
+  white-space: pre-wrap;
+}
+
 /* Generic chip fields (criteria arrays) */
 .chip-field {
   display: flex;

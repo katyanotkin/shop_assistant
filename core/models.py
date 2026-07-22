@@ -72,6 +72,7 @@ class ProductMatch(BaseModel):
     unmatched: list[str] = []
     notes: str = ""
     is_new: bool = False
+    carried_over: bool = False
 
 
 _MAX_PINNED_FINDS = 3

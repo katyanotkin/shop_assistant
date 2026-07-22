@@ -393,6 +393,7 @@ def get_run(
         if isinstance(snapshot, dict):
             run["config_snapshot"] = {
                 **snapshot,
+                "description": None,
                 "feedback_notes": None,
                 "avoid_shops": [],
                 "example_urls": [],

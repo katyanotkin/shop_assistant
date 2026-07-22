@@ -320,6 +320,33 @@ def load_feedback_entries(search_name: str, limit: int = 10) -> list[dict]:
     return entries
 
 
+def load_recent_matches(search_name: str, limit: int = 2) -> list[dict]:
+    """Matches + partial_matches from the last `limit` runs, deduped by URL
+    (most-recent run's occurrence wins), as candidate-shaped {link, title}
+    dicts ready to merge into the next run's discovery candidates so a good
+    result isn't silently lost just because a fresh run's queries don't
+    resurface it."""
+    runs = (
+        get_db()
+        .collection("shop_results")
+        .document(search_name)
+        .collection("runs")
+        .order_by("run_date", direction=firestore.Query.DESCENDING)
+        .limit(limit)
+        .stream()
+    )
+    seen: set[str] = set()
+    out: list[dict] = []
+    for doc in runs:
+        data = doc.to_dict()
+        for m in data.get("matches", []) + data.get("partial_matches", []):
+            url = m.get("url")
+            if url and url not in seen:
+                seen.add(url)
+                out.append({"link": url, "title": m.get("title", "")})
+    return out
+
+
 def save_product_feedback(text: str, owner_id: str | None, owner_name: str | None) -> None:
     from datetime import datetime, timezone
 
