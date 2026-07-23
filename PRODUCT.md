@@ -29,11 +29,13 @@ You will see a two-field form:
 
 Click **Generate config**. The AI reads your description and produces a structured configuration populated only with fields mentioned or implied by your text — `category` is always present; every other field (gender, material, lining, etc.) is included only if the description calls for it. The generated config appears in an editable form. Optional fields can be added with the chip buttons in the **Add:** row, or removed with the × button on each field. Review the populated fields — the AI will get most things right but you may want to add, remove, or adjust values.
 
+Your original description isn't discarded once the config is generated. A collapsed **Original request** disclosure sits right above the criteria fields whenever you come back to edit this search — in the admin panel and in your own search view on the main page alike. Click it to re-read exactly what you typed. It's collapsed by default so it doesn't clutter the form. On a promoted public search, it's visible only to the owner and admin, the same as feedback text, pinned finds, and reference products.
+
 When you are satisfied, click **Save** to store the config, or **Save & Run** to store it and immediately run the first search.
 
 ### Reference products (optional)
 
-In the Edit config tab, the **Reference products** card lets you add up to 3 URLs of products you already love — from any shop, not just past results from this search. Adding or removing a URL saves immediately — the card shows a Saving…/Saved status, there is no separate Save step. The AI uses these to calibrate what a great match looks like when scoring candidates.
+In the config panel, the **Reference products** card lets you add up to 3 URLs of products you already love — from any shop, not just past results from this search. Adding or removing a URL saves immediately — the card shows a Saving…/Saved status, there is no separate Save step. The AI uses these to calibrate what a great match looks like when scoring candidates.
 
 Each run, the ranker fetches the actual text of every reference page once and feeds an excerpt of it to the scoring model, so calibration is based on real product content, not just the URL. Today this only sharpens *scoring*: it does not change what search queries get generated or which candidate URLs get fetched. Pasting a reference product does not make the search go find "more like this" — it only changes how already-found candidates get judged against it.
 
@@ -43,7 +45,7 @@ Your current reference products are shown in the results view as links ("Product
 
 Every criteria field normally reduces a result's score proportionally when it doesn't match — a partial mismatch on one field doesn't sink an otherwise great result. Some criteria aren't like that: "flex on price, but not on cabinet dimensions."
 
-In the Edit config tab, each optional field (Material, Lining, Length, Sizes, Max price, and any custom field you've added) has a **Deal-breaker** checkbox next to it. Ticking it makes that field non-negotiable: a result that fails to satisfy it is capped at a score of 3, the same way an excluded material already caps a result today — low enough that it falls below the Partial match threshold and doesn't appear in results at all, rather than surfacing as a lower-scored match. Category and Gender aren't offered the checkbox because they're already non-negotiable everywhere (a category or gender mismatch already zeroes the score); Exclude isn't offered it either since an excluded value already caps the score the same way a deal-breaker would.
+In the config panel, each optional field (Material, Lining, Length, Sizes, Max price, and any custom field you've added) has a **Deal-breaker** checkbox next to it. Ticking it makes that field non-negotiable: a result that fails to satisfy it is capped at a score of 3, the same way an excluded material already caps a result today — low enough that it falls below the Partial match threshold and doesn't appear in results at all, rather than surfacing as a lower-scored match. Category and Gender aren't offered the checkbox because they're already non-negotiable everywhere (a category or gender mismatch already zeroes the score); Exclude isn't offered it either since an excluded value already caps the score the same way a deal-breaker would.
 
 ### Step 2 — What happens during a run
 
@@ -59,11 +61,15 @@ When a search runs, the system:
 
 A run typically takes about a minute, depending on how many candidate URLs are found (up to 40 by default) — search, fetch, and scoring all happen concurrently rather than one step at a time.
 
+Grounded search has some query-to-query variance — a genuinely good match found recently can simply fail to be resurfaced by a fresh run's newly-generated queries, even though it's still available. To make results more reliable, every run also automatically pulls in the Matches and Partial matches from the search's last 2 runs, dedupes them against this run's freshly-discovered candidates, and re-fetches and re-scores them completely fresh against the *current* criteria — not whatever criteria was in effect when they first appeared. These carried-forward candidates share the same ~40-candidate-per-run budget as new discovery and get priority within it. Anything that no longer qualifies under fresh scoring just drops silently and isn't retried. There's no visual difference between a carried-forward result and one found fresh this run — if it still qualifies, it appears as a normal Match or Partial match either way. This is separate from pinned finds (below), which are a manual, user-curated, permanently-frozen pick — carried-forward results are automatic, unlimited beyond the last-2-runs window, and always re-verified fresh rather than frozen.
+
 ### Step 3 — Read results
 
 Open the main page (`/`). The left sidebar lists all active searches. Click one to load its results.
 
 A date picker at the top lets you switch between runs. The most recent run loads by default.
+
+If you own the search, a config panel sits side-by-side with the results (collapsible, same toggle as the admin panel) and follows the same date picker. Selecting the **latest** run shows your **live, editable** config — the same form described in "Editing a search config" below. Selecting an **older** run shows that run's config exactly as it was when it executed: fields are disabled and there's no Save button, with a banner reading "Read-only — showing config as of [date]" and a one-click button back to the latest run. A search that hasn't been run yet always shows the live editable config, since there's no past run to freeze. This is how editing works now for a search's own owner — there's no separate edit screen. Viewers of a public search they don't own instead see a compact, read-only criteria summary bar above the results, not the full panel.
 
 Results are divided into two sections:
 
@@ -123,11 +129,13 @@ Learn mode is on by default. You can turn it off per-run with the **Learn from f
 
 ### Running a search manually
 
-In the admin panel, select a search from the sidebar. Click **Run** to trigger a search immediately without saving config changes, or **Save & Run** to save first and then run. The button shows an animated indicator while the run is in progress. When done, a summary shows how many matches and partial matches were found, and the view switches to the Results tab automatically.
+In the admin panel, select a search from the sidebar. Click **Run** to trigger a search immediately without saving config changes, or **Save & Run** to save first and then run. The button shows an animated indicator while the run is in progress. When done, a summary shows how many matches and partial matches were found, and the results panel updates automatically alongside the config panel.
 
 ### Editing a search config
 
-Select a search from the sidebar. The Edit config tab shows the fields currently set on the search. `category` is always visible and cannot be removed. All other fields are optional: present fields show an × button to remove them; hidden fields appear as chip buttons in an **Add:** row at the bottom of the form — click a chip to reveal that field. Each field that takes multiple values (material, sizes, etc.) is a comma-separated list. Preferred shops is a newline-separated list of URLs. Click **Save** to update the config without running.
+Select a search from the sidebar. The config panel sits side-by-side with results (collapsible) and shows the fields currently set on the search. `category` is always visible and cannot be removed. All other fields are optional: present fields show an × button to remove them; hidden fields appear as chip buttons in an **Add:** row at the bottom of the form — click a chip to reveal that field. Each field that takes multiple values (material, sizes, etc.) is a comma-separated list. Preferred shops is a newline-separated list of URLs. Click **Save** to update the config without running.
+
+The config panel is run-scoped, following the same date picker used to browse results. Selecting the **latest** run shows this live, editable form. Selecting an **older** run instead shows that run's config frozen exactly as it was when it executed: fields are disabled, and the Save, visibility, and delete controls are hidden. A banner reads "Read-only — showing config as of [date]" with a one-click button back to the latest run. A search that has never been run always shows the live editable form.
 
 ### Scheduled runs
 
@@ -190,7 +198,7 @@ The admin can promote any search — their own or a user's — to **public**. Pr
 - The search config is visible to everyone but not editable by visitors or other users.
 - Visitors can browse results and click through to product pages but cannot run the search, leave feedback, or modify anything.
 
-**Results of a promoted user-owned search.** Run results remain visible to everyone — scores, match/partial tags, AI explanations, candidate counts, and the config (criteria, preferred shops) are all part of the showcase. But three layers stay **owner-only** regardless of promotion, the same personal-signal categories the Copy feature already excludes: per-result **feedback text**, **pinned finds** ("Your picks"), and **reference products** ("Products like this"). Learned preference notes distilled by Learn mode (`feedback_notes`, avoided shops) are likewise owner-only, including the copies frozen inside each run's config snapshot. Non-owner viewers simply see the run without these sections. Promotion changes nothing about the owner's experience — their run window, monthly quota, and full view of their own pins/references/feedback are unaffected, and promotion requires no consent beyond the Terms of Service already in effect.
+**Results of a promoted user-owned search.** Run results remain visible to everyone — scores, match/partial tags, AI explanations, candidate counts, and the config (criteria, preferred shops) are all part of the showcase. But layers of personal signal stay **owner-only** regardless of promotion, the same categories the Copy feature already excludes: per-result **feedback text**, **pinned finds** ("Your picks"), **reference products** ("Products like this"), and the **original request** text behind the config. Learned preference notes distilled by Learn mode (`feedback_notes`, avoided shops) are likewise owner-only, including the copies frozen inside each run's config snapshot. Non-owner viewers simply see the run without these sections. Promotion changes nothing about the owner's experience — their run window, monthly quota, and full view of their own pins/references/feedback are unaffected, and promotion requires no consent beyond the Terms of Service already in effect.
 
 ### Copying a public search
 

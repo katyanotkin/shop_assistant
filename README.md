@@ -5,7 +5,7 @@ Web app that monitors online shops for products matching saved search criteria. 
 ## How it works
 
 1. **Plan** — Gemini generates 3 optimised search queries from your criteria
-2. **Search** — Gemini with Google Search grounding returns product URLs (no API key needed); URLs that are recognizably category/collection/search pages are dropped, and duplicate URLs that resolve to the same page are deduped
+2. **Search** — Gemini with Google Search grounding returns product URLs (no API key needed); URLs that are recognizably category/collection/search pages are dropped, and duplicate URLs that resolve to the same page are deduped. Matches and Partial matches from the last 2 runs are merged in too (deduped against the fresh candidates), sharing the same per-run candidate budget with priority, so a good result found recently isn't silently lost if this run's queries don't resurface it — carried-forward candidates are re-fetched and re-scored fresh against the search's current criteria, just like new candidates
 3. **Fetch** — each remaining URL is fetched and stripped to plain text
 4. **Rank** — Gemini scores each page 0–10 against your criteria; a multi-product listing page scores 0; any field listed as a deal-breaker caps the score at 3 if not satisfied
 5. **Save** — results saved to Firestore; the web UI updates automatically
@@ -59,6 +59,10 @@ MAX_CANDIDATES=40             # max URLs to evaluate per run
 
 Go to `/admin`, log in, and click **+ New search** in the sidebar. Enter a short search name (lowercase, underscores) and describe what you want in plain text — material, style, size, price ceiling, preferred shops. Click **Generate config**: Gemini produces a structured config populated only with fields mentioned or implied by the description — `category` is always present, everything else is conditional. The config appears in an editable form. Optional fields can be added using the chip buttons in the **Add:** row, or removed with the × button on each field. Material, lining, length, sizes, max price, and custom fields each have a **Deal-breaker** checkbox to mark them non-negotiable. Review the populated fields, then click **Save** or **Save & Run**.
 
+The free-text description is kept (`SearchConfig.description` in `core/models.py`), not just used once at generation time. Coming back to edit the search later shows it as a collapsed **Original request** disclosure right above the criteria fields — same rendering (`web/static/criteria-form.js`) on the admin panel and on the public/signed-in user's own search view. It's redacted for non-owner viewers of a promoted public search, same as feedback text, pinned finds, and reference products.
+
+The config panel is run-scoped: a date picker at the top switches between runs. Selecting the latest run keeps the panel live and editable; selecting an older run shows that run's config exactly as it was when it executed — read-only, fields disabled, no Save/visibility/delete buttons — with a banner and a one-click button back to the latest run. A search that hasn't been run yet always shows the live editable config.
+
 ### Create a search (signed-in users)
 
 Signed-in users on the main page (`/`) can create one private search without admin access.
@@ -68,6 +72,8 @@ After signing in, a **+ New search** button appears in the sidebar. Free-plan us
 Click **+ New search**: enter a title (free text) and describe what you want. Click **Generate**: Gemini produces a structured config identical to the admin flow; the search's Firestore ID is derived from the title. A JSON preview appears. Click **Save** to store it; a **Run** button then appears. Click **Run** to execute the search immediately.
 
 The search appears under **My searches** in the sidebar. A **Run** button also appears in the toolbar when an owned search is selected.
+
+For a search's own owner (not admin viewing it), the same run-scoped config panel described above for admin appears side-by-side with results — there's no separate edit screen or overlay. Selecting the latest run shows the live editable config; selecting an older run shows it frozen and read-only as of that run, with a button back to latest. Non-owners viewing someone else's public search instead see a compact, read-only criteria summary bar, not the full panel.
 
 Free-plan searches can be run for 30 days from the date they were created, capped at 20 runs per UTC calendar month. After 30 days the Run endpoint returns an error message ("contact us to upgrade").
 
@@ -155,6 +161,8 @@ When logged in as admin, or as the owner of the search being viewed, each result
 On the next run, if at least 1 feedback item exists across the last 10 runs, Gemini distils product-attribute preferences and any shop-level complaints into reusable signal. The **Teach this search** textarea (run-level feedback, not tied to one product) is included too, and treated as an explicit high-signal statement rather than being ignored. That signal is injected into the planning and scoring prompts for the next run, and shops with a clear pattern of complaints are filtered out automatically. You can disable this per-run with the **Learn from feedback** checkbox in the admin edit view.
 
 Leaving the exact "Perfect match" quick-phrase on a result also pins it (`pinned_finds` on the search config). Up to 3 pins are kept per search; oldest is evicted first past the cap. Pinned finds reappear in a **Your picks** section above Matches on every future run, regardless of whether that run's queries rediscover the URL, and feed the ranker's calibration alongside reference products (`example_urls`). Pinned cards don't show the feedback box. Unpin from the **Your picks** card at any time.
+
+This is separate from the automatic carry-forward described above (`core/runner.py`, `core/firestore_client.py: load_recent_matches`): pins are a manual, user-curated, permanently-frozen pick capped at 3, while carry-forward is automatic, unlimited beyond the last-2-runs window, and always re-verified fresh rather than frozen. There's no UI indicator distinguishing a carried-forward result from a freshly-discovered one — if it still qualifies, it just appears as a normal Match or Partial match (`ProductMatch.carried_over` in `core/models.py` is tracked internally but not surfaced in the UI).
 
 Reference products (`example_urls`, up to 3 per search) save immediately on add/remove — no separate Save step. Each run, the ranker fetches each reference page's text once and feeds an excerpt to the scoring model. The results view shows the current saved references as links, live-merged so a reference added after the run still shows.
 
