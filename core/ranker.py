@@ -49,7 +49,7 @@ def fetch_example_refs(urls: list[str], fetch_timeout: float = DEFAULT_FETCH_TIM
     product content, not just an opaque URL the model cannot open."""
     refs = []
     for u in urls:
-        _, text = fetch_page(u, timeout=fetch_timeout)
+        _, text, _ = fetch_page(u, timeout=fetch_timeout)
         refs.append({"url": u, "text": text[:_EXAMPLE_TEXT_CHARS]})
     return refs
 
@@ -193,16 +193,27 @@ def rank_all(
     # results in ORIGINAL candidate order — cheap (no I/O), and this ordering
     # is what makes "first candidate in the list wins a duplicate" deterministic
     # regardless of which fetch happened to finish first in stage 1.
+    #
+    # seen_final_urls also absorbs each page's declared hreflang alternates —
+    # some shops serve the identical product at several locale-prefixed paths
+    # (no redirect between them, each with a self-referencing canonical tag),
+    # so a plain final_url comparison alone lets the same product through
+    # twice under two different URLs. This only catches it when the
+    # first-encountered variant is the one declaring the alternate back to the
+    # second (hreflang is conventionally reciprocal, not universally
+    # enforced) — a best-effort improvement over the prior zero-detection
+    # state, not a guarantee for every possible markup asymmetry.
     seen_final_urls: set[str] = set()
     to_rank: list[tuple[str, str]] = []
-    for url, (final_url, text) in fetched:
+    for url, (final_url, text, alternate_urls) in fetched:
         if final_url in seen_final_urls:
             print(f"  skipped (duplicate): {url}")
             continue
-        seen_final_urls.add(final_url)
         if is_listing_url(final_url):
             print(f"  skipped (resolved to listing URL): {url}")
             continue
+        seen_final_urls.add(final_url)
+        seen_final_urls.update(alternate_urls)
         to_rank.append((final_url, text))
 
     print(f"  Ranking {len(to_rank)}/{len(candidates)} candidates")

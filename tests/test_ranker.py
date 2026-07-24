@@ -211,7 +211,7 @@ def test_fetch_example_refs_truncates_text_to_example_text_chars():
     from core.ranker import _EXAMPLE_TEXT_CHARS
 
     long_text = "x" * (_EXAMPLE_TEXT_CHARS + 500)
-    with patch("core.ranker.fetch_page", return_value=("https://example.com/ref", long_text)):
+    with patch("core.ranker.fetch_page", return_value=("https://example.com/ref", long_text, [])):
         refs = fetch_example_refs(["https://example.com/ref"])
     assert len(refs) == 1
     assert refs[0]["url"] == "https://example.com/ref"
@@ -266,7 +266,7 @@ def test_rank_all_skips_listing_url_before_fetching():
         patch("core.ranker.fetch_page") as mock_fetch,
         patch("core.ranker.genai.Client") as MockClient,
     ):
-        mock_fetch.return_value = ("https://example.com/product/waxed-coat", "some product text")
+        mock_fetch.return_value = ("https://example.com/product/waxed-coat", "some product text", [])
         MockClient.return_value = _client_returning(VALID_RESPONSE)
 
         results = rank_all(candidates, CRITERIA, project="test-project")
@@ -285,7 +285,7 @@ def test_rank_all_dedupes_candidates_resolving_to_the_same_final_url():
     with (
         patch(
             "core.ranker.fetch_page",
-            return_value=("https://shop.com/product/coat-123", "product text"),
+            return_value=("https://shop.com/product/coat-123", "product text", []),
         ) as mock_fetch,
         patch("core.ranker.genai.Client") as MockClient,
     ):
@@ -299,12 +299,71 @@ def test_rank_all_dedupes_candidates_resolving_to_the_same_final_url():
     assert client.models.generate_content.call_count == 1
 
 
+def test_rank_all_dedupes_locale_mirrors_via_hreflang_alternates():
+    """Some shops (Rydale among them) serve the same product at several
+    locale-prefixed paths with no redirect between them and a
+    self-referencing canonical tag on each — final_url alone can't catch
+    this, but the hreflang alternates each page declares can."""
+    candidates = [
+        {"link": "https://shop.com/products/coat"},
+        {"link": "https://shop.com/us/products/coat"},
+    ]
+
+    def fake_fetch_page(url, *args, **kwargs):
+        if url == "https://shop.com/products/coat":
+            return url, "product text (GB)", ["https://shop.com/us/products/coat"]
+        return url, "product text (US)", ["https://shop.com/products/coat"]
+
+    with (
+        patch("core.ranker.fetch_page", side_effect=fake_fetch_page) as mock_fetch,
+        patch("core.ranker.genai.Client") as MockClient,
+    ):
+        client = _client_returning(VALID_RESPONSE)
+        MockClient.return_value = client
+
+        results = rank_all(candidates, CRITERIA, project="test-project")
+
+    assert mock_fetch.call_count == 2  # both still fetched — dedup only decides which get ranked
+    assert len(results) == 1
+    assert results[0]["url"] == "https://shop.com/products/coat"  # first occurrence wins
+    assert client.models.generate_content.call_count == 1
+
+
+def test_rank_all_dedupes_locale_mirrors_regardless_of_which_variant_is_first():
+    """Same fixture as above with candidate order reversed — confirms
+    "first occurrence wins" holds in either direction, not just the one
+    where the GB/bare variant happens to come first."""
+    candidates = [
+        {"link": "https://shop.com/us/products/coat"},
+        {"link": "https://shop.com/products/coat"},
+    ]
+
+    def fake_fetch_page(url, *args, **kwargs):
+        if url == "https://shop.com/products/coat":
+            return url, "product text (GB)", ["https://shop.com/us/products/coat"]
+        return url, "product text (US)", ["https://shop.com/products/coat"]
+
+    with (
+        patch("core.ranker.fetch_page", side_effect=fake_fetch_page) as mock_fetch,
+        patch("core.ranker.genai.Client") as MockClient,
+    ):
+        client = _client_returning(VALID_RESPONSE)
+        MockClient.return_value = client
+
+        results = rank_all(candidates, CRITERIA, project="test-project")
+
+    assert mock_fetch.call_count == 2
+    assert len(results) == 1
+    assert results[0]["url"] == "https://shop.com/us/products/coat"  # first occurrence wins
+    assert client.models.generate_content.call_count == 1
+
+
 def test_rank_all_skips_candidate_resolving_to_listing_url():
     candidates = [{"link": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AbCdEf"}]
     with (
         patch(
             "core.ranker.fetch_page",
-            return_value=("https://shop.com/collections/coats", "listing page text"),
+            return_value=("https://shop.com/collections/coats", "listing page text", []),
         ),
         patch("core.ranker.genai.Client") as MockClient,
     ):
@@ -325,8 +384,8 @@ def test_rank_all_fetches_example_refs_once_and_includes_in_every_prompt():
 
     def fake_fetch_page(url, *args, **kwargs):
         if "reference" in url:
-            return url, "reference product text"
-        return url, "candidate product text"
+            return url, "reference product text", []
+        return url, "candidate product text", []
 
     with (
         patch("core.ranker.fetch_page", side_effect=fake_fetch_page),

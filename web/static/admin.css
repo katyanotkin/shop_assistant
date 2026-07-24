@@ -64,15 +64,17 @@
   height: 28px;
   margin: 10px 4px 4px auto;
   flex-shrink: 0;
-  background: none;
+  background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 6px;
   color: var(--text-muted);
   cursor: pointer;
-  transition: color 0.1s, border-color 0.1s, transform 0.18s ease;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, transform 0.18s ease;
 }
-.sidebar-collapse-btn:hover { color: var(--text-main); border-color: var(--text-muted); }
+.sidebar-collapse-btn:hover { color: var(--button-primary-bg); border-color: var(--button-primary-bg); background: var(--line-soft); }
+.sidebar-collapse-btn:focus-visible { outline: 2px solid var(--button-primary-bg); outline-offset: 1px; }
 .admin-sidebar--collapsed .sidebar-collapse-btn { transform: rotate(180deg); margin: 10px auto 4px; }
+.admin-sidebar--collapsed { background: var(--page-bg); }
 
 .sidebar-inner {
   padding: 8px 0 16px;
@@ -169,23 +171,31 @@
   width: 28px;
   height: 28px;
   flex-shrink: 0;
-  background: none;
+  background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 6px;
   color: var(--text-muted);
   cursor: pointer;
-  transition: color 0.1s, border-color 0.1s, transform 0.18s ease;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, transform 0.18s ease;
 }
-.panel-collapse-btn:hover { color: var(--text-main); border-color: var(--text-muted); }
+.panel-collapse-btn:hover { color: var(--button-primary-bg); border-color: var(--button-primary-bg); background: var(--line-soft); }
+.panel-collapse-btn:focus-visible { outline: 2px solid var(--button-primary-bg); outline-offset: 1px; }
 
 .admin-panels--config-collapsed #config-panel {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+  background: var(--page-bg);
   border-right: 1px solid var(--card-border);
   padding: 0;
 }
 .admin-panels--config-collapsed .config-panel-header {
+  position: static;
+  flex: 1;
+  align-items: center;
   justify-content: center;
-  padding: 8px 0 0;
+  padding: 0;
+  background: transparent;
 }
 .admin-panels--config-collapsed .panel-collapse-btn {
   transform: rotate(180deg);
@@ -230,14 +240,45 @@
   margin-bottom: 12px;
 }
 .description-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   cursor: pointer;
   font-size: 12px;
+  font-weight: 600;
   color: var(--text-muted);
   user-select: none;
+  padding: 3px 0;
 }
-.description-disclosure > summary:hover { color: var(--text-main); }
+.description-disclosure > summary::before {
+  content: "";
+  flex-shrink: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 4px 0 4px 5px;
+  border-color: transparent transparent transparent var(--text-muted);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.description-disclosure[open] > summary::before {
+  transform: rotate(90deg);
+}
+.description-disclosure > summary:hover,
+.description-disclosure[open] > summary {
+  color: var(--text-main);
+}
+.description-disclosure > summary:hover::before,
+.description-disclosure[open] > summary::before {
+  border-color: transparent transparent transparent var(--text-main);
+}
+.description-disclosure > summary:focus-visible {
+  outline: 2px solid var(--button-primary-bg);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
 .description-disclosure > .card-notes {
   margin-top: 6px;
+  margin-left: 11px;
   white-space: pre-wrap;
 }
 
