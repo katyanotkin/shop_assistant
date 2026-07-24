@@ -116,6 +116,18 @@ def run_search(search_name: str, settings: Settings, dry_run: bool = False, lear
         if before > len(candidates):
             print(f"  Filtered {before - len(candidates)} candidates from avoided shops")
 
+    existing_urls = {c.get("link", "") for c in candidates}
+
+    # Reference products ("Products like this") are used below purely as
+    # calibration text for the scoring prompt — but the user picked them
+    # because they're already known great matches, so score them fresh
+    # too and let them land in Matches/Partial like anything else. That's
+    # the most direct sanity check of whether the model's rating is
+    # trustworthy: a reference the user loves should consistently score
+    # well. Not filtered by avoid_shops — the user chose these deliberately.
+    reference_candidates = [{"link": u, "title": ""} for u in example_urls if u not in existing_urls]
+    existing_urls |= {c["link"] for c in reference_candidates}
+
     # Carry forward Matches + Partial matches from the last 2 runs so a good
     # result isn't silently lost just because this run's fresh queries don't
     # resurface it. Re-verified fresh below (fetch + score), not redisplayed
@@ -123,14 +135,15 @@ def run_search(search_name: str, settings: Settings, dry_run: bool = False, lear
     # and is given priority within it (prepended) since avoiding loss is the
     # whole point.
     carried_forward_urls: set[str] = set()
+    recent_candidates: list[dict] = []
     if not dry_run:
         recent = fc.load_recent_matches(search_name, limit=2)
         if avoid_shops:
             recent = [c for c in recent if urlparse(c.get("link", "")).netloc.removeprefix("www.") not in avoid_shops]
-        existing_urls = {c.get("link", "") for c in candidates}
-        new_recent = [c for c in recent if c.get("link", "") not in existing_urls]
-        carried_forward_urls = {c["link"] for c in new_recent}
-        candidates = (new_recent + candidates)[: settings.max_candidates]
+        recent_candidates = [c for c in recent if c.get("link", "") not in existing_urls]
+        carried_forward_urls = {c["link"] for c in recent_candidates}
+
+    candidates = (reference_candidates + recent_candidates + candidates)[: settings.max_candidates]
 
     print(f"Candidates: {len(candidates)}")
 

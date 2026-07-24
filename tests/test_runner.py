@@ -123,6 +123,83 @@ def test_pinned_finds_included_in_config_snapshot():
     assert result.config_snapshot.pinned_finds[0].url == "https://example.com/pinned"
 
 
+# --- Reference products: scored fresh every run, mixed into Matches/Partial ---
+
+
+def test_reference_product_merged_into_candidates_passed_to_ranker():
+    config = {**_FAKE_CONFIG, "example_urls": ["https://example.com/reference"]}
+    _, rank_all_mock, _ = _run(config=config, candidates=[])
+    links = [c["link"] for c in rank_all_mock.call_args.args[0]]
+    assert "https://example.com/reference" in links
+
+
+def test_reference_product_deduped_against_existing_candidate():
+    """A reference URL that's also independently discovered by search
+    shouldn't produce a duplicate candidate."""
+    config = {**_FAKE_CONFIG, "example_urls": ["https://example.com/p1"]}
+    candidates = [{"link": "https://example.com/p1", "title": "Nice Coat"}]
+    _, rank_all_mock, _ = _run(config=config, candidates=candidates)
+    links = [c["link"] for c in rank_all_mock.call_args.args[0]]
+    assert links.count("https://example.com/p1") == 1
+
+
+def test_reference_product_merged_even_in_dry_run():
+    """Unlike carried-forward (which needs real Firestore run history),
+    reference products come straight from the already-loaded config, so
+    they're scored even on a dry run."""
+    config = {**_FAKE_CONFIG, "example_urls": ["https://example.com/reference"]}
+    _, rank_all_mock, _ = _run(dry_run=True, config=config, candidates=[])
+    links = [c["link"] for c in rank_all_mock.call_args.args[0]]
+    assert "https://example.com/reference" in links
+
+
+def test_reference_product_that_scores_well_appears_in_matches():
+    config = {**_FAKE_CONFIG, "example_urls": ["https://example.com/reference"]}
+    ranked = [
+        {
+            "url": "https://example.com/reference",
+            "title": "Reference Coat",
+            "score": 9.0,
+            "matched": [],
+            "unmatched": [],
+            "notes": "",
+        }
+    ]
+    result, _, _ = _run(config=config, candidates=[], ranked=ranked)
+    assert len(result.matches) == 1
+    assert result.matches[0].url == "https://example.com/reference"
+
+
+def test_reference_products_prioritized_within_shared_candidate_cap():
+    """Reference products must not be crowded out by new discovery when the
+    combined list exceeds max_candidates."""
+    config = {**_FAKE_CONFIG, "example_urls": ["https://example.com/reference"]}
+    candidates = [{"link": "https://example.com/new"}]
+    _, rank_all_mock, _ = _run(config=config, candidates=candidates, ranked=[], max_candidates=1)
+    links = [c["link"] for c in rank_all_mock.call_args.args[0]]
+    assert links == ["https://example.com/reference"]
+
+
+def test_three_way_priority_reference_then_carried_forward_then_fresh():
+    """The highest-risk combination: reference products, carried-forward
+    matches, and fresh discovery all present at once, with a cap too small
+    for all three — confirms the full intended priority order (reference >
+    carried-forward > fresh) rather than just each pair in isolation."""
+    config = {**_FAKE_CONFIG, "example_urls": ["https://example.com/reference"]}
+    candidates = [{"link": "https://example.com/fresh"}]
+    recent_matches = [{"link": "https://example.com/carried", "title": "Old Good Match"}]
+    _, rank_all_mock, _ = _run(
+        dry_run=False,
+        config=config,
+        candidates=candidates,
+        recent_matches=recent_matches,
+        ranked=[],
+        max_candidates=2,
+    )
+    links = [c["link"] for c in rank_all_mock.call_args.args[0]]
+    assert links == ["https://example.com/reference", "https://example.com/carried"]
+
+
 # --- Carry-forward: last-2-runs' Matches + Partial matches, re-verified fresh ---
 
 
