@@ -204,7 +204,7 @@
     const preferredShops = (!preferredShopsRow || preferredShopsRow.hidden)
       ? []
       : (preferredShopsRow.querySelector('[name="preferred_shops"]')?.value || "")
-          .split(/[\n,]/).map(s => s.trim()).filter(Boolean);
+          .split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
 
     return {
       search_name: name,
