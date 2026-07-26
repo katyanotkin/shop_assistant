@@ -181,24 +181,68 @@
 .panel-collapse-btn:hover { color: var(--button-primary-bg); border-color: var(--button-primary-bg); background: var(--line-soft); }
 .panel-collapse-btn:focus-visible { outline: 2px solid var(--button-primary-bg); outline-offset: 1px; }
 
+.panel-collapse-label {
+  display: none;
+}
+
+/* Collapsed config: the whole 36px column becomes one full-height clickable
+   "expand" tab, not just a small icon floating in a bare strip — the icon
+   alone reads as a stray border decoration, easy to miss and unclear that
+   it's interactive. Reusing --card-bg (not --page-bg) makes the tab read as
+   a distinct panel rather than blending into the page background. */
 .admin-panels--config-collapsed #config-panel {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--page-bg);
+  background: var(--card-bg);
   border-right: 1px solid var(--card-border);
   padding: 0;
+  /* min-height/max-height alone (from .admin-panel--config) don't give this
+     grid item a definite height, so the button's height:100% below falls
+     back to intrinsic content size instead of filling the column — an
+     explicit height fixes that. */
+  height: calc(100vh - var(--topbar-h));
 }
 .admin-panels--config-collapsed .config-panel-header {
   position: static;
   flex: 1;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
   padding: 0;
   background: transparent;
 }
 .admin-panels--config-collapsed .panel-collapse-btn {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+.admin-panels--config-collapsed .panel-collapse-btn:hover,
+.admin-panels--config-collapsed .panel-collapse-btn:focus-visible {
+  background: var(--line-soft);
+  color: var(--button-primary-bg);
+}
+.admin-panels--config-collapsed .panel-collapse-btn:focus-visible {
+  outline: 2px solid var(--button-primary-bg);
+  outline-offset: -2px;
+}
+.admin-panels--config-collapsed .panel-collapse-btn svg {
+  transform: rotate(180deg) scale(1.3);
+  flex-shrink: 0;
+}
+.admin-panels--config-collapsed .panel-collapse-label {
+  display: block;
+  writing-mode: vertical-rl;
   transform: rotate(180deg);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
 }
 .admin-panels--config-collapsed #config-content {
   display: none;
