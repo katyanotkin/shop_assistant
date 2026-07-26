@@ -100,9 +100,14 @@ def _grounded_search(query: str, client: genai.Client) -> list[dict]:
             config=types.GenerateContentConfig(tools=[types.Tool(google_search=types.GoogleSearch())]),
         )
         meta = response.candidates[0].grounding_metadata
+        if meta is None:
+            return results
 
-        # Primary: chunks Gemini explicitly cited
-        for chunk in meta.grounding_chunks:
+        # Primary: chunks Gemini explicitly cited. grounding_chunks is None
+        # (not an empty list) when Gemini found nothing worth citing — common
+        # for narrow site:-scoped queries — and iterating None used to crash
+        # the whole query as an exception, skipping the fallback below too.
+        for chunk in meta.grounding_chunks or []:
             if chunk.web and chunk.web.uri:
                 url = chunk.web.uri
                 if url not in seen:

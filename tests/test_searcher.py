@@ -102,6 +102,26 @@ def test_grounded_search_returns_empty_when_chunks_raise():
     assert result == []
 
 
+def test_grounded_search_falls_back_to_rendered_content_when_chunks_none():
+    """Regression: grounding_chunks comes back as None (not []) whenever Gemini
+    finds nothing worth explicitly citing — common for narrow site:-scoped
+    preferred-shop queries. `for chunk in None` used to raise TypeError,
+    caught by the outer except, which meant the secondary rendered-HTML
+    fallback below it never even ran — silently zeroing out that shop's
+    results even when the rendered search page had real links."""
+    response = MagicMock()
+    response.candidates[0].grounding_metadata.grounding_chunks = None
+    response.candidates[
+        0
+    ].grounding_metadata.search_entry_point.rendered_content = '<a href="https://dillards.com/product/dress">Dress</a>'
+
+    client = MagicMock()
+    client.models.generate_content.return_value = response
+
+    result = _grounded_search("site:dillards.com dresses", client)
+    assert result == [{"link": "https://dillards.com/product/dress", "title": "Dress"}]
+
+
 # --- search_products ---
 
 
