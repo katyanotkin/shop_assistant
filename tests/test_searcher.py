@@ -196,6 +196,21 @@ def test_search_shop_gender_set_includes_gender_in_query():
     assert "women" in contents
 
 
+def test_search_shop_bare_domain_no_scheme_still_scopes_query():
+    """A shop entered without http(s):// (e.g. "nordstrom.com") must still produce
+    a site:-scoped query — urlparse() puts a schemeless string entirely in .path,
+    not .netloc, so this previously silently produced an unscoped site: query."""
+    from core.searcher import _search_shop
+
+    criteria = SearchCriteria(category=["dress"])
+    client = MagicMock()
+    _search_shop("nordstrom.com", criteria, client)
+
+    call_args = client.models.generate_content.call_args
+    contents = call_args[1]["contents"] if "contents" in call_args[1] else call_args[0][1]
+    assert "site:nordstrom.com" in contents
+
+
 # --- _plan_queries: exclude_defaults removes empty clothing fields ---
 
 

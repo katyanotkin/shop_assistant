@@ -70,6 +70,8 @@ def _plan_queries(criteria: models.SearchCriteria, client: genai.Client, feedbac
 
 def _search_shop(shop_url: str, criteria: models.SearchCriteria, client: genai.Client) -> list[dict]:
     """Grounded search scoped to one preferred shop."""
+    if "//" not in shop_url:
+        shop_url = f"//{shop_url}"
     domain = urlparse(shop_url).netloc.removeprefix("www.")
     cats = " OR ".join(criteria.category)
     parts = [f"({cats})"]
