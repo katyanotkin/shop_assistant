@@ -92,6 +92,42 @@ def test_get_searches_shows_private_to_admin(client):
     assert "secret_search" in names
 
 
+def test_get_searches_public_active_search_visible_to_anonymous_and_other_user(client):
+    """Regression pin for the tshirt_bra report: a search saved with
+    visibility='public' and active=True must show up in GET /api/searches
+    both for anonymous callers and for a *different* logged-in (non-owner)
+    user — with visibility='public' and owned=False for that non-owner."""
+    c, fc = client
+    fc.list_searches.return_value = [
+        {
+            "search_name": "tshirt_bra",
+            "title": "T-Shirt Bra",
+            "active": True,
+            "visibility": "public",
+            "owner_id": "kate.middlesex@gmail.com",
+        },
+    ]
+
+    # Anonymous caller.
+    r_anon = c.get("/api/searches")
+    assert r_anon.status_code == 200
+    anon_entries = {e["name"]: e for e in r_anon.json()}
+    assert "tshirt_bra" in anon_entries
+    assert anon_entries["tshirt_bra"]["active"] is True
+    assert anon_entries["tshirt_bra"]["visibility"] == "public"
+    assert anon_entries["tshirt_bra"]["owned"] is False
+
+    # A different logged-in (non-owner) user.
+    with patch.object(main_module._settings, "session_secret", "test-secret"):
+        r_other = c.get("/api/searches", cookies=_session_cookie("someone.else@example.com"))
+    assert r_other.status_code == 200
+    other_entries = {e["name"]: e for e in r_other.json()}
+    assert "tshirt_bra" in other_entries
+    assert other_entries["tshirt_bra"]["active"] is True
+    assert other_entries["tshirt_bra"]["visibility"] == "public"
+    assert other_entries["tshirt_bra"]["owned"] is False
+
+
 # ── GET /api/results/{search_name} ───────────────────────────────────────────
 
 
