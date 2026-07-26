@@ -683,3 +683,56 @@ class TestEditPanelBreadcrumbAndInPlaceSave:
             expect(page.locator("#create-panel")).to_be_hidden()
         finally:
             context.close()
+
+
+# ---------------------------------------------------------------------------
+# 7. Preferred-shops textarea: mixed delimiters must each become a separate
+# shop, not collapse into one bogus entry (regression for 9a29d7a / a2df5a3 —
+# a comma- or semicolon-joined single line silently produced an unscoped
+# site: search with no error, because urlparse() puts a delimiter-joined
+# string entirely in .path/.netloc rather than raising).
+# ---------------------------------------------------------------------------
+
+
+class TestPreferredShopsDelimiterSplit:
+    """Typing shops separated by newline, comma, semicolon, or whitespace in
+    the edit panel's Preferred shops textarea must save as separate entries."""
+
+    def test_mixed_delimiters_saved_as_separate_shops(self, browser, synthetic_user, redaction_search):
+        user = synthetic_user(redaction_search["owner_email"], role="free", display_name="QATP Shops Delimiter Owner")
+        context = _new_context(browser, user["cookie"])
+        page = context.new_page()
+        try:
+            page.goto(f"/{redaction_search['search_name']}")
+            page.wait_for_selector("#results-panel .card", timeout=20000)
+
+            # The owner's own search shows the live/editable config panel
+            # side-by-side with results automatically (no separate edit-panel
+            # navigation — see app.js's run-scoped config panel).
+            expect(page.locator("#config-panel")).to_be_visible(timeout=15000)
+
+            # preferred_shops starts as [] on this fixture, so the field is
+            # hidden until added via the "Add" chip.
+            page.locator('.btn-add-field[data-field="preferred_shops"]').click()
+            shops_field = page.locator('textarea[name="preferred_shops"]')
+            expect(shops_field).to_be_visible()
+            shops_field.fill("nordstrom.com, tjmaxx.com; dillards.com\nbananarepublic.com bloomingdales.com")
+
+            with page.expect_response(
+                lambda r: "/api/user/search/" in r.url and r.request.method == "PUT",
+                timeout=15000,
+            ):
+                page.locator("#edit-save-btn").click()
+
+            expect(page.locator("#results-panel")).to_be_visible(timeout=15000)
+
+            saved = fc.load_search_config(redaction_search["search_name"])
+            assert saved["preferred_shops"] == [
+                "nordstrom.com",
+                "tjmaxx.com",
+                "dillards.com",
+                "bananarepublic.com",
+                "bloomingdales.com",
+            ], f"delimiters were not all split into separate shops: {saved['preferred_shops']!r}"
+        finally:
+            context.close()
