@@ -468,6 +468,119 @@ def test_run_admin_no_monthly_check_and_no_increment(client):
     mock_fc.increment_user_run_count.assert_not_called()
 
 
+# ── 4b. Blocked same-day re-run when nothing changed ─────────────────────────
+
+_RUN_CRITERIA = {
+    "category": ["coat"],
+    "gender": "women",
+    "material": ["wool"],
+    "lining": [],
+    "length": [],
+    "exclude": [],
+    "sizes": [],
+    "max_price": None,
+    "extra_notes": "",
+}
+
+
+def _config_with_criteria(owner: str, criteria: dict, **extra) -> dict:
+    return {
+        "search_name": "wool_coat",
+        "owner_id": owner,
+        "created_at": datetime.now(timezone.utc) - timedelta(days=5),
+        "criteria": criteria,
+        "preferred_shops": [],
+        "example_urls": [],
+        "pinned_finds": [],
+        **extra,
+    }
+
+
+def _todays_run(criteria: dict, feedback: dict | None = None, **extra) -> dict:
+    from datetime import date
+
+    return {
+        "run_date": str(date.today()),
+        "feedback": feedback or {},
+        "config_snapshot": {
+            "criteria": criteria,
+            "preferred_shops": [],
+            "example_urls": [],
+            "pinned_finds": [],
+            **extra,
+        },
+    }
+
+
+def test_run_blocked_when_unchanged_since_todays_run(client):
+    c, mock_fc = client
+    mock_fc.load_search_config.return_value = _config_with_criteria(_PREMIUM_USER["email"], _RUN_CRITERIA)
+    mock_fc.load_last_run.return_value = _todays_run(_RUN_CRITERIA)
+    c.cookies.set("sa_session", _tok(_PREMIUM_USER))
+    with patch("web.main.run_search", return_value=_FakeRunResult()) as run_mock:
+        r = c.post("/api/user/search/wool_coat/run")
+    assert r.status_code == 403
+    assert "already ran this search today" in r.json()["detail"]
+    run_mock.assert_not_called()
+
+
+def test_run_allowed_when_criteria_changed_since_todays_run(client):
+    c, mock_fc = client
+    changed = {**_RUN_CRITERIA, "material": ["cotton"]}
+    mock_fc.load_search_config.return_value = _config_with_criteria(_PREMIUM_USER["email"], changed)
+    mock_fc.load_last_run.return_value = _todays_run(_RUN_CRITERIA)  # snapshot has the OLD material
+    c.cookies.set("sa_session", _tok(_PREMIUM_USER))
+    with patch("web.main.run_search", return_value=_FakeRunResult()):
+        r = c.post("/api/user/search/wool_coat/run")
+    assert r.status_code == 200
+
+
+def test_run_allowed_when_feedback_added_since_todays_run(client):
+    c, mock_fc = client
+    mock_fc.load_search_config.return_value = _config_with_criteria(_PREMIUM_USER["email"], _RUN_CRITERIA)
+    mock_fc.load_last_run.return_value = _todays_run(
+        _RUN_CRITERIA, feedback={"abc123": {"url": "https://example.com/x", "text": "too small"}}
+    )
+    c.cookies.set("sa_session", _tok(_PREMIUM_USER))
+    with patch("web.main.run_search", return_value=_FakeRunResult()):
+        r = c.post("/api/user/search/wool_coat/run")
+    assert r.status_code == 200
+
+
+def test_run_allowed_when_last_run_was_a_different_day(client):
+    c, mock_fc = client
+    mock_fc.load_search_config.return_value = _config_with_criteria(_PREMIUM_USER["email"], _RUN_CRITERIA)
+    yesterday_run = _todays_run(_RUN_CRITERIA)
+    yesterday_run["run_date"] = "2020-01-01"  # unchanged config, but not today — always allowed
+    mock_fc.load_last_run.return_value = yesterday_run
+    c.cookies.set("sa_session", _tok(_PREMIUM_USER))
+    with patch("web.main.run_search", return_value=_FakeRunResult()):
+        r = c.post("/api/user/search/wool_coat/run")
+    assert r.status_code == 200
+
+
+def test_run_allowed_when_no_prior_run_exists(client):
+    c, mock_fc = client
+    mock_fc.load_search_config.return_value = _config_with_criteria(_PREMIUM_USER["email"], _RUN_CRITERIA)
+    mock_fc.load_last_run.return_value = None
+    c.cookies.set("sa_session", _tok(_PREMIUM_USER))
+    with patch("web.main.run_search", return_value=_FakeRunResult()):
+        r = c.post("/api/user/search/wool_coat/run")
+    assert r.status_code == 200
+
+
+def test_run_admin_bypasses_unchanged_rerun_block(client):
+    """Admin running someone else's search is never the 'owner', so the
+    unchanged-rerun block (owner-only) must never apply to them."""
+    c, mock_fc = client
+    mock_fc.load_search_config.return_value = _config_with_criteria("someone_else@x.com", _RUN_CRITERIA)
+    mock_fc.load_last_run.return_value = _todays_run(_RUN_CRITERIA)
+    c.cookies.set("sa_session", _tok(_ADMIN_USER))
+    with patch("web.main.run_search", return_value=_FakeRunResult()):
+        r = c.post("/api/user/search/wool_coat/run")
+    assert r.status_code == 200
+
+
 def test_run_failed_run_search_does_not_increment_run_count(client):
     c, mock_fc = client
     mock_fc.load_search_config.return_value = {

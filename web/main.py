@@ -19,7 +19,7 @@ from core.auth import (
 )
 from core.brand import APP_MOTTO, APP_NAME
 from core.generator import generate_search_config
-from core.models import validate_example_urls
+from core.models import SearchCriteria, validate_example_urls
 from core.runner import run_search
 from core.settings import Settings
 
@@ -624,6 +624,47 @@ def _check_premium_daily_limit(user: dict) -> None:
         raise HTTPException(status_code=403, detail=PREMIUM_DAILY_LIMIT_MSG)
 
 
+def _config_unchanged_since(config: dict, snapshot: dict) -> bool:
+    """True if the user-editable parts of `config` (live) match `snapshot`
+    (the config_snapshot stored with a prior run). Criteria is normalized
+    through SearchCriteria first so sparse vs. fully-populated dicts compare
+    equal — feedback_notes/avoid_shops are deliberately excluded since those
+    can change automatically via learn_from_feedback, not by user action."""
+    criteria_now = SearchCriteria(**(config.get("criteria") or {})).model_dump()
+    criteria_then = SearchCriteria(**(snapshot.get("criteria") or {})).model_dump()
+    if criteria_now != criteria_then:
+        return False
+    for field in ("preferred_shops", "example_urls", "pinned_finds"):
+        if (config.get(field) or []) != (snapshot.get(field) or []):
+            return False
+    return True
+
+
+def _check_unchanged_rerun(name: str, config: dict, is_owner: bool) -> None:
+    """Block re-running today if nothing has changed since the last run on
+    this same UTC date — no config edit, no new feedback. A fresh run always
+    starts with feedback={} (see models.RunResult), and feedback is only ever
+    added afterward via the feedback-batch endpoint updating the stored run
+    doc directly — so a non-empty `feedback` on today's run reliably means
+    something WAS added since, which is a legitimate reason to re-run."""
+    if not is_owner:
+        return
+    last_run = fc.load_last_run(name)
+    if not last_run or last_run.get("run_date") != str(date.today()):
+        return
+    if last_run.get("feedback"):
+        return
+    if _config_unchanged_since(config, last_run.get("config_snapshot") or {}):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "You already ran this search today and nothing has changed since "
+                "(no edits, no new feedback) — running again would give the same result. "
+                "Edit your criteria/shops, leave feedback, or try again tomorrow."
+            ),
+        )
+
+
 def _session_user(sa_session: str | None) -> dict | None:
     """Decode session JWT and refresh role from Firestore so promotions take effect without re-login."""
     if not sa_session:
@@ -746,6 +787,7 @@ def user_run_search(name: str, sa_session: str | None = Cookie(default=None)):
                 else:
                     detail = "Free plan: 30-day run window has expired. Contact us to upgrade."
                 raise HTTPException(status_code=403, detail=detail)
+    _check_unchanged_rerun(name, config, is_owner)
     _check_monthly_run_limit(user)
     result = run_search(name, _settings, learn=True)
     if MONTHLY_RUN_LIMITS.get(user.get("role")):
