@@ -358,3 +358,14 @@ def save_product_feedback(text: str, owner_id: str | None, owner_name: str | Non
             "created_at": datetime.now(timezone.utc),
         }
     )
+
+
+def load_product_feedback(limit: int = 200) -> list[dict]:
+    docs = (
+        get_db()
+        .collection("product_feedback")
+        .order_by("created_at", direction=firestore.Query.DESCENDING)
+        .limit(limit)
+        .stream()
+    )
+    return [d.to_dict() for d in docs]

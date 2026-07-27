@@ -563,6 +563,11 @@ def admin_list_users():
     return fc.list_users()
 
 
+@app.get("/api/admin/site-feedback", dependencies=[Depends(_require_admin)])
+def admin_list_site_feedback():
+    return fc.load_product_feedback()
+
+
 @app.patch("/api/admin/user/{uid}/role", dependencies=[Depends(_require_admin)])
 def admin_update_user_role(uid: str, body: UpdateRoleBody):
     try:

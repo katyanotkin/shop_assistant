@@ -98,6 +98,7 @@ def client():
             mock_fc.load_search_config.return_value = None
             mock_fc.save_search_config.return_value = None
             mock_fc.list_users.return_value = []
+            mock_fc.load_product_feedback.return_value = []
             mock_fc.list_user_searches.return_value = []
             # Quota counters default to zero so gates stay open unless a test
             # overrides them.
@@ -168,6 +169,33 @@ def test_admin_endpoint_rejects_demoted_admin_with_stale_jwt(client):
     mock_fc.get_user.return_value = {"role": "free"}
     c.cookies.set("sa_session", _tok(_ADMIN_USER))
     r = c.get("/api/admin/users")
+    assert r.status_code == 401
+
+
+# ── GET /api/admin/site-feedback ─────────────────────────────────────────────
+
+
+def test_admin_list_site_feedback_requires_auth(client):
+    c, _ = client
+    r = c.get("/api/admin/site-feedback")
+    assert r.status_code == 401
+
+
+def test_admin_list_site_feedback_returns_entries_with_password_cookie(client):
+    c, mock_fc = client
+    mock_fc.load_product_feedback.return_value = [
+        {"text": "small square for feedback", "owner_name": "Kate Middlesex", "created_at": "2026-07-27T03:11:57"},
+    ]
+    c.cookies.set("sa_admin", TOKEN)
+    r = c.get("/api/admin/site-feedback")
+    assert r.status_code == 200
+    assert r.json()[0]["text"] == "small square for feedback"
+
+
+def test_admin_list_site_feedback_rejects_free_session(client):
+    c, _ = client
+    c.cookies.set("sa_session", _tok(_FREE_USER))
+    r = c.get("/api/admin/site-feedback")
     assert r.status_code == 401
 
 

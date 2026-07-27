@@ -63,3 +63,16 @@
 .privacy-content a:hover {
   text-decoration: underline;
 }
+
+/* Not .field-row: that class's grid-template-columns (120px label + 1fr +
+   auto + auto, for the admin config-form layout) would auto-place this
+   textarea — its only, label-less child — into the 120px column instead of
+   letting it span the row, rendering as a small fixed-width square instead
+   of filling the page. */
+.feedback-field {
+  margin-bottom: 12px;
+}
+.feedback-field .field-input {
+  width: 100%;
+  min-height: 140px;
+}

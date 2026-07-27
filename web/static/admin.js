@@ -453,6 +453,37 @@
     }
   }
 
+  // ── Site feedback tab ─────────────────────────────────────────────────────
+
+  function renderSiteFeedbackTable(entries) {
+    if (!entries.length) return `<p class="empty-state">No site feedback yet.</p>`;
+    return `<table class="users-table">
+      <thead><tr><th>When</th><th>From</th><th>Feedback</th></tr></thead>
+      <tbody>${entries.map(f => `<tr>
+        <td>${esc((f.created_at || "").slice(0, 16).replace("T", " "))}</td>
+        <td>${esc(f.owner_name || "Anonymous")}</td>
+        <td>${esc(f.text || "")}</td>
+      </tr>`).join("")}</tbody>
+    </table>`;
+  }
+
+  async function loadSiteFeedback() {
+    _beginNav(); // invalidate any in-flight search load
+    activeName = null;
+    latestRunDate = null;
+    currentRunDate = null;
+    dateToolbar.hidden = true;
+    searchList.querySelectorAll("li").forEach(el => el.classList.remove("active"));
+    configContent.innerHTML   = `<p class="loading">Loading site feedback…</p>`;
+    resultsPanel.innerHTML    = `<p class="empty-state">Select a search to view results.</p>`;
+    try {
+      const entries = await api("GET", "/api/admin/site-feedback");
+      configContent.innerHTML = renderSiteFeedbackTable(entries);
+    } catch (e) {
+      configContent.innerHTML = `<p class="empty-state">Failed to load site feedback: ${esc(e.message)}</p>`;
+    }
+  }
+
   async function refreshSidebar(selectName) {
     const searches = await api("GET", "/api/admin/searches");
     searchList.innerHTML = searches.map(s =>
@@ -564,6 +595,7 @@
     });
 
     document.getElementById("btn-users")?.addEventListener("click", loadUsers);
+    document.getElementById("btn-site-feedback")?.addEventListener("click", loadSiteFeedback);
 
     document.getElementById("btn-logout")?.addEventListener("click", async () => {
       try { await fetch("/auth/logout", { method: "POST", credentials: "same-origin" }); } catch {}
