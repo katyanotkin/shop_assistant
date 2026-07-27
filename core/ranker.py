@@ -118,6 +118,87 @@ proportionally if the product does not satisfy them.
 Keep matched/unmatched labels concise (2-5 words) — use plain English, not raw JSON field names.
 Return only the JSON object, no markdown, no extra text."""
 
+# Some shops block automated page fetches outright (see core/fetcher.py) —
+# rather than discard those candidates entirely (score 0, "could not fetch
+# page"), score them from the title alone when we have one, so a genuinely
+# matching product from a blocked shop can still surface as a low-confidence
+# Partial Match instead of silently vanishing. Explicitly told to be
+# conservative, and the caller hard-caps the resulting score (see
+# _TITLE_ONLY_SCORE_CAP) so this path can never produce a full Match —
+# a title alone isn't enough evidence for that.
+_TITLE_ONLY_PROMPT = """\
+You are a shopping assistant. Score how well this product's TITLE matches the search criteria.
+
+The product page itself could not be fetched (the shop blocks automated access) — only its \
+title, from a search result, is available. Score conservatively: only mark a criteria field as \
+`matched` if the title clearly and unambiguously confirms it. If the title doesn't mention a \
+field at all, treat that field as unmatched/unclear rather than assuming it's satisfied.
+
+Search criteria (JSON):
+{criteria}
+{feedback_section}{example_section}
+Product title:
+{title}
+
+Return ONLY a JSON object:
+{{
+  "title": "the product title as given",
+  "price": null,
+  "score": integer 0-10,
+  "matched": ["brief label per satisfied requirement (one per criteria FIELD, not per value)"],
+  "unmatched": ["brief label per unsatisfied requirement (one per criteria FIELD, not per value)"],
+  "notes": "one sentence explanation"
+}}
+
+Hard rules (violations → score 0):
+- Product must match at least one value in `category` — this is always enforced.
+- If `gender` is present in criteria: product must match it (or be unisex); otherwise ignore.
+
+Keep matched/unmatched labels concise (2-5 words) — use plain English, not raw JSON field names.
+Return only the JSON object, no markdown, no extra text."""
+
+_TITLE_ONLY_SCORE_CAP = 6  # below match_score_threshold — can only ever land as Partial, never Match
+
+
+def _rank_from_title_only(
+    title: str,
+    criteria: models.SearchCriteria,
+    client: genai.Client,
+    feedback_notes: str = "",
+    example_refs: list[dict] | None = None,
+) -> dict:
+    try:
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=_TITLE_ONLY_PROMPT.format(
+                criteria=criteria.model_dump_json(indent=2, exclude_defaults=True),
+                feedback_section=format_feedback_section(feedback_notes),
+                example_section=_example_section(example_refs or []),
+                title=title,
+            ),
+            config=types.GenerateContentConfig(temperature=0),
+        )
+        raw = response.text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        result = json.loads(raw)
+    except Exception as e:
+        return {
+            "title": title,
+            "price": None,
+            "score": 0,
+            "matched": [],
+            "unmatched": [],
+            "notes": f"analysis error: {e}",
+        }
+    result["price"] = None
+    result["score"] = min(float(result.get("score", 0)), _TITLE_ONLY_SCORE_CAP)
+    prefix = "Unverified — page could not be fetched, scored from title only."
+    result["notes"] = f"{prefix} {result.get('notes', '')}".strip()
+    return result
+
 
 def rank_candidate(
     url: str,
@@ -126,16 +207,19 @@ def rank_candidate(
     client: genai.Client,
     feedback_notes: str = "",
     example_refs: list[dict] | None = None,
+    title: str = "",
 ) -> dict:
     if not text:
-        return {
-            "title": "",
-            "price": None,
-            "score": 0,
-            "matched": [],
-            "unmatched": [],
-            "notes": "could not fetch page",
-        }
+        if not title:
+            return {
+                "title": "",
+                "price": None,
+                "score": 0,
+                "matched": [],
+                "unmatched": [],
+                "notes": "could not fetch page",
+            }
+        return _rank_from_title_only(title, criteria, client, feedback_notes=feedback_notes, example_refs=example_refs)
     try:
         response = client.models.generate_content(
             model=GEMINI_MODEL,
@@ -178,16 +262,18 @@ def rank_all(
     # Stage 1: drop obvious listing URLs before spending a fetch on them, then
     # fetch the rest concurrently — most of a serial run's wall-clock time was
     # spent here, each fetch paying up to fetch_page's own timeout back-to-back.
-    to_fetch = []
+    # Each candidate's title travels alongside its URL so a blocked fetch (see
+    # rank_candidate's title-only fallback) still has something to score from.
+    to_fetch: list[tuple[str, str]] = []
     for item in candidates:
         url = item.get("link", "")
         if is_listing_url(url):
             print(f"  skipped (listing URL): {url}")
             continue
-        to_fetch.append(url)
+        to_fetch.append((url, item.get("title", "")))
 
     with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
-        fetched = list(zip(to_fetch, pool.map(lambda u: fetch_page(u, timeout=fetch_timeout), to_fetch)))
+        fetched = list(zip(to_fetch, pool.map(lambda ut: fetch_page(ut[0], timeout=fetch_timeout), to_fetch)))
 
     # Stage 2: dedupe + post-fetch listing filter, sequential over the fetched
     # results in ORIGINAL candidate order — cheap (no I/O), and this ordering
@@ -204,8 +290,8 @@ def rank_all(
     # enforced) — a best-effort improvement over the prior zero-detection
     # state, not a guarantee for every possible markup asymmetry.
     seen_final_urls: set[str] = set()
-    to_rank: list[tuple[str, str]] = []
-    for url, (final_url, text, alternate_urls) in fetched:
+    to_rank: list[tuple[str, str, str]] = []
+    for (url, title), (final_url, text, alternate_urls) in fetched:
         if final_url in seen_final_urls:
             print(f"  skipped (duplicate): {url}")
             continue
@@ -214,13 +300,13 @@ def rank_all(
             continue
         seen_final_urls.add(final_url)
         seen_final_urls.update(alternate_urls)
-        to_rank.append((final_url, text))
+        to_rank.append((final_url, text, title))
 
     print(f"  Ranking {len(to_rank)}/{len(candidates)} candidates")
 
     # Stage 3: rank survivors concurrently — each is an independent Gemini call.
-    def _rank(item: tuple[str, str]) -> dict:
-        final_url, text = item
+    def _rank(item: tuple[str, str, str]) -> dict:
+        final_url, text, title = item
         ranked = rank_candidate(
             final_url,
             text,
@@ -228,6 +314,7 @@ def rank_all(
             client,
             feedback_notes=feedback_notes,
             example_refs=example_refs,
+            title=title,
         )
         ranked["url"] = final_url
         return ranked

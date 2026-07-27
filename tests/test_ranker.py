@@ -63,6 +63,50 @@ def test_rank_candidate_returns_score_zero_on_empty_text():
     client.models.generate_content.assert_not_called()
 
 
+def test_rank_candidate_falls_back_to_title_only_when_text_empty_but_title_present():
+    """A blocked fetch (see core/fetcher.py) shouldn't zero out a candidate we
+    actually have a title for — it should still get scored, just conservatively
+    and capped so it can never register as a full Match, only a Partial."""
+    title_only_response = {
+        "title": "Barbour Waxed Cotton Jacket",
+        "price": None,
+        "score": 9,
+        "matched": ["waxed cotton"],
+        "unmatched": [],
+        "notes": "Title clearly matches.",
+    }
+    client = _make_client(json.dumps(title_only_response))
+    result = rank_candidate("https://example.com", "", CRITERIA, client, title="Barbour Waxed Cotton Jacket")
+    assert result["score"] == 6  # capped below match_score_threshold despite model returning 9
+    assert result["price"] is None
+    assert "Unverified" in result["notes"]
+    assert "Title clearly matches" in result["notes"]
+    client.models.generate_content.assert_called_once()
+
+
+def test_rank_candidate_title_only_respects_low_model_score():
+    """The cap only ever lowers a score, never raises one — a poor title-only
+    match should still score below the cap, not get inflated to it."""
+    title_only_response = {
+        "title": "Some Other Product",
+        "price": None,
+        "score": 2,
+        "matched": [],
+        "unmatched": ["category"],
+        "notes": "Doesn't look related.",
+    }
+    client = _make_client(json.dumps(title_only_response))
+    result = rank_candidate("https://example.com", "", CRITERIA, client, title="Some Other Product")
+    assert result["score"] == 2
+
+
+def test_rank_candidate_title_only_handles_malformed_json():
+    client = _make_client("not valid json {{{")
+    result = rank_candidate("https://example.com", "", CRITERIA, client, title="Some Title")
+    assert result["score"] == 0
+    assert "analysis error" in result["notes"]
+
+
 def test_rank_candidate_returns_score_zero_on_malformed_json():
     client = _make_client("this is not json at all {{{")
     result = rank_candidate("https://example.com", "some page text", CRITERIA, client)
@@ -275,6 +319,35 @@ def test_rank_all_skips_listing_url_before_fetching():
     fetched_urls = [c.args[0] for c in mock_fetch.call_args_list]
     assert "https://shop.com/collections/coats" not in fetched_urls
     assert fetched_urls == ["https://example.com/product/waxed-coat"]
+
+
+def test_rank_all_scores_from_title_when_fetch_returns_empty_text():
+    """A candidate whose page couldn't be fetched (blocked shop, see
+    core/fetcher.py) must still reach the ranker via its title, not get
+    silently dropped — end-to-end through rank_all, not just rank_candidate."""
+    candidates = [{"link": "https://blocked-shop.com/product/coat", "title": "Barbour Waxed Cotton Jacket"}]
+    title_only_response = {
+        "title": "Barbour Waxed Cotton Jacket",
+        "price": None,
+        "score": 9,
+        "matched": ["waxed cotton"],
+        "unmatched": [],
+        "notes": "Title matches.",
+    }
+    with (
+        patch(
+            "core.ranker.fetch_page",
+            return_value=("https://blocked-shop.com/product/coat", "", []),
+        ),
+        patch("core.ranker.genai.Client") as MockClient,
+    ):
+        MockClient.return_value = _client_returning(title_only_response)
+
+        results = rank_all(candidates, CRITERIA, project="test-project")
+
+    assert len(results) == 1
+    assert results[0]["score"] == 6  # capped, never a full Match from title alone
+    assert "Unverified" in results[0]["notes"]
 
 
 def test_rank_all_dedupes_candidates_resolving_to_the_same_final_url():
