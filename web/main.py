@@ -204,6 +204,16 @@ def auth_callback(
     email = userinfo.get("email")
     if not email:
         return RedirectResponse(url="/?auth_error=1", status_code=302)
+    # Registration is closed: only emails with an existing users doc may sign in.
+    # Existing users still flow through upsert_user below unchanged (display name/
+    # photo refresh, bootstrap-admin promotion); brand-new emails are turned away
+    # before any doc is created. The bootstrap admin email is exempt so the
+    # designated owner can still stand up the very first admin account.
+    is_bootstrap_admin = bool(
+        _settings.bootstrap_admin_email and email.lower() == _settings.bootstrap_admin_email.lower()
+    )
+    if not is_bootstrap_admin and not fc.get_user(email):
+        return RedirectResponse(url="/?blocked=registration_closed", status_code=302)
     user = fc.upsert_user(
         email=email,
         display_name=userinfo.get("name", ""),
@@ -383,22 +393,10 @@ def get_run(
     # reference added after this run was saved must still show in the results
     # view. Sanitized so legacy pre-validation records can't reach the UI raw.
     run["example_urls"] = validate_example_urls((live_config or {}).get("example_urls") or [])
-    if not _is_owner_or_admin(search_name, sa_admin, sa_session):
-        # Personal-signal layers are owner-only even on public searches — the
-        # same categories the clone endpoint refuses to copy: feedback, pinned
-        # finds, reference products, and learn-mode distillations. The frozen
-        # config_snapshot carries its own copies, so redact those too.
-        run = {**run, "feedback": {}, "pinned_finds": [], "example_urls": []}
-        snapshot = run.get("config_snapshot")
-        if isinstance(snapshot, dict):
-            run["config_snapshot"] = {
-                **snapshot,
-                "description": None,
-                "feedback_notes": None,
-                "avoid_shops": [],
-                "example_urls": [],
-                "pinned_finds": [],
-            }
+    # Public searches are fully transparent: feedback, pinned finds, reference
+    # products, and notes are visible to any viewer, not just the owner/admin.
+    # Private searches still only reach the owner/admin at all (_can_view_search
+    # above 404s everyone else before this point).
     return run
 
 
@@ -568,10 +566,10 @@ def admin_list_site_feedback():
     return fc.load_product_feedback()
 
 
-@app.patch("/api/admin/user/{uid}/role", dependencies=[Depends(_require_admin)])
-def admin_update_user_role(uid: str, body: UpdateRoleBody):
+@app.patch("/api/admin/user/{email}/role", dependencies=[Depends(_require_admin)])
+def admin_update_user_role(email: str, body: UpdateRoleBody):
     try:
-        fc.update_user_role(uid, body.role)
+        fc.update_user_role(email, body.role)
     except ValueError:
         raise HTTPException(status_code=404, detail="User not found")
     return {"ok": True}

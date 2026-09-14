@@ -758,6 +758,7 @@
   const BLOCKED_LOGIN_MESSAGES = {
     admin_active: "You're signed in as admin. Log out of admin first, then sign in as a user.",
     user_active: "You're signed in as a user. Sign out first, then sign in as admin.",
+    registration_closed: "Registration is closed. If you're interested in collaborating on this project, leave feedback using the Site feedback link.",
   };
 
   function checkBlockedLoginMessage() {

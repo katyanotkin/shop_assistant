@@ -167,11 +167,13 @@ def list_users() -> list[dict]:
     return [d.to_dict() | {"uid": d.id} for d in docs]
 
 
-def update_user_role(uid: str, role: str) -> None:
+def update_user_role(email: str, role: str) -> None:
+    from core.auth import user_doc_id
+
     try:
-        get_db().collection("users").document(uid).update({"role": role})
+        get_db().collection("users").document(user_doc_id(email)).update({"role": role})
     except NotFound:
-        raise ValueError(f"User {uid} not found")
+        raise ValueError(f"User {email} not found")
 
 
 def list_user_searches(owner_id: str) -> list[dict]:

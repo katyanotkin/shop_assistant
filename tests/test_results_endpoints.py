@@ -243,7 +243,9 @@ def test_get_run_pinned_finds_empty_when_no_live_config(client):
     assert r.json()["pinned_finds"] == []
 
 
-def test_get_run_redacts_feedback_from_anonymous_caller(client):
+def test_get_run_shows_feedback_to_anonymous_caller(client):
+    """Public searches are fully transparent — feedback is visible to any
+    viewer, not just the owner/admin."""
     c, fc = client
     fc.load_run.return_value = {
         "search_name": "wax_coat",
@@ -254,7 +256,7 @@ def test_get_run_redacts_feedback_from_anonymous_caller(client):
     }
     r = c.get("/api/results/wax_coat/2026-06-21")
     assert r.status_code == 200
-    assert r.json()["feedback"] == {}
+    assert r.json()["feedback"] == {"https://example.com/a": "great fit"}
 
 
 def test_get_run_shows_feedback_to_admin(client):
@@ -291,7 +293,9 @@ def test_get_run_shows_feedback_to_owner(client):
     assert r.json()["feedback"] == {"https://example.com/a": "great fit"}
 
 
-def test_get_run_redacts_feedback_from_non_owner_session(client):
+def test_get_run_shows_feedback_to_non_owner_session(client):
+    """Public searches are fully transparent — feedback is visible to any
+    logged-in viewer, not just the owner/admin."""
     from core.auth import create_session_token
 
     c, fc = client
@@ -306,7 +310,7 @@ def test_get_run_redacts_feedback_from_non_owner_session(client):
     with patch.object(main_module._settings, "session_secret", "test-secret"):
         token = create_session_token({"email": "other@x.com", "role": "free"}, "test-secret")
         r = c.get("/api/results/wax_coat/2026-06-21", cookies={"sa_session": token})
-    assert r.json()["feedback"] == {}
+    assert r.json()["feedback"] == {"https://example.com/a": "great fit"}
 
 
 def test_get_run_returns_live_example_urls_sanitized(client):
@@ -334,10 +338,10 @@ def test_get_run_returns_live_example_urls_sanitized(client):
     assert r.json()["example_urls"] == ["https://ok.example/x"]
 
 
-def test_get_run_redacts_personal_layers_from_non_owner_on_public_search(client):
-    """Public showcase keeps scores/criteria visible, but personal signal —
-    pinned finds, reference products, learn-mode notes (incl. the frozen
-    config_snapshot copies) — is owner/admin-only."""
+def test_get_run_shows_personal_layers_to_non_owner_on_public_search(client):
+    """Public searches are fully transparent — personal signal (pinned finds,
+    reference products, learn-mode notes, incl. the frozen config_snapshot
+    copies) is visible to any viewer, not just the owner/admin."""
     c, fc = client
     fc.load_run.return_value = {
         "search_name": "wax_coat",
@@ -363,15 +367,15 @@ def test_get_run_redacts_personal_layers_from_non_owner_on_public_search(client)
     r = c.get("/api/results/wax_coat/2026-06-21")
     assert r.status_code == 200
     data = r.json()
-    assert data["pinned_finds"] == []
-    assert data["example_urls"] == []
+    assert data["pinned_finds"] == [{"url": "https://pin.example/coat"}]
+    assert data["example_urls"] == ["https://ref.example/coat"]
     snap = data["config_snapshot"]
-    assert snap["criteria"] == {"category": ["coat"]}  # objective spec stays public
-    assert snap["description"] is None
-    assert snap["feedback_notes"] is None
-    assert snap["avoid_shops"] == []
-    assert snap["example_urls"] == []
-    assert snap["pinned_finds"] == []
+    assert snap["criteria"] == {"category": ["coat"]}
+    assert snap["description"] == "women's waxed cotton coat, midi length"
+    assert snap["feedback_notes"] == "prefers unlined"
+    assert snap["avoid_shops"] == ["bad.example"]
+    assert snap["example_urls"] == ["https://ref.example/coat"]
+    assert snap["pinned_finds"] == [{"url": "https://pin.example/coat"}]
 
 
 def test_get_run_example_urls_empty_when_no_live_config(client):

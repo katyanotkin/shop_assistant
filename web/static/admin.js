@@ -411,7 +411,7 @@
         <td>${esc(u.display_name || "")}</td>
         <td>${esc(u.email || "")}</td>
         <td>
-          <select class="role-select" data-uid="${esc(u.uid)}">
+          <select class="role-select" data-email="${esc(u.email)}">
             ${["free", "premium", "admin"].map(r => `<option value="${r}" ${u.role === r ? "selected" : ""}>${r}</option>`).join("")}
           </select>
           <span class="role-saved-msg save-msg"></span>
@@ -434,13 +434,13 @@
       configContent.innerHTML = renderUsersTable(users);
       configContent.querySelectorAll(".role-select").forEach(select => {
         select.addEventListener("change", async () => {
-          const uid   = select.dataset.uid;
+          const email = select.dataset.email;
           const role  = select.value;
           const msgEl = select.parentElement.querySelector(".role-saved-msg");
           select.disabled = true;
           if (msgEl) { msgEl.textContent = "Saving…"; msgEl.className = "role-saved-msg save-msg"; }
           try {
-            await api("PATCH", `/api/admin/user/${encodeURIComponent(uid)}/role`, { role });
+            await api("PATCH", `/api/admin/user/${encodeURIComponent(email)}/role`, { role });
             if (msgEl) { msgEl.textContent = "Saved"; msgEl.className = "role-saved-msg save-msg ok"; setTimeout(() => { msgEl.textContent = ""; }, 2500); }
           } catch (e) {
             if (msgEl) { msgEl.textContent = e.message; msgEl.className = "role-saved-msg save-msg err"; }

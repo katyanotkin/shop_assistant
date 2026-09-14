@@ -72,7 +72,7 @@ from playwright.sync_api import expect, sync_playwright
 
 import core.firestore_client as fc
 import web.main as web_main
-from core.auth import create_session_token, user_doc_id
+from core.auth import create_session_token
 
 QATP_BROWSER = os.environ.get("QATP_BROWSER") == "1"
 BASE_URL = os.environ.get("QATP_BASE_URL", "http://localhost:8000").rstrip("/")
@@ -143,7 +143,7 @@ def synthetic_user(request):
         fc.upsert_user(email=email, display_name=display_name, photo_url="")
         request.addfinalizer(lambda: fc.delete_user(email))
         if role != "free":
-            fc.update_user_role(user_doc_id(email), role)
+            fc.update_user_role(email, role)
         token = create_session_token(
             {"email": email, "display_name": display_name, "photo_url": "", "role": role},
             web_main._settings.session_secret,

@@ -29,7 +29,7 @@ You will see a two-field form:
 
 Click **Generate config**. The AI reads your description and produces a structured configuration populated only with fields mentioned or implied by your text — `category` is always present; every other field (gender, material, lining, etc.) is included only if the description calls for it. The generated config appears in an editable form. Optional fields can be added with the chip buttons in the **Add:** row, or removed with the × button on each field. Review the populated fields — the AI will get most things right but you may want to add, remove, or adjust values.
 
-Your original description isn't discarded once the config is generated. A collapsed **Original request** disclosure sits right above the criteria fields whenever you come back to edit this search — in the admin panel and in your own search view on the main page alike. Click it to re-read exactly what you typed. It's collapsed by default so it doesn't clutter the form. On a promoted public search, it's visible only to the owner and admin, the same as feedback text, pinned finds, and reference products.
+Your original description isn't discarded once the config is generated. A collapsed **Original request** disclosure sits right above the criteria fields whenever you come back to edit this search — in the admin panel and in your own search view on the main page alike. Click it to re-read exactly what you typed. It's collapsed by default so it doesn't clutter the form. On a promoted public search, it's visible to anyone viewing the results, the same as feedback text, pinned finds, and reference products.
 
 When you are satisfied, click **Save** to store the config, or **Save & Run** to store it and immediately run the first search.
 
@@ -153,7 +153,7 @@ Every account has one of three roles:
 
 | Role | How you get it |
 |---|---|
-| **Free** | Default on first sign-in via Google |
+| **Free** | Default role for an existing account. New-user registration is currently closed — sign-in only works for emails that already have an account (or the bootstrap admin); a new email is turned away rather than getting a Free account created |
 | **Premium** | Admin grants it manually (whether you paid or were comped is decided outside the product) |
 | **Admin** | Bootstrapped; additional admins promoted manually |
 
@@ -179,7 +179,7 @@ Deleting is admin-only across the board — Free and Premium users can edit thei
 
 ### User accounts and private searches
 
-Users sign in with Google. Each user's searches and results are private — only visible to that user and to the admin. This is enforced at the API level: a private search's config, run list, and run data all 404 for anyone else, indistinguishable from a search that doesn't exist.
+Users sign in with Google. New-user registration is currently closed: only emails that already have an account (plus the bootstrap admin) can sign in — a brand-new email is redirected with a message pointing to the Site feedback page instead of getting an account created. Existing users sign in exactly as before. Each user's searches and results are private — only visible to that user and to the admin. This is enforced at the API level: a private search's config, run list, and run data all 404 for anyone else, indistinguishable from a search that doesn't exist.
 
 **Free tier** gives users 1 private search. They can create it, configure it, edit it, and run it for up to one month from the date the search was created. After one month, runs are disabled; the search and its results remain readable, and it can still be edited. Promotion to public does not change or reset the run window — the same 1-month clock applies regardless. Runs are also capped at 20 per UTC calendar month; hitting the cap shows: *"You've used all 20 runs for this month. Runs reset on the 1st."*
 
@@ -198,7 +198,7 @@ The admin can promote any search — their own or a user's — to **public**. Pr
 - The search config is visible to everyone but not editable by visitors or other users.
 - Visitors can browse results and click through to product pages but cannot run the search, leave feedback, or modify anything.
 
-**Results of a promoted user-owned search.** Run results remain visible to everyone — scores, match/partial tags, AI explanations, candidate counts, and the config (criteria, preferred shops) are all part of the showcase. But layers of personal signal stay **owner-only** regardless of promotion, the same categories the Copy feature already excludes: per-result **feedback text**, **pinned finds** ("Your picks"), **reference products** ("Products like this"), and the **original request** text behind the config. Learned preference notes distilled by Learn mode (`feedback_notes`, avoided shops) are likewise owner-only, including the copies frozen inside each run's config snapshot. Non-owner viewers simply see the run without these sections. Promotion changes nothing about the owner's experience — their run window, monthly quota, and full view of their own pins/references/feedback are unaffected, and promotion requires no consent beyond the Terms of Service already in effect.
+**Results of a promoted user-owned search.** Once a search is promoted, everything about its runs is visible to everyone, not just the owner and admin — scores, match/partial tags, AI explanations, candidate counts, the config (criteria, preferred shops), and now also the personal-signal layers too: per-result **feedback text**, **pinned finds** ("Your picks"), **reference products** ("Products like this"), and the **original request** text behind the config. Learned preference notes distilled by Learn mode (`feedback_notes`, avoided shops) are also visible, including the copies frozen inside each run's config snapshot. Promotion changes nothing about the owner's experience — their run window, monthly quota, and their own view are unaffected — but it does mean anyone with the URL, including anonymous visitors, can read the owner's feedback notes and picks once a search is public. Promotion requires no consent beyond the Terms of Service already in effect. Private searches are unaffected by any of this — they remain visible only to their owner and admin.
 
 ### Copying a public search
 

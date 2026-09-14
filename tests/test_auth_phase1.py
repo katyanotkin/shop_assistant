@@ -196,6 +196,60 @@ def test_auth_callback_sets_session_cookie_on_success(client):
     assert "sa_session" in r.cookies
 
 
+def test_auth_callback_blocks_new_email_when_registration_closed(client):
+    """Registration is closed: an email with no existing users doc is turned
+    away before any doc is created, and gets no session cookie."""
+    client.cookies.set("sa_oauth_state", "mystate")
+    with patch("web.main.exchange_code", return_value={"access_token": "tok"}):
+        with patch(
+            "web.main.fetch_userinfo",
+            return_value={"email": "brand-new@example.com", "name": "New", "picture": ""},
+        ):
+            with patch("web.main.fc") as fc:
+                fc.get_user.return_value = None
+                r = client.get("/auth/callback?code=mycode&state=mystate")
+    assert r.status_code in (302, 307)
+    assert r.headers["location"] == "/?blocked=registration_closed"
+    assert "sa_session" not in r.cookies
+    fc.upsert_user.assert_not_called()
+
+
+def test_auth_callback_allows_existing_email_when_registration_closed(client):
+    """An email with an existing users doc still signs in normally."""
+    client.cookies.set("sa_oauth_state", "mystate")
+    with patch("web.main.exchange_code", return_value={"access_token": "tok"}):
+        with patch(
+            "web.main.fetch_userinfo",
+            return_value={"email": "user@example.com", "name": "Test", "picture": ""},
+        ):
+            with patch("web.main.fc") as fc:
+                fc.get_user.return_value = FREE_USER
+                fc.upsert_user.return_value = FREE_USER
+                r = client.get("/auth/callback?code=mycode&state=mystate")
+    assert r.status_code in (302, 307)
+    assert r.headers["location"] == "/"
+    assert "sa_session" in r.cookies
+
+
+def test_auth_callback_bootstrap_admin_exempt_from_closed_registration(client):
+    """The bootstrap admin email can still stand up the first admin account
+    even though it has no users doc yet."""
+    client.cookies.set("sa_oauth_state", "mystate")
+    with patch.object(main_module._settings, "bootstrap_admin_email", "owner@example.com"):
+        with patch("web.main.exchange_code", return_value={"access_token": "tok"}):
+            with patch(
+                "web.main.fetch_userinfo",
+                return_value={"email": "owner@example.com", "name": "Owner", "picture": ""},
+            ):
+                with patch("web.main.fc") as fc:
+                    fc.get_user.return_value = None
+                    fc.upsert_user.return_value = {**FREE_USER, "email": "owner@example.com", "role": "admin"}
+                    r = client.get("/auth/callback?code=mycode&state=mystate")
+    assert r.status_code in (302, 307)
+    assert r.headers["location"] == "/"
+    assert "sa_session" in r.cookies
+
+
 # ── DELETE /api/me ────────────────────────────────────────────────────────────
 
 

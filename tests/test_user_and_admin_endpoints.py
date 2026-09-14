@@ -199,29 +199,29 @@ def test_admin_list_site_feedback_rejects_free_session(client):
     assert r.status_code == 401
 
 
-# ── PATCH /api/admin/user/{uid}/role ─────────────────────────────────────────
+# ── PATCH /api/admin/user/{email}/role ───────────────────────────────────────
 
 
 def test_admin_update_role_requires_auth(client):
     c, _ = client
-    r = c.patch("/api/admin/user/abc123/role", json={"role": "premium"})
+    r = c.patch("/api/admin/user/user@x.com/role", json={"role": "premium"})
     assert r.status_code == 401
 
 
 def test_admin_update_role_success(client):
     c, mock_fc = client
     c.cookies.set("sa_admin", TOKEN)
-    r = c.patch("/api/admin/user/abc123/role", json={"role": "premium"})
+    r = c.patch("/api/admin/user/user@x.com/role", json={"role": "premium"})
     assert r.status_code == 200
     assert r.json() == {"ok": True}
-    mock_fc.update_user_role.assert_called_once_with("abc123", "premium")
+    mock_fc.update_user_role.assert_called_once_with("user@x.com", "premium")
 
 
-def test_admin_update_role_404_when_uid_not_found(client):
+def test_admin_update_role_404_when_email_not_found(client):
     c, mock_fc = client
     mock_fc.update_user_role.side_effect = ValueError("User not found")
     c.cookies.set("sa_admin", TOKEN)
-    r = c.patch("/api/admin/user/nonexistent/role", json={"role": "premium"})
+    r = c.patch("/api/admin/user/nonexistent@x.com/role", json={"role": "premium"})
     assert r.status_code == 404
     assert "not found" in r.json()["detail"].lower()
 
@@ -229,7 +229,7 @@ def test_admin_update_role_404_when_uid_not_found(client):
 def test_admin_update_role_rejects_invalid_role_value(client):
     c, _ = client
     c.cookies.set("sa_admin", TOKEN)
-    r = c.patch("/api/admin/user/abc123/role", json={"role": "superuser"})
+    r = c.patch("/api/admin/user/user@x.com/role", json={"role": "superuser"})
     assert r.status_code == 422
 
 

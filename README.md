@@ -59,7 +59,7 @@ MAX_CANDIDATES=40             # max URLs to evaluate per run
 
 Go to `/admin`, log in, and click **+ New search** in the sidebar. Enter a short search name (lowercase, underscores) and describe what you want in plain text — material, style, size, price ceiling, preferred shops. Click **Generate config**: Gemini produces a structured config populated only with fields mentioned or implied by the description — `category` is always present, everything else is conditional. The config appears in an editable form. Optional fields can be added using the chip buttons in the **Add:** row, or removed with the × button on each field. Material, lining, length, sizes, max price, and custom fields each have a **Deal-breaker** checkbox to mark them non-negotiable. Review the populated fields, then click **Save** or **Save & Run**.
 
-The free-text description is kept (`SearchConfig.description` in `core/models.py`), not just used once at generation time. Coming back to edit the search later shows it as a collapsed **Original request** disclosure right above the criteria fields — same rendering (`web/static/criteria-form.js`) on the admin panel and on the public/signed-in user's own search view. It's redacted for non-owner viewers of a promoted public search, same as feedback text, pinned finds, and reference products.
+The free-text description is kept (`SearchConfig.description` in `core/models.py`), not just used once at generation time. Coming back to edit the search later shows it as a collapsed **Original request** disclosure right above the criteria fields — same rendering (`web/static/criteria-form.js`) on the admin panel and on the public/signed-in user's own search view. On a promoted public search, it's visible to any viewer, same as feedback text, pinned finds, and reference products — none of those are redacted for non-owners.
 
 The config panel is run-scoped: a date picker at the top switches between runs. Selecting the latest run keeps the panel live and editable; selecting an older run shows that run's config exactly as it was when it executed — read-only, fields disabled, no Save/visibility/delete buttons — with a banner and a one-click button back to the latest run. A search that hasn't been run yet always shows the live editable config.
 
@@ -181,6 +181,8 @@ The UI reads directly from Firestore — no CLI run needed. Select a search from
 The results page (`/`) is public. Signed-in users see their own private searches listed above the public searches in the sidebar and can create and run them from the main page. The admin panel (`/admin`) is accessible via `ADMIN_PASSWORD` or via Google sign-in for accounts with the `admin` role.
 
 Google sign-in requires `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, and optionally `BOOTSTRAP_ADMIN_EMAIL` in `.env` (see `.env.sample`). The sign-in flow always prompts the Google account chooser on every login.
+
+New-user registration is currently closed: `/auth/callback` only signs in an email that already has a `users` doc, or the `BOOTSTRAP_ADMIN_EMAIL`. Any other new email is redirected to `/?blocked=registration_closed` and shown a message pointing at the `/feedback` page. Existing users are unaffected.
 
 ### Host on Cloud Run
 
