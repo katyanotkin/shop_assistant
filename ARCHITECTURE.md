@@ -248,6 +248,6 @@ Base URL: `https://shopassistant.verbboard.com`
 | Concurrency / CPU | `--concurrency=1 --no-cpu-throttling` — each in-flight run gets a dedicated instance and vCPU rather than sharing one with concurrent page-load traffic |
 | Vertex AI | `us-central1` (separate from Cloud Run region) |
 | Web process | `uvicorn web.main:app --host 0.0.0.0 --port 8080` inside `python:3.12-slim` |
-| Live regression | After deploy, run `BASE_URL=https://shopassistant.verbboard.com python -m pytest tests/test_live_qatp.py -v` |
+| Live regression | After deploy, run `PROD_URL=https://shopassistant.verbboard.com python -m pytest tests/test_live_qatp.py -v` |
 
 The web image excludes `run.py`, `searches/`, `tests/`, and `results/` — only `core/` and `web/` are copied into the container.

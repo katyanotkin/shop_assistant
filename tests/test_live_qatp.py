@@ -486,25 +486,25 @@ class TestApiResultsRunDetail:
 
 
 # ---------------------------------------------------------------------------
-# H. config_snapshot.description — redacted for anonymous viewers
+# H. config_snapshot.description — visible to anonymous viewers on public searches
 # ---------------------------------------------------------------------------
 
 
-class TestApiResultsRunDetailDescriptionRedaction:
-    """config_snapshot.description is personal-signal input (free-text the
-    owner typed, which may carry context never reflected in the structured
-    criteria) — anonymous viewers of a public search's run must never receive
-    it, the same redaction tier as feedback_notes/avoid_shops/example_urls/
-    pinned_finds."""
+class TestApiResultsRunDetailDescriptionVisible:
+    """config_snapshot.description is free-text the owner typed when creating
+    the search. Public searches are fully transparent: any viewer (including
+    anonymous) sees it, same as feedback/pinned_finds/example_urls. Private
+    searches are unaffected — they 404 for anyone but the owner/admin via the
+    visibility gate, tested elsewhere."""
 
-    def test_snapshot_description_redacted_for_anonymous(self, discovered_search, discovered_run):
+    def test_snapshot_description_visible_to_anonymous(self, discovered_search, discovered_run):
         data = _get(f"/api/results/{discovered_search}/{discovered_run}").json()
         snapshot = data.get("config_snapshot")
         if not isinstance(snapshot, dict) or "description" not in snapshot:
             pytest.skip(f"'{discovered_search}' run has no config_snapshot.description to check")
-        assert snapshot["description"] is None, (
+        assert snapshot["description"] is not None, (
             f"/api/results/{discovered_search}/{discovered_run} config_snapshot.description "
-            f"leaked to an anonymous caller: {snapshot['description']!r}"
+            f"was unexpectedly redacted for an anonymous caller on a public search"
         )
 
 
