@@ -70,6 +70,7 @@
           });
           if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `${r.status} ${r.statusText}`);
           text.value = "";
+          email.value = "";
           setMsg("Thanks — feedback sent.", "ok");
         } catch (err) {
           setMsg(err.message, "err");
