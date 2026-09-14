@@ -349,12 +349,13 @@ def load_recent_matches(search_name: str, limit: int = 2) -> list[dict]:
     return out
 
 
-def save_product_feedback(text: str, owner_id: str | None, owner_name: str | None) -> None:
+def save_product_feedback(text: str, reply_to_email: str, owner_id: str | None, owner_name: str | None) -> None:
     from datetime import datetime, timezone
 
     get_db().collection("product_feedback").add(
         {
             "text": text,
+            "reply_to_email": reply_to_email,
             "owner_id": owner_id,  # the user's email, matching owner_id semantics elsewhere in this codebase
             "owner_name": owner_name,
             "created_at": datetime.now(timezone.utc),

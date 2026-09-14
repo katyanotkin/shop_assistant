@@ -26,9 +26,12 @@
     <h1>Site feedback</h1>
 
     <div class="privacy-content">
-      <p>Tell us about TailoredLoop — what's working, what's broken, or what you'd like to see. This is separate from the feedback you leave on individual search results, which trains that search instead. If you're signed in, we'll link your feedback to your account so we can follow up; if not, it's submitted anonymously.</p>
+      <p>Tell us about TailoredLoop — what's working, what's broken, or what you'd like to see. This is separate from the feedback you leave on individual search results, which trains that search instead. If you're signed in, we'll link your feedback to your account too. A reply-to email is required either way, so we can actually get back to you.</p>
 
       <form id="feedback-form">
+        <div class="feedback-field">
+          <input type="email" id="feedback-email" class="field-input" maxlength="254" placeholder="Reply-to email address" aria-label="Reply-to email" required>
+        </div>
         <div class="feedback-field">
           <textarea id="feedback-text" class="field-input" rows="6" maxlength="2000" placeholder="What's on your mind about TailoredLoop?" aria-label="Site feedback"></textarea>
         </div>
@@ -43,14 +46,18 @@
   <script>
     (() => {
       const form   = document.getElementById("feedback-form");
+      const email  = document.getElementById("feedback-email");
       const text   = document.getElementById("feedback-text");
       const btn    = document.getElementById("feedback-submit-btn");
       const msgEl  = document.getElementById("feedback-msg");
       const setMsg = (t, cls) => { msgEl.textContent = t; msgEl.className = `save-msg ${cls}`; };
+      const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
-        const value = text.value.trim();
+        const value      = text.value.trim();
+        const emailValue = email.value.trim();
+        if (!emailValue || !EMAIL_RE.test(emailValue)) { setMsg("Enter a valid reply-to email address.", "err"); return; }
         if (!value) { setMsg("Please enter some feedback first.", "err"); return; }
         btn.disabled = true;
         setMsg("Sending…", "");
@@ -59,7 +66,7 @@
             method: "POST",
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: value }),
+            body: JSON.stringify({ text: value, reply_to_email: emailValue }),
           });
           if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `${r.status} ${r.statusText}`);
           text.value = "";

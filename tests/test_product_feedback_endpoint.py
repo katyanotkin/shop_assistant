@@ -42,45 +42,67 @@ def test_feedback_page_serves_without_auth(client):
 
 def test_product_feedback_anonymous_success(client):
     c, mock_fc = client
-    r = c.post("/api/product-feedback", json={"text": "Love the app, would like dark mode."})
+    r = c.post(
+        "/api/product-feedback",
+        json={"text": "Love the app, would like dark mode.", "reply_to_email": "visitor@example.com"},
+    )
     assert r.status_code == 200
     assert r.json() == {"ok": True}
     mock_fc.save_product_feedback.assert_called_once_with(
-        "Love the app, would like dark mode.", owner_id=None, owner_name=None
+        "Love the app, would like dark mode.",
+        reply_to_email="visitor@example.com",
+        owner_id=None,
+        owner_name=None,
     )
 
 
 def test_product_feedback_logged_in_attaches_owner(client):
     c, mock_fc = client
     c.cookies.set("sa_session", _tok(_USER))
-    r = c.post("/api/product-feedback", json={"text": "Please add CSV export."})
+    r = c.post(
+        "/api/product-feedback",
+        json={"text": "Please add CSV export.", "reply_to_email": "user@x.com"},
+    )
     assert r.status_code == 200
     mock_fc.save_product_feedback.assert_called_once_with(
-        "Please add CSV export.", owner_id="user@x.com", owner_name="User"
+        "Please add CSV export.", reply_to_email="user@x.com", owner_id="user@x.com", owner_name="User"
     )
 
 
 def test_product_feedback_rejects_empty_text(client):
     c, _ = client
-    r = c.post("/api/product-feedback", json={"text": "   "})
+    r = c.post("/api/product-feedback", json={"text": "   ", "reply_to_email": "a@b.com"})
     assert r.status_code == 422
 
 
 def test_product_feedback_rejects_missing_text(client):
     c, _ = client
-    r = c.post("/api/product-feedback", json={})
+    r = c.post("/api/product-feedback", json={"reply_to_email": "a@b.com"})
     assert r.status_code == 422
+
+
+def test_product_feedback_rejects_missing_email(client):
+    c, _ = client
+    r = c.post("/api/product-feedback", json={"text": "hello"})
+    assert r.status_code == 422
+
+
+def test_product_feedback_rejects_malformed_email(client):
+    c, _ = client
+    r = c.post("/api/product-feedback", json={"text": "hello", "reply_to_email": "not-an-email"})
+    assert r.status_code == 422
+    assert "valid reply-to email" in r.json()["detail"].lower()
 
 
 def test_product_feedback_anonymous_over_500_chars_rejected(client):
     c, _ = client
-    r = c.post("/api/product-feedback", json={"text": "x" * 501})
+    r = c.post("/api/product-feedback", json={"text": "x" * 501, "reply_to_email": "a@b.com"})
     assert r.status_code == 422
 
 
 def test_product_feedback_anonymous_exactly_500_chars_allowed(client):
     c, mock_fc = client
-    r = c.post("/api/product-feedback", json={"text": "x" * 500})
+    r = c.post("/api/product-feedback", json={"text": "x" * 500, "reply_to_email": "a@b.com"})
     assert r.status_code == 200
     mock_fc.save_product_feedback.assert_called_once()
 
@@ -88,7 +110,7 @@ def test_product_feedback_anonymous_exactly_500_chars_allowed(client):
 def test_product_feedback_logged_in_over_500_chars_allowed(client):
     c, mock_fc = client
     c.cookies.set("sa_session", _tok(_USER))
-    r = c.post("/api/product-feedback", json={"text": "x" * 1500})
+    r = c.post("/api/product-feedback", json={"text": "x" * 1500, "reply_to_email": "user@x.com"})
     assert r.status_code == 200
     mock_fc.save_product_feedback.assert_called_once()
 
@@ -96,5 +118,5 @@ def test_product_feedback_logged_in_over_500_chars_allowed(client):
 def test_product_feedback_over_2000_chars_rejected_even_logged_in(client):
     c, _ = client
     c.cookies.set("sa_session", _tok(_USER))
-    r = c.post("/api/product-feedback", json={"text": "x" * 2001})
+    r = c.post("/api/product-feedback", json={"text": "x" * 2001, "reply_to_email": "user@x.com"})
     assert r.status_code == 422

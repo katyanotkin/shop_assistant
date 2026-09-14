@@ -458,10 +458,11 @@
   function renderSiteFeedbackTable(entries) {
     if (!entries.length) return `<p class="empty-state">No site feedback yet.</p>`;
     return `<table class="users-table">
-      <thead><tr><th>When</th><th>From</th><th>Feedback</th></tr></thead>
+      <thead><tr><th>When</th><th>From</th><th>Reply-to</th><th>Feedback</th></tr></thead>
       <tbody>${entries.map(f => `<tr>
         <td>${esc((f.created_at || "").slice(0, 16).replace("T", " "))}</td>
         <td>${esc(f.owner_name || "Anonymous")}</td>
+        <td>${esc(f.reply_to_email || "")}</td>
         <td>${esc(f.text || "")}</td>
       </tr>`).join("")}</tbody>
     </table>`;

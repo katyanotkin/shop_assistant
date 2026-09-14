@@ -179,7 +179,7 @@ Base URL: `https://shopassistant.verbboard.com`
 | `GET` | `/api/me` | `{role, anonymous, name?, email?}` — current user identity from session or admin cookie |
 | `DELETE` | `/api/me` | Delete the caller's own account (requires `sa_session`). Removes the `users` doc (email, display name, photo URL); does not delete their searches or results — `owner_id` on any search they owned is reassigned to `"admin"` instead, and results are unaffected. Clears the `sa_session` cookie |
 | `GET` | `/feedback` | General product-feedback page (HTML) — open to anonymous and signed-in visitors |
-| `POST` | `/api/product-feedback` | Submit general product feedback: `{text}`. Anonymous submissions capped at 500 chars; signed-in submissions up to 2000. Stored in the `product_feedback` collection with `owner_id`/`owner_name` if signed in — there is no admin UI to read these back yet, only direct Firestore access |
+| `POST` | `/api/product-feedback` | Submit general product feedback: `{text, reply_to_email}`. `reply_to_email` is mandatory (basic regex format check, not full RFC validation) regardless of sign-in state — anonymous feedback is useless without a way to reply. Anonymous submissions capped at 500 chars; signed-in submissions up to 2000. Stored in the `product_feedback` collection with `owner_id`/`owner_name` if signed in. Readable via `GET /api/admin/site-feedback` (admin-only) |
 
 ### Auth endpoints
 
