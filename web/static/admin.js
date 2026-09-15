@@ -18,6 +18,16 @@
   function _beginNav() { return ++_navSeq; }
   function _isCurrentNav(seq) { return seq === _navSeq; }
 
+  // ── Results panel visibility: the Users and Site feedback tabs have no
+  // per-run results to show, so hide the panel and collapse the grid to a
+  // single column instead of leaving its "Select a search…" placeholder
+  // sitting in a half-width track next to the table (mirrors app.js's
+  // setConfigPanelHidden) ────────────────────────────────────────────────
+  function setResultsPanelHidden(hidden) {
+    resultsPanel.hidden = hidden;
+    adminPanels.classList.toggle("admin-panels--no-results", hidden);
+  }
+
   // ── API ──────────────────────────────────────────────────────────────────
 
   async function api(method, path, body) {
@@ -426,9 +436,9 @@
     latestRunDate = null;
     currentRunDate = null;
     dateToolbar.hidden = true;
+    setResultsPanelHidden(true);
     searchList.querySelectorAll("li").forEach(el => el.classList.remove("active"));
     configContent.innerHTML   = `<p class="loading">Loading users…</p>`;
-    resultsPanel.innerHTML    = `<p class="empty-state">Select a search to view results.</p>`;
     try {
       const users = await api("GET", "/api/admin/users");
       configContent.innerHTML = renderUsersTable(users);
@@ -474,9 +484,9 @@
     latestRunDate = null;
     currentRunDate = null;
     dateToolbar.hidden = true;
+    setResultsPanelHidden(true);
     searchList.querySelectorAll("li").forEach(el => el.classList.remove("active"));
     configContent.innerHTML   = `<p class="loading">Loading site feedback…</p>`;
-    resultsPanel.innerHTML    = `<p class="empty-state">Select a search to view results.</p>`;
     try {
       const entries = await api("GET", "/api/admin/site-feedback");
       configContent.innerHTML = renderSiteFeedbackTable(entries);
@@ -524,6 +534,7 @@
     searchList.querySelectorAll("li").forEach(el =>
       el.classList.toggle("active", el.dataset.name === name));
 
+    setResultsPanelHidden(false);
     configContent.innerHTML = `<p class="loading">Loading…</p>`;
     resultsPanel.innerHTML = `<p class="loading">Loading…</p>`;
 
@@ -589,6 +600,7 @@
       latestRunDate = null;
       currentRunDate = null;
       dateToolbar.hidden = true;
+      setResultsPanelHidden(false);
       searchList.querySelectorAll("li").forEach(el => el.classList.remove("active"));
       configContent.innerHTML = renderGenerate();
       resultsPanel.innerHTML = `<p class="empty-state">Save the new search, then run it to see results.</p>`;

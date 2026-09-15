@@ -119,6 +119,14 @@
   grid-template-columns: 1fr;
 }
 
+/* Admin-only: the Users and Site feedback tabs have no per-run results to
+   show — without this, #results-panel's unrelated "Select a search to view
+   results" placeholder sits in the other half-width track next to the
+   table, cramping it for no reason. */
+.admin-panels--no-results {
+  grid-template-columns: 1fr;
+}
+
 /* Reused on the public/signed-in-user page, where .admin-panels sits inside
    .content (which already has its own 24px padding) rather than directly in
    .admin-layout — cancel the double padding rather than duplicating the grid. */
