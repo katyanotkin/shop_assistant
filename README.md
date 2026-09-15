@@ -2,6 +2,8 @@
 
 Web app that monitors online shops for products matching saved search criteria. Uses Gemini (Vertex AI) to plan queries, search the web via Google Search grounding, and score each product page against your criteria. Results are saved to Firestore and displayed in the browser UI.
 
+> **Project status:** Development on TailoredLoop is closed. It's kept running live at the deployed URL as a portfolio/demo piece, fully functional as described below. New user registration is closed (see the Google sign-in section further down) — existing accounts still work. Feedback is welcome via `/feedback` if you want to reach out.
+
 ## How it works
 
 1. **Plan** — Gemini generates 3 optimised search queries from your criteria

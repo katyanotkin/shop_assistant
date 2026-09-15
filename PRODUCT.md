@@ -8,6 +8,12 @@ It is designed for searches that are hard to express in a single Google query an
 
 ---
 
+## Project status
+
+TailoredLoop is no longer under active development. The product scope described in this document is final — no new features are planned. The app remains deployed and fully functional, kept live as a demo of the product rather than as a growing service. New user registration is closed (see "Accounts and roles" below); existing accounts continue to work as described.
+
+---
+
 ## Where it lives
 
 The web interface is at **shopassistant.verbboard.com**.

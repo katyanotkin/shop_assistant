@@ -4,6 +4,8 @@
 
 Shop Assistant monitors online shops for products matching saved search criteria. On each run it: generates optimized search queries from structured criteria, uses Gemini with Google Search grounding to find candidate product URLs, fetches and strips each page, scores each candidate against the criteria, persists results to Firestore, writes a local CSV, and optionally sends an email notification for new matches. A FastAPI web app reads from Firestore and serves results to a browser UI.
 
+**Project status:** feature development is closed. The system described below is deployed and stable, and is kept running as a live demo rather than an evolving codebase. Changes going forward should be limited to fixes needed to keep the demo functional.
+
 ---
 
 ## Pipeline
